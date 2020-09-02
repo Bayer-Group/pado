@@ -1,5 +1,4 @@
 import pytest
-from pado
 
 
 @pytest.fixture(scope="function")

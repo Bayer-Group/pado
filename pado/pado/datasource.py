@@ -1,5 +1,6 @@
 from abc import ABC
 
+
 # TODO:
 #   this needs more thought...
 #   my first test implementation didn't feel correct...
@@ -12,4 +13,5 @@ class DataSource(ABC):
     allow channelling them into the same output format.
 
     """
+
     pass

@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 import os
 import pathlib
 import re
 import shutil
 from pathlib import Path
-from typing import Union, Literal
+from typing import Literal, Union
 
-from pado.structure import Group, File
+from pado.structure import File, Group
 
 PathOrStr = Union[str, os.PathLike]
 
@@ -71,10 +72,7 @@ DatasetIOMode = Union[
 
 
 class PadoDataset:
-
-    def __init__(self,
-                 path: Union[str, pathlib.Path],
-                 mode: DatasetIOMode = 'r'):
+    def __init__(self, path: Union[str, pathlib.Path], mode: DatasetIOMode = "r"):
         """open or create a new PadoDataset
 
         Parameters
@@ -94,7 +92,7 @@ class PadoDataset:
 
         # guarantee p points to `pado.dataset.toml` file (allow directory)
         if not self._config.suffix:
-            self._config /= 'pado.dataset.toml'
+            self._config /= "pado.dataset.toml"
         elif self._config.suffix != ".toml":
             raise ValueError("dataset file requires '.toml' suffix")
 
@@ -165,4 +163,5 @@ class PadoDataset:
 
 class PadoDatasetView:
     """a container for accessing the various data in filtered form"""
+
     pass

@@ -1,15 +1,15 @@
+import string
 from abc import abstractmethod
-from collections import Sequence, MutableSet, MutableMapping
+from collections import MutableMapping, MutableSet, Sequence
 from operator import attrgetter
 from pathlib import Path, PurePath
-from typing import Union, overload, Any, Iterator
-import string
+from typing import Any, Iterator, Union, overload
 
 
 class Key:
     CHARACTER_SET = string.ascii_letters + string.digits + "_"
 
-    def __init__(self, name: str, parent: 'Group'):
+    def __init__(self, name: str, parent: "Group"):
         self.is_valid_key(name, raise_if_invalid=True)
         self.name = name
         if not isinstance(parent, Group):
@@ -19,7 +19,7 @@ class Key:
         return self.name
 
     @staticmethod
-    def is_valid_key(key: Union[str, 'Key'], raise_if_invalid=False) -> bool:
+    def is_valid_key(key: Union[str, "Key"], raise_if_invalid=False) -> bool:
         valid, msg = True, ""
         if isinstance(key, Key):
             pass
@@ -34,7 +34,7 @@ class Key:
         return valid
 
 
-class _Group(MutableMapping[str, Union['Group', 'File']]):
+class _Group(MutableMapping[str, Union["Group", "File"]]):
     GROUP_SEPERATOR = "/"
 
     def __setitem__(self, k: _KT, v: _VT) -> None:
@@ -75,8 +75,7 @@ def _iter_group_parents(obj):
 
 
 class Group(_Group):
-
-    def __init__(self, key: Key, parent: Union['Group', RootGroup]):
+    def __init__(self, key: Key, parent: Union["Group", RootGroup]):
         if not isinstance(key, Key):
             raise TypeError("expected a Key instance")
         if not isinstance(parent, _Group):
@@ -109,8 +108,7 @@ class Group(_Group):
 
 
 class File:
-
-    def __init__(self, key, parent: Union['Group', RootGroup], extension: str):
+    def __init__(self, key, parent: Union["Group", RootGroup], extension: str):
         self.key = key
         self.parent = parent
         self.extension = extension
