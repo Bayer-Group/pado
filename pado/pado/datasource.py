@@ -2,6 +2,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, TypeVar, Union
 
+import requests
+
+
+class DataSourceException(Exception):
+    pass
+
 
 class DataSourceRegistry:
     def __init__(self, identifier: str):
@@ -23,7 +29,7 @@ class DataSource(ABC):
         self.name = name
 
     @abstractmethod
-    def inputs(self) -> Iterable[str]:
+    def inputs(self) -> Iterable["DataSource"]:
         ...
 
     @abstractmethod
@@ -33,6 +39,12 @@ class DataSource(ABC):
     @abstractmethod
     def outputs(self) -> Iterable[Any]:
         ...
+
+    def create(self, *args, **kwargs) -> None:
+        raise DataSourceException(f"{self.__class__.__name__}.create is not supported")
+
+    def get(self, *args, **kwargs) -> Any:
+        raise NotImplementedError(f"{self.__class__.__name__}.get is not implemented")
 
     @abstractmethod
     def is_creatable(self) -> bool:
@@ -52,12 +64,12 @@ class DataSource(ABC):
         ...
 
 
-class FileDataSource(DataSource):
+class File(DataSource):
     def __init__(self, name: str, filename: Path):
         super().__init__(name)
         self._path = Path(filename)
 
-    def inputs(self) -> Iterable[str]:
+    def inputs(self) -> Iterable[DataSource]:
         return ()
 
     def cache(self):
@@ -65,6 +77,9 @@ class FileDataSource(DataSource):
 
     def outputs(self) -> Iterable[Path]:
         return (self._path,)
+
+    def get(self):
+        return self._path
 
     def is_creatable(self) -> bool:
         return self._path.is_file()
@@ -81,7 +96,7 @@ class FileDataSource(DataSource):
         registry: DataSourceRegistry,
         name: str,
         obj: Union[Path, Iterable[Path]],
-        **__
+        **__,
     ) -> Path:
         paths = [obj] if isinstance(obj, Path) else obj
         for o in paths:
@@ -89,7 +104,25 @@ class FileDataSource(DataSource):
         return obj
 
 
-class FunctionDataSource(DataSource):
+class DownloadableFile(File):
+    def __init__(self, name: str, filename: Path, url: str):
+        super().__init__(name, filename)
+        self._url = url
+
+    def is_creatable(self) -> bool:
+        r = requests.head(self._url)
+        return r.status_code == 200
+
+    def create(self, force=False):
+        mode = "xb" if not force else "wb"
+        r = requests.get(self._url, stream=True)
+        r.raise_for_status()
+        with open(self._path, mode) as f:
+            for chunk in r.iter_content(512):
+                f.write(chunk)
+
+
+class Function(DataSource):
     def __init__(
         self, name, inputs: Iterable[DataSource] = (), cache: Optional[Path] = None
     ):
@@ -97,8 +130,8 @@ class FunctionDataSource(DataSource):
         self._inputs = inputs
         self._cache = cache
 
-    def inputs(self) -> Iterable[str]:
-        return tuple(inp.name for inp in self._inputs)
+    def inputs(self) -> Iterable[DataSource]:
+        return tuple(self._inputs)
 
     def cache(self) -> Optional[Path]:
         return self._cache
@@ -107,7 +140,7 @@ class FunctionDataSource(DataSource):
         return ()
 
     def is_creatable(self) -> bool:
-        if all(inp.is_creatable() for inp in self._inputs):
+        if all(inp.is_available() or inp.is_creatable() for inp in self._inputs):
             return True
 
     def is_cached(self) -> bool:
