@@ -1,11 +1,8 @@
-import pytest
+import pandas as pd
 
 
-@pytest.fixture(scope="function")
-def pado_dataset(tmp_path):
-    pass
-
-
-def test_opening(tmpdir):
-    with pytest.raises():
-        ds = PadoDataset(tmpdir)
+def test_pado_test_datasource(datasource):
+    assert isinstance(datasource.metadata, pd.DataFrame)
+    for image in datasource.images():
+        assert image.id is not None
+        assert image.path.is_file()
