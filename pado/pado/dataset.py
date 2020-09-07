@@ -5,9 +5,11 @@ import pathlib
 import re
 import shutil
 from pathlib import Path
-from typing import Literal, Union
+from typing import Iterable, Literal, Union
 
-from pado.structure import File, Group
+import pandas as pd
+
+from pado.datasource import DataSource, ImageResource
 
 PathOrStr = Union[str, os.PathLike]
 
@@ -71,7 +73,7 @@ DatasetIOMode = Union[
 ]
 
 
-class PadoDataset:
+class PadoDataset(DataSource):
     def __init__(self, path: Union[str, pathlib.Path], mode: DatasetIOMode = "r"):
         """open or create a new PadoDataset
 
@@ -110,8 +112,10 @@ class PadoDataset:
         elif mode in {"x", "x+"} and _exists:
             raise FileExistsError(p)
         elif mode in {"w", "w+"} and _exists:
-            shutil.rmtree(self._path, ignore_errors=True)
+            # todo: truncate
+            # shutil.rmtree(self._path, ignore_errors=True)
             _exists = False
+            raise NotImplementedError("not tested yet...")
 
         if _exists:
             if not verify_pado_dataset_integrity(path):
@@ -119,49 +123,55 @@ class PadoDataset:
         else:
             pass
 
+        # cached metadata dataframe
+        self._metadata_df = None
+        self._path_images = self._path / "images"
+        self._path_metadata = self._path / "metadata"
+
+        # ensure folders exist
+        self._path.mkdir(exist_ok=True)
+        self._path_images.mkdir(exist_ok=True)
+        self._path_metadata.mkdir(exist_ok=True)
+
     @property
     def path(self):
         return self._path
 
-    def __getitem__(self, key: str):
-        path = _key_to_path(self._path, key)
-        if path.is_dir():
-            return Group(path, _root=self)
-        elif path.is_file():
-            return File(path, _root=self)
-        else:
-            raise KeyError(key)
+    @property
+    def metadata(self) -> pd.DataFrame:
+        if self._metadata_df is None:
+            md_dir = self._path_metadata
+            dfs = []
+            for metadata_file in md_dir.glob("*.parquet.gzip"):
+                dfs.append(pd.read_parquet(metadata_file))
+            self._metadata_df = pd.concat(dfs)
+            del dfs
+        return self._metadata_df
 
-    def __delitem__(self, key: str):
-        path = _key_to_path(self._path, key)
-        if path.is_dir():
-            shutil.rmtree(path)
-        elif path.is_file():
-            path.unlink()
-        else:
-            raise KeyError(key)
+    def images(self) -> Iterable[ImageResource]:
+        raise NotImplementedError("todo: implement iteration over multiple sources")
 
-    def __contains__(self, key: str):
-        path = _key_to_path(self._path, key)
-        if path.is_dir():
-            return True
-        elif path.is_file():
-            return True
-        else:
-            return False
+    def add_source(self, source: DataSource, copy_images: bool = True):
+        if self._readonly:
+            raise RuntimeError("can't add sources to readonly dataset")
+        identifier = source.identifier
 
-    def __setitem__(self, key: str, item: Union[Group, File]):
-        path = _key_to_path(self._path, key)
-        _create_missing_group_dirs(self._path, key)
-        # fixme
-        pass
+        metadata_path = self._path_metadata / f"{identifier}.parquet.gzip"
+        if metadata_path.is_file():
+            # todo: allow extending
+            raise ValueError("source already exists")
 
+        # store metadata
+        source.metadata.to_parquet(metadata_path, compression="gzip")
 
-    def query(self, *query_args, **query_kwargs) -> PadoDatasetView:
-        raise NotImplementedError("todo")
+        base = self._path_images / identifier
+        base.mkdir(exist_ok=True)
+        for image in source.images():
+            dst = base / Path(*image.id)
+            # note: maybe replace with urlretrieve to allow downloading
+            if copy_images:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(image.path, dst)
+            else:
+                raise NotImplementedError("todo: allow keeping references?")
 
-
-class PadoDatasetView:
-    """a container for accessing the various data in filtered form"""
-
-    pass
