@@ -44,21 +44,6 @@ def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
     return True
 
 
-def _key_to_path(root, key):
-    p = pathlib.PurePath(key)
-    if p.is_absolute():
-        p = p.relative_to("/")
-    key_path = root / p
-    if Path(os.path.commonpath([root.parts, key_path.parts])) != root:
-        raise ValueError("can't break out of PadoDataset")
-    return key_path
-
-
-def _create_missing_group_dirs(root, key):
-    p = _key_to_path(root, key)
-    p.parent.mkdir(parents=True, exist_ok=True)
-
-
 DatasetIOMode = Union[
     Literal["r"],
     Literal["r+"],
