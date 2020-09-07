@@ -1,4 +1,5 @@
 import hashlib
+import json
 import pathlib
 import shutil
 import urllib.request
@@ -60,22 +61,22 @@ class TestImageResource(ImageResource):
 
 
 class TestDataSource(DataSource):
+    identifier = "testsource"
+    image_id_columns = [PadoColumn.COMPOUND, PadoColumn.IMAGE]
+
     def __init__(self, test_image_path):
         self._image_path = test_image_path
 
     @property
     def metadata(self) -> pd.DataFrame:
         data = {c: range(3) for c in PadoColumn}
-        data[PadoColumn.IMAGE] = [
-            ("a", "1", "o"),
-            ("a", "1", "q"),
-            ("a", "2", "o"),
-        ]
+        data[PadoColumn.COMPOUND] = ["abc", "abc", "efg"]
+        data[PadoColumn.IMAGE] = ["a.svs", "b.svs", "c.svs"]
         return pd.DataFrame(data)
 
     def images(self) -> Iterable[ImageResource]:
-        for image_id in self.metadata[PadoColumn.IMAGE]:
-            yield TestImageResource(image_id, self._image_path)
+        for _, image_id in self.metadata[self.image_id_columns].iterrows():
+            yield TestImageResource(tuple(image_id.tolist()), self._image_path)
 
 
 @pytest.fixture(scope="function")
