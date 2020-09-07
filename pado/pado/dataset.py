@@ -10,6 +10,7 @@ from typing import Iterable, Literal, Union
 import pandas as pd
 
 from pado.datasource import DataSource, ImageResource
+from pado.structure import PadoReserved
 
 PathOrStr = Union[str, os.PathLike]
 
@@ -132,17 +133,28 @@ class PadoDataset(DataSource):
 
     @property
     def path(self):
+        """root folder of pado dataset"""
         return self._path
 
     @property
     def metadata(self) -> pd.DataFrame:
+        _ext = ".parquet.gzip"
+
         if self._metadata_df is None:
             md_dir = self._path_metadata
-            dfs = []
-            for metadata_file in md_dir.glob("*.parquet.gzip"):
+            dfs, keys = [], []
+            for metadata_file in md_dir.glob(f"*{_ext}"):
                 dfs.append(pd.read_parquet(metadata_file))
-            self._metadata_df = pd.concat(dfs)
-            del dfs
+                keys.append(metadata_file[: -len(_ext)])
+            # build the combined df and allow differentiating data sources
+            df = pd.concat(dfs, keys=keys)
+            # this implicitly assumes that "level_0" is reserved
+            df = (
+                df.reset_index(level=0)
+                .rename(columns={"level_0": PadoReserved.SRC_ID})
+                .reset_index(drop=True)
+            )
+            self._metadata_df = df
         return self._metadata_df
 
     def images(self) -> Iterable[ImageResource]:
