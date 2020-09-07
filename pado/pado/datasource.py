@@ -1,18 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import Any, Hashable, Iterable
+from pathlib import Path
+from typing import Any, Hashable, Iterable, List, Tuple
 
 import pandas as pd
+
+from pado.structure import PadoColumn
 
 
 class ImageResource(ABC):
     @property
     @abstractmethod
-    def id(self) -> Hashable:
+    def id(self) -> Tuple[str, ...]:
         ...
 
     @property
     @abstractmethod
-    def path(self) -> Any:
+    def path(self) -> Path:
+        """this should point to the image resource"""
         ...
 
 
@@ -25,6 +29,7 @@ class DataSource(ABC):
     """
 
     identifier: str
+    image_id_columns: List[str] = [PadoColumn.IMAGE]
 
     @property
     @abstractmethod
