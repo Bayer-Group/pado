@@ -22,7 +22,7 @@ __all__ = ["TestDataSource"]
 def make_temporary_tiff(name, size=(100, 100)):
     """create a temporary tif"""
     with TemporaryDirectory() as tmp_dir:
-        data = np.random.randint(0, 255, size=size, dtype=np.float32)
+        data = np.random.randint(0, 255, size=size).astype(np.float32)
         img_fn = Path(tmp_dir).expanduser().absolute() / f"{name}.tif"
         imsave(img_fn, data)
         yield img_fn
