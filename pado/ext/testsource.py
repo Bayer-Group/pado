@@ -53,8 +53,8 @@ TEST_DATA = {
     c.GROUP: ["g0", "g1", "g3"],
     # Animal
     c.ANIMAL: ["a1", "a2", "a3", "a4", "a5"],
-    c.ANIMAL.subcolum("SPECIES"): ["species_A", "species_B"],
-    c.ANIMAL.subcolum("AGE"): [10, 20, 30, 40],
+    c.ANIMAL.subcolumn("SPECIES"): ["species_A", "species_B"],
+    c.ANIMAL.subcolumn("AGE"): [10, 20, 30, 40],
     # COMPOUND
     c.COMPOUND: ["cA", "cB", "cC"],
     # ORGAN
