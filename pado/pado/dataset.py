@@ -133,7 +133,7 @@ class PadoDataset(DataSource):
             dfs, keys = [], []
             for metadata_file in md_dir.glob(f"*{_ext}"):
                 dfs.append(pd.read_parquet(metadata_file))
-                keys.append(metadata_file[: -len(_ext)])
+                keys.append(metadata_file.name[: -len(_ext)])
             # build the combined df and allow differentiating data sources
             df = pd.concat(dfs, keys=keys)
             # this implicitly assumes that "level_0" is reserved
