@@ -18,11 +18,14 @@ PathOrStr = Union[str, os.PathLike]
 def is_pado_dataset(path: PathOrStr) -> bool:
     """check if the given path is a valid pado dataset"""
     path = Path(path)
-    if not (path / "pado.dataset.toml").is_file():
+    if path.is_dir():
+        path /= "pado.dataset.toml"
+    if path.name == "pado.dataset.toml" and path.is_file():
+        return True
+    else:
         # we could check more, but let's file this under
         # "dataset integrity verification"
         return False
-    return True
 
 
 def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
