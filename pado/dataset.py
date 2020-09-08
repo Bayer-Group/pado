@@ -139,7 +139,11 @@ class PadoDataset(DataSource):
             # this implicitly assumes that "level_0" is reserved
             df = (
                 df.reset_index(level=0)
-                .rename(columns={"level_0": PadoReserved.SRC_ID})
+                .rename(
+                    columns={
+                        PadoInvalid.RESERVED_COL_INDEX: PadoReserved.DATA_SOURCE_ID
+                    }
+                )
                 .reset_index(drop=True)
             )
             self._metadata_df = df
@@ -171,4 +175,3 @@ class PadoDataset(DataSource):
                 shutil.copy(image.path, dst)
             else:
                 raise NotImplementedError("todo: allow keeping references?")
-
