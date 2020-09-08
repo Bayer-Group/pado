@@ -52,7 +52,7 @@ class PadoColumn(_SubColumnMixin, str, enum.Enum):
 
     STUDY = "STUDY"
     EXPERIMENT = "EXPERIMENT"
-    ANIMAL_GROUP = "GROUP"
+    GROUP = "GROUP"
     ANIMAL = "ANIMAL"
     COMPOUND = "COMPOUND"
     ORGAN = "ORGAN"
