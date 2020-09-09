@@ -223,15 +223,16 @@ class PadoDataset(DataSource):
             raise ValueError("source already exists")
 
         # store metadata
-        source.metadata.to_parquet(metadata_path, compression="gzip")
+        with source:
+            source.metadata.to_parquet(metadata_path, compression="gzip")
 
-        base = self._path_images / identifier
-        base.mkdir(exist_ok=True)
-        for image in source.images():
-            dst = base / Path(*image.id)
-            # note: maybe replace with urlretrieve to allow downloading
-            if copy_images:
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(image.path, dst)
-            else:
-                raise NotImplementedError("todo: allow keeping references?")
+            base = self._path_images / identifier
+            base.mkdir(exist_ok=True)
+            for image in source.images():
+                dst = base / Path(*image.id)
+                # note: maybe replace with urlretrieve to allow downloading
+                if copy_images:
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(image.path, dst)
+                else:
+                    raise NotImplementedError("todo: allow keeping references?")
