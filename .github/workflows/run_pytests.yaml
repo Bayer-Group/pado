@@ -1,0 +1,51 @@
+name: pado ci
+
+on: [push, pull_request]
+
+jobs:
+  # RUN PYTEST ON PADO SOURCE
+  tests:
+    name: pytest ${{ matrix.os }}::py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 5
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.8]
+        include:
+          # we'll test the python support on ubuntu
+          - os: ubuntu-latest
+            python-version: 3.7
+          - os: ubuntu-latest
+            python-version: 3.6
+    steps:
+    - uses: actions/checkout@v1
+    - name: Cache conda
+      uses: actions/cache@v1
+      env:
+        # Increase this value to reset cache if etc/example-environment.yml has not changed
+        CACHE_NUMBER: 0
+      with:
+        path: ~/conda_pkgs_dir
+        key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('environment.yaml') }}
+    - name: Setup conda
+      uses: goanpeca/setup-miniconda@v1
+      with:
+        environment-file: environment.yml
+        python-version: ${{ matrix.python-version }}
+        auto-update-conda: true
+        activate-environment: pado
+        use-only-tar-bz2: true
+        auto-activate-base: false
+    - shell: bash -l {0}
+      name: Test with pytest
+      run: |
+        conda info
+        conda list
+        pytest --cov=./pado --cov-report=xml
+    #- name: Upload coverage to Codecov
+    #  uses: codecov/codecov-action@v1
+    #  with:
+    #    name: pado
+
