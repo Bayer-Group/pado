@@ -92,10 +92,13 @@ def verify_columns(columns: Iterable[str], raise_if_invalid: bool = True) -> boo
 def build_column_map(columns: Iterable[str]) -> Dict[str, List[str]]:
     """build a map of subcolumns"""
     output = defaultdict(list)
+    ignore = set(PadoReserved)
+    valid = set(PadoColumn)
     for col in columns:
         key, _, _ = col.partition(SEPARATOR)
-        output[key].append(col)
-    if not (output.keys() <= set(PadoColumn)):  # Set comparison
+        if key not in ignore:
+            output[key].append(col)
+    if not (output.keys() <= valid):  # Set comparison
         raise ValueError(f"unsupported keys {set(output) - set(PadoColumn)}")
     output.default_factory = None
     return output
