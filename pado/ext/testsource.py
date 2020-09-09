@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from tifffile import imsave
 
+from pado import __version__
 from pado.datasource import DataSource, ImageResource
 
 # noinspection PyPep8Naming
