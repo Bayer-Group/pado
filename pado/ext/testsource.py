@@ -10,11 +10,15 @@ import numpy as np
 import pandas as pd
 from tifffile import imsave
 
-from pado import __version__
 from pado.datasource import DataSource, ImageResource
 
 # noinspection PyPep8Naming
 from pado.structure import PadoColumn as c
+
+try:
+    from pado._version import __version__
+except ImportError:
+    __version__ = "not-installed"
 
 __all__ = ["TestDataSource"]
 
