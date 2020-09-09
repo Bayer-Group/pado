@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from pado.dataset import PadoDataset
-from pado.structure import PadoColumn, PadoReserved
+from pado.structure import PadoColumn
 
 
 def test_pado_test_datasource(datasource):
@@ -44,8 +44,23 @@ def dataset_ro(datasource, tmp_path):
     yield PadoDataset(dataset_path, mode="r")
 
 
-def test_pado_dataframe_accessor(dataset):
-    df_subset = dataset.metadata.pado.organs
+_accessors = {
+    "studies": PadoColumn.STUDY,
+    "experiments": PadoColumn.EXPERIMENT,
+    "groups": PadoColumn.GROUP,
+    "animals": PadoColumn.ANIMAL,
+    "compounds": PadoColumn.COMPOUND,
+    "organs": PadoColumn.ORGAN,
+    "slides": PadoColumn.SLIDE,
+    "images": PadoColumn.IMAGE,
+    "findings": PadoColumn.FINDING,
+}
+
+
+@pytest.mark.parametrize("accessor,column", _accessors.items(), ids=_accessors.keys())
+def test_pado_dataframe_accessor(dataset, accessor, column):
+    # this is testing, i.e.: dataset.metadata.pado.organs
+    df_subset = getattr(dataset.metadata.pado, accessor)
     assert isinstance(df_subset, pd.DataFrame)
     assert len(df_subset) > 0
-    assert all(map(lambda x: x.startswith(PadoColumn.ORGAN), df_subset.columns))
+    assert all(map(lambda x: x.startswith(column), df_subset.columns))
