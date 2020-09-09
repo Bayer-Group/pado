@@ -15,6 +15,11 @@ def hash_file(path, hasher=hashlib.sha256) -> str:
     return hasher.hexdigest()
 
 
+def hash_str(string: str, hasher=hashlib.sha256) -> str:
+    """calculate the hash of a string"""
+    return hasher(string.encode()).hexdigest()
+
+
 def hash_zip(path, hasher=hashlib.sha256) -> str:
     """calculate the hash of a zip file
 
