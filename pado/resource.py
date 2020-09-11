@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import platform
 import warnings
 from abc import ABC, abstractmethod
@@ -9,12 +10,16 @@ from urllib.request import urlopen
 
 
 class ImageResource(ABC):
-    def __init__(self, image_id, *_, **__):
+    __slots__ = ("_image_id", "_resource")
+
+    def __init__(self, image_id, resource, *mixin_args, **mixin_kwargs):
+        super().__init__(*mixin_args, **mixin_kwargs)
         if isinstance(image_id, str):
             image_id = (image_id,)
         if not isinstance(image_id, (tuple, list)):
             raise TypeError(f"image_id not str or tuple, got {type(image_id)}")
         self._image_id = tuple(image_id)
+        self._resource = resource
 
     @property
     def id(self) -> Tuple[str, ...]:
@@ -32,12 +37,22 @@ class ImageResource(ABC):
         ...
 
 
-class LocalImageResource(ImageResource):
-    def __init__(self, image_id, path, *_, **__):
-        super(LocalImageResource, self).__init__(image_id)
-        if not isinstance(path, (Path, str)):
-            raise TypeError(f"path not str or pathlib.Path, got {type(path)}")
-        self._path = Path(path)
+class MD5Resource:
+    __slots__ = ("md5sum",)
+
+    def __init__(self, *args, md5sum=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.md5sum = md5sum
+
+
+class LocalImageResource(ImageResource, MD5Resource):
+    __slots__ = ("_path",)
+
+    def __init__(self, image_id, resource, **mixin_kwargs):
+        if not isinstance(resource, (Path, str)):
+            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
+        super().__init__(image_id, resource, **mixin_kwargs)
+        self._path = Path(resource)
 
     def open(self):
         return self._path.open("rb")
@@ -47,14 +62,16 @@ class LocalImageResource(ImageResource):
         return self._path.stat().st_size
 
 
-class RemoteImageResource(ImageResource):
-    def __init__(self, image_id, url, *_, **__):
-        super(RemoteImageResource, self).__init__(image_id)
-        if not isinstance(url, str):
-            raise TypeError(f"url not str, got {type(url)}")
-        if urlparse(url).scheme not in {"http", "https", "ftp"}:
-            warnings.warn(f"untested scheme for url: '{url}'")
-        self._url = url
+class RemoteImageResource(ImageResource, MD5Resource):
+    __slots__ = ("_url", "_fp")
+
+    def __init__(self, image_id, resource, **mixin_kwargs):
+        super().__init__(image_id, resource, **mixin_kwargs)
+        if not isinstance(resource, str):
+            raise TypeError(f"url not str, got {type(resource)}")
+        if urlparse(resource).scheme not in {"http", "https", "ftp"}:
+            warnings.warn(f"untested scheme for url: '{resource}'")
+        self._url = resource
         self._fp = None
 
     @contextlib.contextmanager
@@ -85,6 +102,11 @@ def copy_resource(
     resource: ImageResource, path: Path, progress_hook: Callable[[int, int], None]
 ):
     """copy an image resource to a local path"""
+    md5hash = None
+    # in case we provide an md5 build the hash incrementally
+    if isinstance(resource, MD5Resource) and resource.md5sum:
+        md5hash = hashlib.md5()
+
     with resource.open() as src, path.open("wb") as dst:
         src_size = resource.size
         bs = _BLOCK_SIZE[resource.__class__.__name__]
@@ -101,8 +123,13 @@ def copy_resource(
                 break
             read += len(buf)
             dst_write(buf)
+            if md5hash:
+                md5hash.update(buf)
             if progress_hook:
                 progress_hook(read, src_size)
 
     if src_size >= 0 and read < src_size:
-        raise RuntimeError(f"Could only copy {read} of {src_size} bytes")
+        raise RuntimeError(f"{resource.id}: could only copy {read} of {src_size} bytes")
+
+    if md5hash and md5hash.hexdigest() != resource.md5sum:
+        raise ValueError(f"{resource.id}: md5sum does not match provided md5")
