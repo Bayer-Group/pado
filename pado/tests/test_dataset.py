@@ -33,7 +33,7 @@ def test_write_pado_dataset(datasource, tmp_path):
     ds = PadoDataset(dataset_path, mode="x")
     ds.add_source(datasource)
 
-    assert len(list(filter(Path.is_file, (ds.path / "images").glob("**/*")))) == 1
+    assert count_images(ds) == 1
     assert isinstance(ds.metadata, pd.DataFrame)
     assert len(ds.metadata) == 10
 
