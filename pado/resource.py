@@ -2,7 +2,6 @@ import contextlib
 import hashlib
 import platform
 import re
-import tempfile
 import warnings
 from abc import ABC, abstractmethod
 from itertools import tee
@@ -80,19 +79,6 @@ class ImageResource(ABC):
     def deserialize(cls, data: Union[_SerializedImageResource, pd.Series]):
         impl = cls.registry[data.type]
         return impl(data.image_id, data.uri, data.md5)
-
-
-class ImageResourcesProvider(ABC):
-    def ids(self) -> Iterable[ImageId]:
-        return (resource.id for resource in self)
-
-    @abstractmethod
-    def __getitem__(self, item: int) -> ImageResource:
-        pass
-
-    @abstractmethod
-    def __len__(self) -> int:
-        pass
 
 
 class LocalImageResource(ImageResource, resource_type="local"):
@@ -235,50 +221,17 @@ class InternalImageResource(ImageResource, resource_type="internal"):
         return self
 
 
-_WINDOWS = platform.system() == "Windows"
-_BLOCK_SIZE = {
-    LocalImageResource.__name__: 1024 * 1024 if _WINDOWS else 1024 * 64,
-    RemoteImageResource.__name__: 1024 * 8,
-}
+class ImageResourcesProvider(ABC):
+    def ids(self) -> Iterable[ImageId]:
+        return (resource.id for resource in self)
 
+    @abstractmethod
+    def __getitem__(self, item: int) -> ImageResource:
+        pass
 
-def copy_resource(
-    resource: ImageResource,
-    path: Path,
-    progress_hook: Optional[Callable[[int, int], None]],
-):
-    """copy an image resource to a local path"""
-    md5hash = None
-    # in case we provide an md5 build the hash incrementally
-    if resource.md5:
-        md5hash = hashlib.md5()
-
-    with resource.open() as src, path.open("wb") as dst:
-        src_size = resource.size
-        bs = _BLOCK_SIZE[resource.__class__.__name__]
-        src_read = src.read
-        dst_write = dst.write
-        read = 0
-
-        if progress_hook:
-            progress_hook(read, src_size)
-
-        while True:
-            buf = src_read(bs)
-            if not buf:
-                break
-            read += len(buf)
-            dst_write(buf)
-            if md5hash:
-                md5hash.update(buf)
-            if progress_hook:
-                progress_hook(read, src_size)
-
-    if src_size >= 0 and read < src_size:
-        raise RuntimeError(f"{resource.id}: could only copy {read} of {src_size} bytes")
-
-    if md5hash and md5hash.hexdigest() != resource.md5:
-        raise ValueError(f"{resource.id}: md5sum does not match provided md5")
+    @abstractmethod
+    def __len__(self) -> int:
+        pass
 
 
 class MergedImageResourcesProvider(ImageResourcesProvider):
@@ -357,6 +310,52 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         )
         inst.save()
         return inst
+
+
+_WINDOWS = platform.system() == "Windows"
+_BLOCK_SIZE = {
+    LocalImageResource.__name__: 1024 * 1024 if _WINDOWS else 1024 * 64,
+    RemoteImageResource.__name__: 1024 * 8,
+}
+
+
+def copy_resource(
+    resource: ImageResource,
+    path: Path,
+    progress_hook: Optional[Callable[[int, int], None]],
+):
+    """copy an image resource to a local path"""
+    md5hash = None
+    # in case we provide an md5 build the hash incrementally
+    if resource.md5:
+        md5hash = hashlib.md5()
+
+    with resource.open() as src, path.open("wb") as dst:
+        src_size = resource.size
+        bs = _BLOCK_SIZE[resource.__class__.__name__]
+        src_read = src.read
+        dst_write = dst.write
+        read = 0
+
+        if progress_hook:
+            progress_hook(read, src_size)
+
+        while True:
+            buf = src_read(bs)
+            if not buf:
+                break
+            read += len(buf)
+            dst_write(buf)
+            if md5hash:
+                md5hash.update(buf)
+            if progress_hook:
+                progress_hook(read, src_size)
+
+    if src_size >= 0 and read < src_size:
+        raise RuntimeError(f"{resource.id}: could only copy {read} of {src_size} bytes")
+
+    if md5hash and md5hash.hexdigest() != resource.md5:
+        raise ValueError(f"{resource.id}: md5sum does not match provided md5")
 
 
 class _ProgressCB(tqdm):
