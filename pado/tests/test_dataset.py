@@ -7,6 +7,12 @@ from pado.dataset import PadoDataset
 from pado.structure import PadoColumn
 
 
+def count_images(ds: PadoDataset):
+    imgs = list(filter(Path.is_file, (ds.path / "images").glob("**/*")))
+    print(imgs)
+    return len(imgs)
+
+
 def test_pado_test_datasource(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
@@ -25,6 +31,20 @@ def test_write_pado_dataset(datasource, tmp_path):
     assert len(list(filter(Path.is_file, (ds.path / "images").glob("**/*")))) == 1
     assert isinstance(ds.metadata, pd.DataFrame)
     assert len(ds.metadata) == 10
+
+
+def test_add_multiple_datasets(tmp_path):
+    from pado.ext.testsource import TestDataSource
+
+    dataset_path = tmp_path / "my_dataset"
+    ds = PadoDataset(dataset_path, mode="x")
+
+    ds.add_source(TestDataSource(num_images=2, num_findings=12, identifier="s0"))
+    ds.add_source(TestDataSource(num_images=1, num_findings=7, identifier="s1"))
+
+    assert isinstance(ds.metadata, pd.DataFrame)
+    assert len(ds.metadata) == 19
+    assert count_images(ds) == 3
 
 
 @pytest.fixture()
