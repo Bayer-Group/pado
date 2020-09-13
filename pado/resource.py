@@ -396,6 +396,6 @@ class ImageResourceCopier:
                     else:
                         images[idx] = InternalImageResource(
                             image.id, internal_path, image.md5
-                        )
+                        ).attach(self.identifier, self.base_path)
         finally:
             images.save()
