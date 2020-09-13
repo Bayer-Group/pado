@@ -3,13 +3,18 @@ from __future__ import annotations
 import os
 import pathlib
 import re
-import shutil
 from pathlib import Path
-from typing import Iterable, Literal, Union
+from typing import Literal, Union
 
 import pandas as pd
 
-from pado.datasource import DataSource, ImageResource
+from pado.datasource import DataSource
+from pado.resource import (
+    ImageResourceCopier,
+    ImageResourcesProvider,
+    MergedImageResourcesProvider,
+    SerializableImageResourcesProvider,
+)
 from pado.structure import (
     PadoColumn,
     PadoInvalid,
@@ -169,8 +174,9 @@ class PadoDataset(DataSource):
         else:
             pass
 
-        # cached metadata dataframe
+        # cached metadata dataframe and image_provider
         self._metadata_df = None
+        self._image_provider = None
         self._path_images = self._path / "images"
         self._path_metadata = self._path / "metadata"
 
@@ -209,30 +215,46 @@ class PadoDataset(DataSource):
             self._metadata_df = df
         return self._metadata_df
 
-    def images(self) -> Iterable[ImageResource]:
-        raise NotImplementedError("todo: implement iteration over multiple sources")
+    @property
+    def images(self) -> ImageResourcesProvider:
+        if self._image_provider is None:
+            providers = []
+            for p in self._path_images.glob("*"):
+                if not p.is_dir():
+                    continue
+                providers.append(
+                    SerializableImageResourcesProvider(p.name, self._path_images)
+                )
+            self._image_provider = MergedImageResourcesProvider(providers)
+        return self._image_provider
 
     def add_source(self, source: DataSource, copy_images: bool = True):
         if self._readonly:
             raise RuntimeError("can't add sources to readonly dataset")
-        identifier = source.identifier
 
+        # store metadata and images
+        with source:
+            self._store_metadata(source)
+            self._store_image_provider(source, copy_images)
+
+    def _store_metadata(self, source):
+        """store the metadata in the dataset"""
+        identifier = source.identifier
         metadata_path = self._path_metadata / f"{identifier}.parquet.gzip"
         if metadata_path.is_file():
             # todo: allow extending
             raise ValueError("source already exists")
 
-        # store metadata
-        with source:
-            source.metadata.to_parquet(metadata_path, compression="gzip")
+        source.metadata.to_parquet(metadata_path, compression="gzip")
 
-            base = self._path_images / identifier
-            base.mkdir(exist_ok=True)
-            for image in source.images():
-                dst = base / Path(*image.id)
-                # note: maybe replace with urlretrieve to allow downloading
-                if copy_images:
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy(image.path, dst)
-                else:
-                    raise NotImplementedError("todo: allow keeping references?")
+    def _store_image_provider(self, source, copy_images=True, copier=None):
+        """store the image provider to the dataset"""
+        identifier = source.identifier
+
+        ip = SerializableImageResourcesProvider.from_provider(
+            identifier, self._path_images, source.images
+        )
+        if copy_images:
+            if copier is None:
+                copier = ImageResourceCopier(identifier, self._path_images)
+            copier(ip)

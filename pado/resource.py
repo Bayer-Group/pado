@@ -360,6 +360,6 @@ class ImageResourceCopier:
                     else:
                         images[idx] = InternalImageResource(
                             image.id, internal_path, image.md5
-                        )
+                        ).serialize()
         finally:
             images.save()
