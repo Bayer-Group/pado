@@ -77,11 +77,13 @@ def _get_test_data(num_images=3, num_rows=10):
 class TestDataSource(DataSource):
     identifier = "testsource"
 
-    def __init__(self, num_images=3, num_findings=10):
+    def __init__(self, num_images=3, num_findings=10, identifier=None):
         self._num_images = num_images
         self._num_findings = num_findings
         self._stack = None
         self._images = []
+        if identifier is not None:
+            self.identifier = identifier  # allow overriding identifier
 
     def acquire(self, raise_if_missing: bool = True):
         """prepare the temporary test images"""
