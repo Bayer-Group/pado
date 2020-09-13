@@ -312,6 +312,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         return (resource.id for resource in iter(self))
 
     def save(self):
+        self._df_filename.parent.mkdir(parents=True, exist_ok=True)
         self._df.to_parquet(self._df_filename, compression="gzip")
 
     @classmethod
