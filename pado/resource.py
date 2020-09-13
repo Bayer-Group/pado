@@ -335,7 +335,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         return len(self._df)
 
     def __iter__(self):
-        for _, row in self._df.itertuples():
+        for row in self._df.itertuples(index=False):
             resource = ImageResource.deserialize(row)
             if isinstance(resource, InternalImageResource):
                 resource.attach(self._identifier, self._base_path)
@@ -396,6 +396,6 @@ class ImageResourceCopier:
                     else:
                         images[idx] = InternalImageResource(
                             image.id, internal_path, image.md5
-                        ).serialize()
+                        )
         finally:
             images.save()
