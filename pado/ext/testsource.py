@@ -91,7 +91,7 @@ class TestDataSource(DataSource):
         _ = raise_if_missing  # ignored
         self._stack = ExitStack()
         for idx in range(self._num_images):
-            img_id = f"i{idx}"
+            img_id = f"i{idx}.tif"
             img = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
             md5 = hash_file(img, hasher=hashlib.md5)
             self._images.append((img_id, img, md5))
