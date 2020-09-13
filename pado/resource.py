@@ -320,10 +320,6 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         else:
             self._df = pd.DataFrame(columns=_SerializedImageResource._fields)
 
-    @property
-    def data(self):
-        return self._df
-
     def __getitem__(self, item: int) -> ImageResource:
         row = self._df.iloc[item]
         resource = ImageResource.deserialize(row)
@@ -354,9 +350,11 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
 
     @classmethod
     def from_provider(cls, identifier, base_path, provider):
-        df = [resource.serialize() for resource in provider]
         inst = cls(identifier, base_path)
-        inst.data.append(df)
+        inst._df = pd.DataFrame(
+            [resource.serialize() for resource in provider],
+            columns=_SerializedImageResource._fields,
+        )
         inst.save()
         return inst
 
