@@ -4,13 +4,18 @@ import pandas as pd
 import pytest
 
 from pado.dataset import PadoDataset
+from pado.resource import SerializableImageResourcesProvider
 from pado.structure import PadoColumn
 
 
 def count_images(ds: PadoDataset):
-    imgs = list(filter(Path.is_file, (ds.path / "images").glob("**/*")))
-    print(imgs)
-    return len(imgs)
+    """helper to count images in a pado dataset"""
+
+    def is_image_file(p):
+        return p.is_file() and p.name != SerializableImageResourcesProvider.STORAGE_FILE
+
+    images = list(filter(is_image_file, (ds.path / "images").glob("**/*")))
+    return len(images)
 
 
 def test_pado_test_datasource(datasource):
