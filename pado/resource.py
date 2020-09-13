@@ -247,7 +247,7 @@ class MergedImageResourcesProvider(ImageResourcesProvider):
         if not isinstance(item, int):
             raise TypeError("expects integer type")
         if item < 0 or item >= self._total_len:
-            raise ValueError(f"item index {item} not in range({len(self)})")
+            raise IndexError(f"item index {item} not in range({len(self)})")
         it0, it1 = tee(self._cumulative_lengths)
         next(it1, None)
 
