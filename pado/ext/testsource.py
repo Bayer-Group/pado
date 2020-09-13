@@ -4,16 +4,15 @@ from functools import cached_property
 from itertools import cycle, islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Iterable, Tuple
 
 import numpy as np
 import pandas as pd
 from tifffile import imsave
 
-from pado.datasource import DataSource, ImageResource
-
-# noinspection PyPep8Naming
-from pado.structure import PadoColumn as c
+from pado.datasource import DataSource
+from pado.fileutils import hash_file
+from pado.resource import ImageResourcesProvider, LocalImageResource
+from pado.structure import PadoColumn
 
 try:
     from pado._version import __version__
@@ -33,20 +32,7 @@ def make_temporary_tiff(name, size=(100, 100)):
         yield img_fn
 
 
-class TestImageResource(ImageResource):
-    def __init__(self, image_id: str, file: Path):
-        self._id = image_id
-        self._path = file
-
-    @property
-    def id(self) -> Tuple[str, ...]:
-        return (self._id,)
-
-    @property
-    def path(self) -> Path:
-        return self._path
-
-
+c = PadoColumn
 TEST_DATA = {
     # Study
     c.STUDY: ["s0", "s1"],
@@ -102,8 +88,10 @@ class TestDataSource(DataSource):
         _ = raise_if_missing  # ignored
         self._stack = ExitStack()
         for idx in range(self._num_images):
+            img_id = f"i{idx}"
             img = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
-            self._images.append(img)
+            md5 = hash_file(img)
+            self._images.append((img_id, img, md5))
 
     def release(self):
         """release the temporary image resources"""
@@ -120,9 +108,10 @@ class TestDataSource(DataSource):
         data = _get_test_data(self._num_images, self._num_findings)
         return pd.DataFrame(data)
 
-    def images(self) -> Iterable[ImageResource]:
+    @property
+    def images(self) -> ImageResourcesProvider:
         """iterate over the test images"""
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
-        for img_id, img_path in enumerate(self._images):
-            yield TestImageResource(f"i{img_id}", img_path)
+        for img_id, img_path, img_md5 in self._images:
+            yield LocalImageResource(img_id, img_path, img_md5)

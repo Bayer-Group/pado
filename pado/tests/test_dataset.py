@@ -10,9 +10,9 @@ from pado.structure import PadoColumn
 def test_pado_test_datasource(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
-        for image in datasource.images():
+        for image in datasource.images:
             assert image.id is not None
-            assert image.path.is_file()
+            assert image.size > 0
 
 
 def test_write_pado_dataset(datasource, tmp_path):
