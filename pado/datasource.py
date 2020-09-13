@@ -1,23 +1,12 @@
+import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
 import pandas as pd
 
+import pado.resource
 from pado.structure import PadoColumn
-
-
-class ImageResource(ABC):
-    @property
-    @abstractmethod
-    def id(self) -> Tuple[str, ...]:
-        ...
-
-    @property
-    @abstractmethod
-    def path(self) -> Path:
-        """this should point to the image resource"""
-        ...
 
 
 class DataSource(ABC):
@@ -36,8 +25,9 @@ class DataSource(ABC):
     def metadata(self) -> pd.DataFrame:
         ...
 
+    @property
     @abstractmethod
-    def images(self) -> Iterable[ImageResource]:
+    def images(self) -> pado.resource.ImageResourcesProvider:
         ...
 
     def acquire(self, raise_if_missing: bool = True):
