@@ -4,6 +4,7 @@ import datetime
 import os
 import pathlib
 import re
+import warnings
 from pathlib import Path
 from typing import List, Literal, Optional, TypedDict, Union
 
@@ -133,6 +134,7 @@ class PadoDataSourceDict(TypedDict):
 
 
 class PadoInfoDict(TypedDict):
+    identifier: str
     created: datetime.datetime
     updated: datetime.datetime
     version: int
@@ -142,7 +144,12 @@ class PadoInfoDict(TypedDict):
 class PadoDataset(DataSource):
     __version__ = 1
 
-    def __init__(self, path: Union[str, pathlib.Path], mode: DatasetIOMode = "r"):
+    def __init__(
+        self,
+        path: Union[str, pathlib.Path],
+        mode: DatasetIOMode = "r",
+        identifier: Optional[str] = None,
+    ):
         """open or create a new PadoDataset
 
         Parameters
@@ -189,11 +196,20 @@ class PadoDataset(DataSource):
         self._path_images = self._path / "images"
         self._path_metadata = self._path / "metadata"
 
+        # identifier
+        if identifier is None:
+            identifier = self._path.name
+
         if _exists:
             self._info = self._load_dataset_toml()
             # check version
             if self.__version__ < self._info["version"]:
                 raise RuntimeError("dataset was created with a newer version of pado")
+
+            if identifier != self._info["identifier"]:
+                self._info["identifier"] = identifier
+                if not self._readonly:
+                    self._store_dataset_toml()
 
             if not verify_pado_dataset_integrity(path):
                 raise RuntimeError("dataset integrity degraded")
@@ -203,7 +219,7 @@ class PadoDataset(DataSource):
             self._path_images.mkdir(exist_ok=True)
             self._path_metadata.mkdir(exist_ok=True)
             # write initial dataset toml
-            self._info = self._store_dataset_toml(_info={})
+            self._info = self._store_dataset_toml(_info={"identifier": identifier})
 
         # cached metadata dataframe and image_provider
         self._metadata_df = None
@@ -213,6 +229,10 @@ class PadoDataset(DataSource):
     def path(self):
         """root folder of pado dataset"""
         return self._path
+
+    @property
+    def identifier(self):
+        return self._info["identifier"]
 
     @property
     def metadata(self) -> pd.DataFrame:
@@ -291,6 +311,7 @@ class PadoDataset(DataSource):
             _info = self._info
 
         info_dict = PadoInfoDict(
+            identifier=_info["identifier"],
             created=_info.get("created", datetime.datetime.now()),
             updated=datetime.datetime.now(),
             version=self.__version__,
