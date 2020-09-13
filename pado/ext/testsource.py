@@ -12,7 +12,7 @@ from tifffile import imsave
 
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
-from pado.resource import ImageResourcesProvider, LocalImageResource
+from pado.resource import ImageResource, ImageResourcesProvider, LocalImageResource
 from pado.structure import PadoColumn
 
 try:
@@ -75,6 +75,18 @@ def _get_test_data(num_images=3, num_rows=10):
     return data
 
 
+class _TestImageResourcesProvider(ImageResourcesProvider):
+    def __init__(self, images):
+        self._images = images
+
+    def __getitem__(self, item: int) -> ImageResource:
+        img_id, img_path, img_md5 = self._images[item]
+        return LocalImageResource(img_id, img_path, img_md5)
+
+    def __len__(self) -> int:
+        return len(self._images)
+
+
 class TestDataSource(DataSource):
     identifier = "testsource"
 
@@ -116,5 +128,4 @@ class TestDataSource(DataSource):
         """iterate over the test images"""
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
-        for img_id, img_path, img_md5 in self._images:
-            yield LocalImageResource(img_id, img_path, img_md5)
+        return _TestImageResourcesProvider(self._images)
