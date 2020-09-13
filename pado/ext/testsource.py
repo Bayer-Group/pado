@@ -1,4 +1,5 @@
 """test datasource for pado"""
+import hashlib
 from contextlib import ExitStack, contextmanager
 from functools import cached_property
 from itertools import cycle, islice
@@ -92,7 +93,7 @@ class TestDataSource(DataSource):
         for idx in range(self._num_images):
             img_id = f"i{idx}"
             img = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
-            md5 = hash_file(img)
+            md5 = hash_file(img, hasher=hashlib.md5)
             self._images.append((img_id, img, md5))
 
     def release(self):
