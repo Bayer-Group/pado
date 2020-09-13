@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import datetime
 import os
 import pathlib
 import re
 from pathlib import Path
-from typing import Literal, Union
+from typing import List, Literal, Optional, TypedDict, Union
 
 import pandas as pd
+import toml
 
 from pado.datasource import DataSource
 from pado.resource import (
@@ -124,7 +126,22 @@ DatasetIOMode = Union[
 ]
 
 
+class PadoDataSourceDict(TypedDict):
+    identifier: str
+    added: datetime.datetime
+    num_images: int
+
+
+class PadoInfoDict(TypedDict):
+    created: datetime.datetime
+    updated: datetime.datetime
+    version: int
+    sources: List[PadoDataSourceDict]
+
+
 class PadoDataset(DataSource):
+    __version__ = 1
+
     def __init__(self, path: Union[str, pathlib.Path], mode: DatasetIOMode = "r"):
         """open or create a new PadoDataset
 
@@ -168,22 +185,29 @@ class PadoDataset(DataSource):
             _exists = False
             raise NotImplementedError("not tested yet...")
 
+        # internal paths
+        self._path_images = self._path / "images"
+        self._path_metadata = self._path / "metadata"
+
         if _exists:
+            self._info = self._load_dataset_toml()
+            # check version
+            if self.__version__ < self._info["version"]:
+                raise RuntimeError("dataset was created with a newer version of pado")
+
             if not verify_pado_dataset_integrity(path):
                 raise RuntimeError("dataset integrity degraded")
         else:
-            pass
+            # ensure folders exist
+            self._path.mkdir(exist_ok=True)
+            self._path_images.mkdir(exist_ok=True)
+            self._path_metadata.mkdir(exist_ok=True)
+            # write initial dataset toml
+            self._info = self._store_dataset_toml(_info={})
 
         # cached metadata dataframe and image_provider
         self._metadata_df = None
         self._image_provider = None
-        self._path_images = self._path / "images"
-        self._path_metadata = self._path / "metadata"
-
-        # ensure folders exist
-        self._path.mkdir(exist_ok=True)
-        self._path_images.mkdir(exist_ok=True)
-        self._path_metadata.mkdir(exist_ok=True)
 
     @property
     def path(self):
@@ -236,6 +260,7 @@ class PadoDataset(DataSource):
         with source:
             self._store_metadata(source)
             self._store_image_provider(source, copy_images)
+            self._store_dataset_toml(add_source=source)
 
     def _store_metadata(self, source):
         """store the metadata in the dataset"""
@@ -258,3 +283,32 @@ class PadoDataset(DataSource):
             if copier is None:
                 copier = ImageResourceCopier(identifier, self._path_images)
             copier(ip)
+
+    def _store_dataset_toml(
+        self, add_source: Optional[DataSource] = None, *, _info=None
+    ) -> PadoInfoDict:
+        if _info is None:
+            _info = self._info
+
+        info_dict = PadoInfoDict(
+            created=_info.get("created", datetime.datetime.now()),
+            updated=datetime.datetime.now(),
+            version=self.__version__,
+            sources=_info.get("sources", []),
+        )
+        if add_source:
+            source_dict = PadoDataSourceDict(
+                identifier=add_source.identifier,
+                added=datetime.datetime.now(),
+                num_images=len(add_source.images),
+            )
+            info_dict["sources"].append(source_dict)
+
+        with self._config.open("w") as config:
+            toml.dump(info_dict, config)
+        return info_dict
+
+    def _load_dataset_toml(self) -> PadoInfoDict:
+        with self._config.open("r") as config:
+            dataset_config = toml.load(config)
+        return dataset_config
