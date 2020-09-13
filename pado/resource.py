@@ -1,13 +1,14 @@
 import contextlib
 import hashlib
 import platform
+import re
 import tempfile
 import warnings
 from abc import ABC, abstractmethod
 from itertools import tee
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, List, NamedTuple, Optional, Tuple, Union
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
 import pandas as pd
@@ -96,12 +97,31 @@ class ImageResourcesProvider(ABC):
 
 class LocalImageResource(ImageResource, resource_type="local"):
     __slots__ = ("_path",)
+    supported_schemes = {"file"}
 
     def __init__(self, image_id, resource, md5sum=None):
-        if not isinstance(resource, (Path, str)):
-            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
         super().__init__(image_id, resource, md5sum)
-        self._path = Path(resource)
+        if isinstance(resource, Path):
+            p = resource
+
+        elif isinstance(resource, str):
+            # URIs need to be parsed
+            _parsed = urlparse(resource)
+            if _parsed.scheme not in self.supported_schemes:
+                raise ValueError(f"'{_parsed.scheme}' scheme unsupported")
+            path_str = unquote(_parsed.path)
+            # check if we encode a windows path
+            if re.match(r"/[A-Z]:/[^/]", path_str):
+                p = PureWindowsPath(path_str[1:])
+            elif re.match(r"//(?P<share>[^/]+)/(?P<directory>[^/]+)/", path_str):
+                p = PureWindowsPath(path_str)
+            else:
+                p = PurePosixPath(path_str)
+
+        else:
+            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
+
+        self._path = Path(p)
         if not self._path.is_absolute():
             raise ValueError(
                 f"LocalImageResource requires absolute path, got '{resource}'"
@@ -121,12 +141,13 @@ class LocalImageResource(ImageResource, resource_type="local"):
 
 class RemoteImageResource(ImageResource, resource_type="remote"):
     __slots__ = ("_url", "_fp")
+    supported_schemes = {"http", "https", "ftp"}
 
     def __init__(self, image_id, resource, md5sum=None):
         super().__init__(image_id, resource, md5sum)
         if not isinstance(resource, str):
             raise TypeError(f"url not str, got {type(resource)}")
-        if urlparse(resource).scheme not in {"http", "https", "ftp"}:
+        if urlparse(resource).scheme not in self.supported_schemes:
             warnings.warn(f"untested scheme for url: '{resource}'")
         self._url = resource
         self._fp = None
@@ -153,17 +174,33 @@ class RemoteImageResource(ImageResource, resource_type="remote"):
 
 
 class InternalImageResource(ImageResource, resource_type="internal"):
+    __slots__ = ("_path", "_base_path", "_identifier")
+    supported_schemes = {"pado+internal"}
+
     def __init__(self, image_id, resource, md5sum=None):
-        if not isinstance(resource, (Path, str)):
-            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
         super().__init__(image_id, resource, md5sum)
-        self._path = Path(resource)
+        if isinstance(resource, Path):
+            # Paths can directly pass through
+            ident, p = None, Path(resource)
+
+        elif isinstance(resource, str):
+            # URIs need to be parsed
+            _parsed = urlparse(resource)
+            if _parsed.scheme not in InternalImageResource.supported_schemes:
+                raise ValueError(f"'{_parsed.scheme}' scheme unsupported")
+            ident = _parsed.netloc
+            p = Path(unquote(_parsed.path)).relative_to("/")
+
+        else:
+            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
+
+        self._path = p
         if self._path.is_absolute():
             raise ValueError(
-                f"LocalImageResource requires relative path, got '{resource}'"
+                f"{self.__class__.__name__} requires relative path, got '{resource}'"
             )
         self._base_path = None
-        self._identifier = None
+        self._identifier = ident
 
     def open(self):
         try:
