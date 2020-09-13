@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 import pandas as pd
 
 import pado.resource
-from pado.structure import PadoColumn
 
 
 class DataSource(ABC):
@@ -16,7 +14,6 @@ class DataSource(ABC):
     """
 
     identifier: str
-    image_id_columns: List[str] = [PadoColumn.IMAGE]
 
     @property
     @abstractmethod

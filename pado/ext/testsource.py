@@ -90,7 +90,6 @@ def _get_test_data(num_images=3, num_rows=10):
 
 class TestDataSource(DataSource):
     identifier = "testsource"
-    image_id_columns = [c.IMAGE]
 
     def __init__(self, num_images=3, num_findings=10):
         self._num_images = num_images
