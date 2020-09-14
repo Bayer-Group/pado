@@ -398,3 +398,37 @@ class ImageResourceCopier:
                         ).attach(self.identifier, self.base_path)
         finally:
             images.save()
+
+
+class DataSource(ABC):
+    """DataSource base class
+
+    All data sources should go through this abstraction to
+    allow channelling them into the same df_path_from_url format.
+
+    """
+
+    identifier: str
+
+    @property
+    @abstractmethod
+    def metadata(self) -> pd.DataFrame:
+        ...
+
+    @property
+    @abstractmethod
+    def images(self) -> ImageResourcesProvider:
+        ...
+
+    def acquire(self, raise_if_missing: bool = True):
+        pass
+
+    def release(self):
+        pass
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
