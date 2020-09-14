@@ -420,14 +420,15 @@ class DataSource(ABC):
     def images(self) -> ImageResourcesProvider:
         ...
 
-    def acquire(self, raise_if_missing: bool = True):
+    def acquire(self, raise_if_missing: bool = False):
         pass
 
     def release(self):
         pass
 
     def __enter__(self):
-        self.acquire()
+        # prevent implicitly doing potentially expensive things
+        self.acquire(raise_if_missing=True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
