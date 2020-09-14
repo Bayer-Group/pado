@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from tifffile import imsave
 
-from pado.datasource import DataSource
+from pado.dataset import DataSource
 from pado.fileutils import hash_file
 from pado.resource import ImageResource, ImageResourcesProvider, LocalImageResource
 from pado.structure import PadoColumn

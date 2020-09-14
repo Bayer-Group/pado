@@ -4,14 +4,13 @@ import datetime
 import os
 import pathlib
 import re
-import warnings
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Literal, Optional, TypedDict, Union
 
 import pandas as pd
 import toml
 
-from pado.datasource import DataSource
 from pado.resource import (
     ImageResourceCopier,
     ImageResourcesProvider,
@@ -113,6 +112,40 @@ class PadoAccessor:
     slides = _SubsetDescriptor(c.SLIDE)
     images = _SubsetDescriptor(c.IMAGE)
     findings = _SubsetDescriptor(c.FINDING)
+
+
+class DataSource(ABC):
+    """DataSource base class
+
+    All data sources should go through this abstraction to
+    allow channelling them into the same output format.
+
+    """
+
+    identifier: str
+
+    @property
+    @abstractmethod
+    def metadata(self) -> pd.DataFrame:
+        ...
+
+    @property
+    @abstractmethod
+    def images(self) -> ImageResourcesProvider:
+        ...
+
+    def acquire(self, raise_if_missing: bool = True):
+        pass
+
+    def release(self):
+        pass
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
 
 
 DatasetIOMode = Union[
