@@ -80,6 +80,9 @@ class ImageResource(ABC):
         impl = cls.registry[data.type]
         return impl(data.image_id, data.uri, data.md5)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(image_id={self.id})"
+
 
 class LocalImageResource(ImageResource, resource_type="local"):
     __slots__ = ("_path",)
