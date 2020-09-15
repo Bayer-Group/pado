@@ -1,7 +1,6 @@
 """test datasource for pado"""
 import hashlib
 from contextlib import ExitStack, contextmanager
-from functools import cached_property
 from itertools import cycle, islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -97,6 +96,9 @@ class TestDataSource(DataSource):
         self._images = []
         if identifier is not None:
             self.identifier = identifier  # allow overriding identifier
+        # cache
+        self._md = None
+        self._im = None
 
     def acquire(self, raise_if_missing: bool = True):
         """prepare the temporary test images"""
@@ -115,17 +117,21 @@ class TestDataSource(DataSource):
             self._stack.close()
             self._stack = None
 
-    @cached_property
+    @property
     def metadata(self) -> pd.DataFrame:
         """return the test metadata"""
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
-        data = _get_test_data(self._num_images, self._num_findings)
-        return pd.DataFrame(data)
+        if self._md is None:
+            data = _get_test_data(self._num_images, self._num_findings)
+            self._md = pd.DataFrame(data)
+        return self._md
 
     @property
     def images(self) -> ImageResourcesProvider:
         """iterate over the test images"""
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
-        return _TestImageResourcesProvider(self._images)
+        if self._im is None:
+            self._im = _TestImageResourcesProvider(self._images)
+        return self._im
