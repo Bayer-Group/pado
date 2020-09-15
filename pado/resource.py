@@ -25,7 +25,7 @@ class _SerializedImageResource(NamedTuple):
 
 
 class ImageResource(ABC):
-    __slots__ = ("_image_id", "_resource", "_md5sum")
+    __slots__ = ("_image_id", "_str_image_id", "_resource", "_md5sum")
     registry = {}
     resource_type = None
 
@@ -36,16 +36,25 @@ class ImageResource(ABC):
 
     def __init__(self, image_id, resource, md5sum=None):
         if isinstance(image_id, str):
+            str_image_id = image_id
             image_id = tuple(image_id.split(SEPARATOR))
-        if not isinstance(image_id, (tuple, list, pd.Series)):
+        elif isinstance(image_id, (tuple, list, pd.Series)):
+            image_id = tuple(image_id)
+            str_image_id = SEPARATOR.join(image_id)
+        else:
             raise TypeError(f"image_id not str or tuple, got {type(image_id)}")
-        self._image_id = tuple(image_id)
+        self._image_id = image_id
+        self._str_image_id = str_image_id
         self._resource = resource
         self._md5sum = md5sum
 
     @property
     def id(self) -> ImageId:
         return self._image_id
+
+    @property
+    def id_str(self) -> str:
+        return self._str_image_id
 
     @property
     def md5(self) -> str:
