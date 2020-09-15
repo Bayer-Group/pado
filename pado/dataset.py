@@ -6,12 +6,12 @@ import pathlib
 import re
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import Dict, List, Optional, Union
 
 try:
-    from typing import Literal
+    from typing import Literal, TypedDict
 except ImportError:
-    from typing_extensions import Literal
+    from typing_extensions import Literal, TypedDict
 
 import pandas as pd
 import toml
