@@ -58,6 +58,12 @@ class ImageResource(ABC):
         """return an uri for the resource"""
         ...
 
+    @property
+    @abstractmethod
+    def local_path(self) -> Optional[Path]:
+        """if possible return a local path"""
+        ...
+
     @abstractmethod
     def open(self):
         """return a file like object"""
@@ -127,6 +133,10 @@ class LocalImageResource(ImageResource, resource_type="local"):
     def uri(self) -> str:
         return self._path.as_uri()
 
+    @property
+    def local_path(self) -> Optional[Path]:
+        return self._path
+
 
 class RemoteImageResource(ImageResource, resource_type="remote"):
     __slots__ = ("_url", "_fp")
@@ -160,6 +170,10 @@ class RemoteImageResource(ImageResource, resource_type="remote"):
     @property
     def uri(self) -> str:
         return self._url
+
+    @property
+    def local_path(self) -> Optional[Path]:
+        return None
 
 
 class InternalImageResource(ImageResource, resource_type="internal"):
@@ -217,6 +231,16 @@ class InternalImageResource(ImageResource, resource_type="internal"):
                 "InternalImageResource has to be attached to dataset for usage"
             )
         return f"pado+internal://{self._identifier}/{self._path}"
+
+    @property
+    def local_path(self) -> Optional[Path]:
+        try:
+            path = self._base_path / self._identifier / self._path
+        except TypeError:
+            raise RuntimeError(
+                "InternalImageResource has to be attached to dataset for usage"
+            )
+        return path
 
     def attach(self, identifier: str, base_path: Path):
         self._identifier = identifier
