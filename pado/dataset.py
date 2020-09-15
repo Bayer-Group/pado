@@ -4,8 +4,9 @@ import datetime
 import os
 import pathlib
 import re
+import warnings
 from pathlib import Path
-from typing import List, Literal, Optional, TypedDict, Union
+from typing import Dict, List, Literal, Optional, TypedDict, Union
 
 import pandas as pd
 import toml
@@ -15,6 +16,7 @@ from pado.resource import (
     ImageResourceCopier,
     ImageResourcesProvider,
     MergedImageResourcesProvider,
+    RemoteImageResource,
     SerializableImageResourcesProvider,
 )
 from pado.structure import (
@@ -22,6 +24,7 @@ from pado.structure import (
     PadoInvalid,
     PadoReserved,
     build_column_map,
+    structurize_metadata,
     verify_columns,
 )
 
@@ -231,6 +234,7 @@ class PadoDataset(DataSource):
 
         # cached metadata dataframe and image_provider
         self._metadata_df = None
+        self._metadata_colmap = None
         self._image_provider = None
 
     @property
@@ -265,6 +269,7 @@ class PadoDataset(DataSource):
                 .reset_index(drop=True)
             )
             self._metadata_df = df
+            self._metadata_colmap = build_column_map(df.columns)
         return self._metadata_df
 
     @property
@@ -279,6 +284,24 @@ class PadoDataset(DataSource):
                 )
             self._image_provider = MergedImageResourcesProvider(providers)
         return self._image_provider
+
+    def __getitem__(self, item: int) -> Dict:
+        image = self.images[item]
+        if isinstance(image, RemoteImageResource):
+            warnings.warn(
+                "you're requesting data from a dataset that contains remote image resources"
+            )
+        _df = self.metadata
+        metadata = _df[_df[PadoColumn.IMAGE] == image.id_str]
+        # this is where a relational database would be great...
+        metadata_dict = structurize_metadata(
+            metadata, PadoColumn.IMAGE, self._metadata_colmap
+        )
+
+        return {"image": image, "metadata": metadata_dict}
+
+    def __len__(self):
+        return len(self.images)
 
     def add_source(self, source: DataSource, copy_images: bool = True):
         if self._readonly:
