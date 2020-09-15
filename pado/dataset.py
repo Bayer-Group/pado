@@ -36,7 +36,7 @@ def is_pado_dataset(path: Path, load_data=False):
     if path.name == "pado.dataset.toml" and path.is_file():
         if not load_data:
             return True
-        with path.open("rb") as p:
+        with path.open("r") as p:
             return toml.load(p)
     else:
         # we could check more, but let's file this under
@@ -48,18 +48,21 @@ def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
     """verify file integrity of a pado dataset"""
     path = Path(path)
     data = is_pado_dataset(path, load_data=True)
+    if path.is_dir():
+        path /= "pado.dataset.toml"
     if not data:
         raise ValueError("provided Path is not a pado dataset")
 
     dataset_dir = path.parent
-    required_dirs = map(dataset_dir.__div__, ["images", "metadata"])
-    if not all(p.is_dir() for p in required_dirs):
-        return False
+    required_dirs = [dataset_dir / "images", dataset_dir / "metadata"]
+    for p in required_dirs:
+        if not p.is_dir():
+            raise ValueError(f"missing {p} directory")
 
     identifiers = [ds["identifier"] for ds in data["sources"]]
     for identifier in identifiers:
-        if not path.glob(f"metadata/{identifier}.*"):
-            return False
+        if not list(dataset_dir.glob(f"metadata/{identifier}.*")):
+            raise ValueError(f"identifier {identifier} is missing metadata")
 
     return True
 
@@ -214,7 +217,9 @@ class PadoDataset(DataSource):
                 if not self._readonly:
                     self._store_dataset_toml()
 
-            if not verify_pado_dataset_integrity(path):
+            try:
+                verify_pado_dataset_integrity(path)
+            except ValueError:
                 raise RuntimeError("dataset integrity degraded")
         else:
             # ensure folders exist
