@@ -9,8 +9,9 @@ __all__ = [
     "PadoColumn",
     "PadoInvalid",
     "PadoReserved",
-    "verify_columns",
     "build_column_map",
+    "structurize_metadata",
+    "verify_columns",
 ]
 
 ALLOWED_CHARACTERS = set(string.ascii_letters + string.digits + "_")
