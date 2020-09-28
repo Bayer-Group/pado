@@ -107,6 +107,8 @@ class TestDataSource(DataSource):
     def acquire(self, raise_if_missing: bool = True):
         """prepare the temporary test images"""
         _ = raise_if_missing  # ignored
+        if self._stack:
+            return
         self._stack = ExitStack()
         for idx in range(self._num_images):
             img_id = f"i{idx}.tif"
