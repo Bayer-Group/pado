@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from pado.dataset import PadoDataset
-from pado.resource import SerializableImageResourcesProvider
+from pado.resource import DataSource, SerializableImageResourcesProvider
 from pado.structure import PadoColumn
 
 
@@ -17,6 +17,10 @@ def count_images(ds: PadoDataset):
 
     images = list(filter(is_image_file, (ds.path / "images").glob("**/*")))
     return len(images)
+
+
+def test_pado_testsource_verification(datasource: DataSource):
+    datasource.verify(acquire=True)
 
 
 def test_pado_test_datasource(datasource):
