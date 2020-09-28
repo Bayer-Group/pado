@@ -281,9 +281,7 @@ class PadoDataset(DataSource):
     def images(self) -> ImageResourcesProvider:
         if self._image_provider is None:
             providers = []
-            for p in self._path_images.glob("*"):
-                if not p.is_dir():
-                    continue
+            for p in filter(os.path.isdir, self._path_images.glob("*")):
                 providers.append(
                     SerializableImageResourcesProvider(p.name, self._path_images)
                 )
@@ -295,7 +293,7 @@ class PadoDataset(DataSource):
         if isinstance(image, RemoteImageResource):
             warnings.warn(
                 "you're requesting data from a dataset that contains remote image resources"
-            )
+            )  # pragma: no cover
         _df = self.metadata
         metadata = _df[_df[PadoColumn.IMAGE] == image.id_str]
         # this is where a relational database would be great...
