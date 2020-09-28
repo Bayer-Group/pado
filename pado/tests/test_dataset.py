@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -72,6 +73,36 @@ def dataset_ro(datasource, tmp_path):
     ds.add_source(datasource)
     del ds
     yield PadoDataset(dataset_path, mode="r")
+
+
+def test_is_pado_dataset(dataset: PadoDataset, tmp_path):
+    from pado.dataset import is_pado_dataset
+
+    assert not is_pado_dataset(tmp_path)
+    assert is_pado_dataset(dataset.path)
+
+
+@pytest.mark.parametrize("failure", ["dataset", "folders", "sources"])
+def test_pado_dataset_integrity(dataset: PadoDataset, tmp_path, failure):
+    from pado.dataset import verify_pado_dataset_integrity
+
+    p = Path(tmp_path) / "incomplete"
+    p.mkdir(parents=True)
+
+    if failure == "dataset":
+        pass
+    elif failure == "folders":
+        shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+        shutil.rmtree(p / "images")
+    elif failure == "sources":
+        shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+        for md in p.glob(f"metadata/*"):
+            md.unlink(missing_ok=True)
+    else:  # pragma: no cover
+        raise RuntimeError("incorrect failure mode")
+
+    with pytest.raises(ValueError):
+        verify_pado_dataset_integrity(p)
 
 
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
