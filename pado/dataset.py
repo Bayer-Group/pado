@@ -203,7 +203,7 @@ class PadoDataset(DataSource):
         elif mode in {"w", "w+"} and _exists:
             # todo: truncate
             # shutil.rmtree(self._path, ignore_errors=True)
-            _exists = False
+            # _exists = False
             raise NotImplementedError("not tested yet...")
 
         # internal paths
