@@ -7,7 +7,6 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 import pandas as pd
-from tifffile import imsave
 
 from pado.dataset import DataSource
 from pado.fileutils import hash_file
@@ -18,6 +17,11 @@ try:
     from pado._version import __version__
 except ImportError:
     __version__ = "not-installed"
+
+try:
+    from tifffile import imsave
+except ImportError:  # pragma: no cover
+    raise ImportError("pado.ext.testsource requires the `pado[testsource]` extra")
 
 __all__ = ["TestDataSource"]
 

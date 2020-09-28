@@ -19,6 +19,11 @@ def count_images(ds: PadoDataset):
 
 
 def test_pado_test_datasource(datasource):
+    with pytest.raises(RuntimeError):
+        _ = datasource.images
+    with pytest.raises(RuntimeError):
+        _ = datasource.metadata
+
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
         for image in datasource.images:
