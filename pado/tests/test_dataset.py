@@ -105,6 +105,55 @@ def test_pado_dataset_integrity(dataset: PadoDataset, tmp_path, failure):
         verify_pado_dataset_integrity(p)
 
 
+def test_open_dataset(dataset: PadoDataset, tmp_path):
+    p = Path(tmp_path)
+
+    with pytest.raises(ValueError):
+        PadoDataset(p / "wrong_suffix.abc")
+
+    with pytest.raises(ValueError):
+        # noinspection PyTypeChecker
+        PadoDataset(dataset.path, mode="incorrect_mode")
+
+    with pytest.raises(FileNotFoundError):
+        PadoDataset(p / "not-found.toml", mode="r")
+
+    with pytest.raises(FileExistsError):
+        PadoDataset(dataset.path, mode="x")
+
+
+def test_open_dataset_with_integrity_errors(dataset: PadoDataset):
+    shutil.rmtree(dataset.path / "images")
+    with pytest.raises(RuntimeError):
+        PadoDataset(dataset.path, mode="r")
+
+
+def test_open_pado_version_too_old(dataset: PadoDataset, monkeypatch):
+    # pretend pado is older
+    monkeypatch.setattr(PadoDataset, "__version__", PadoDataset.__version__ - 1)
+    with pytest.raises(RuntimeError):
+        PadoDataset(dataset.path)
+
+
+def test_pado_dataset_open_with_different_identifier(dataset: PadoDataset):
+    ds = PadoDataset(dataset.path, mode="r+", identifier="new_identifier")
+    assert ds.identifier == "new_identifier"
+
+
+def test_add_source_to_readonly_dataset(dataset_ro, datasource):
+    with pytest.raises(RuntimeError):
+        dataset_ro.add_source(datasource, copy_images=True)
+
+
+def test_add_source_twice(datasource, tmp_path):
+    dataset_path = tmp_path / "new_dataset"
+    ds = PadoDataset(dataset_path, mode="x")
+    ds.add_source(datasource, copy_images=True)
+
+    with pytest.raises(ValueError):
+        ds.add_source(datasource, copy_images=True)
+
+
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
     dataset_path = tmp_path / "new_dataset"
     ds = PadoDataset(dataset_path, mode="x")
