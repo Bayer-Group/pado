@@ -160,6 +160,19 @@ def test_use_dataset_as_datasource(dataset_ro, tmp_path):
     ds.add_source(dataset_ro, copy_images=True)
 
 
+def test_random_access_dataset(dataset_ro):
+    idx = len(dataset_ro) // 2
+    md = dataset_ro[idx]
+    assert md["image"]
+    assert md["metadata"]
+
+
+def test_iterate_dataset(dataset_ro):
+    for md in dataset_ro:
+        assert md["image"]
+        assert md["metadata"]
+
+
 _accessors = {
     "studies": PadoColumn.STUDY,
     "experiments": PadoColumn.EXPERIMENT,
