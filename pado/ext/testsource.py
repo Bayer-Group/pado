@@ -1,7 +1,7 @@
 """test datasource for pado"""
 import hashlib
+import random
 from contextlib import ExitStack, contextmanager
-from itertools import cycle, islice
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -36,46 +36,56 @@ def make_temporary_tiff(name, size=(100, 100)):
         yield img_fn
 
 
-c = PadoColumn
-TEST_DATA = {
-    # Study
-    c.STUDY: ["s0", "s1"],
-    # Experiment
-    c.EXPERIMENT: ["e0", "e1", "e2"],
-    c.EXPERIMENT.subcolumn("DOSE"): ["50ml", "100ml"],
-    c.EXPERIMENT.subcolumn("REPEATS"): [1, 2, 3, 4, 5],
-    # Group
-    c.GROUP: ["g0", "g1", "g3"],
-    # Animal
-    c.ANIMAL: ["a1", "a2", "a3", "a4", "a5"],
-    c.ANIMAL.subcolumn("SPECIES"): ["species_A", "species_B"],
-    c.ANIMAL.subcolumn("AGE"): [10, 20, 30, 40],
-    # COMPOUND
-    c.COMPOUND: ["cA", "cB", "cC"],
-    # ORGAN
-    c.ORGAN: ["organ_0", "organ_1", "organ_2"],
-    # SLIDE
-    c.SLIDE: [f"slide_{idx}" for idx in range(10)],
-    # IMAGE
-    c.IMAGE: ["i0"],
-    c.IMAGE.subcolumn("SCANNER"): ["scanner0", "scanner1"],
-    # FINDING
-    c.FINDING: ["f1", "f2", "f3"],
-    c.FINDING.subcolumn("GRADE"): ["minimal", "slight", "moderate", "severe"],
-}
-
-
 def _get_test_data(num_images=3, num_rows=10):
     """generate a test dataset"""
-    data = TEST_DATA.copy()
+    c = PadoColumn
+    records = []
+
+    # findings per image
+    num_findings_per_image = num_rows // num_images
+    num_findings = [num_findings_per_image] * num_images
+    num_findings[-1] += num_rows - (num_findings_per_image * num_images)
+
     # set the number of individual images
-    data[c.IMAGE] = [f"i{idx}" for idx in range(num_images)]
+    for idx, num_f in zip(range(num_images), num_findings):
+        image = f"i{idx}.tif"
+        image_scanner = random.choice(["scanner0", "scanner1"])
+        slide = f"slide_{idx}"
+        organ = f"o{idx}"
+        animal = f"a{idx}"
+        animal_species = random.choice(["species_A", "species_B"])
+        animal_age = random.randint(1, 4) * 10
+        group = f"g{idx}"
+        exp = f"e{idx}"
+        exp_dose = random.choice(["50ml", "100ml"])
+        exp_repeats = random.randint(1, 6)
+        compound = f"c{idx}"
+        study = "s0"
+        for finding in range(num_f):
+            finding = f"f{idx}_{finding}"
+            finding_grade = random.choice(["minimal", "slight", "moderate", "severe"])
 
-    # get num_rows items of each list
-    for key in data:
-        data[key] = list(islice(cycle(data[key]), num_rows))
+            record = {
+                c.STUDY: study,
+                c.EXPERIMENT: exp,
+                c.EXPERIMENT.subcolumn("DOSE"): exp_dose,
+                c.EXPERIMENT.subcolumn("REPEATS"): exp_repeats,
+                c.GROUP: group,
+                c.ANIMAL: animal,
+                c.ANIMAL.subcolumn("SPECIES"): animal_species,
+                c.ANIMAL.subcolumn("AGE"): animal_age,
+                c.COMPOUND: compound,
+                c.ORGAN: organ,
+                c.SLIDE: slide,
+                c.IMAGE: image,
+                c.IMAGE.subcolumn("SCANNER"): image_scanner,
+                c.FINDING: finding,
+                c.FINDING.subcolumn("GRADE"): finding_grade,
+            }
 
-    return data
+            records.append(record)
+
+    return records
 
 
 class _TestImageResourcesProvider(ImageResourcesProvider):
@@ -130,7 +140,7 @@ class TestDataSource(DataSource):
             raise RuntimeError("need to access via contextmanager or acquire resource")
         if self._md is None:
             data = _get_test_data(self._num_images, self._num_findings)
-            self._md = pd.DataFrame(data)
+            self._md = pd.DataFrame.from_records(data)
         return self._md
 
     @property
