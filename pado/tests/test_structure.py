@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from pado.structure import PadoColumn, PadoInvalid, PadoReserved
+from pado.structure import PadoColumn, PadoInvalid, PadoReserved, verify_columns
 
 
 def test_column_enums():
@@ -30,3 +30,20 @@ def test_subcolumn_allowed_values(subcolumn):
 
     with pytest.raises(ValueError):
         PadoColumn.IMAGE.subcolumn(subcolumn)
+
+
+def test_verify_columns():
+
+    # reserved columns are accepted
+    assert verify_columns([PadoReserved.DATA_SOURCE_ID]) is True
+
+    with pytest.raises(ValueError):
+        verify_columns([PadoInvalid.RESERVED_COL_INDEX])
+
+    with pytest.raises(ValueError):
+        verify_columns(["NOT_A_TOPLEVEL"])
+
+    with pytest.raises(ValueError):
+        verify_columns(["IMAGE___WRONG"])
+
+    assert verify_columns(["NOT_A_TOPLEVEL"], raise_if_invalid=False) is False
