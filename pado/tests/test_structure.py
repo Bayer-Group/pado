@@ -1,5 +1,6 @@
 import itertools
 
+import pandas as pd
 import pytest
 
 from pado.structure import (
@@ -75,3 +76,20 @@ def test_structurize_metadata(datasource):
     # structure
     s = structurize_metadata(sdf, PadoColumn.IMAGE, col_map)
     assert s
+
+
+def test_structurize_metadata_wrong(datasource):
+    with datasource:
+        col_map = build_column_map(datasource.metadata.columns)
+        df = datasource.metadata
+
+    # build an incorrectly structured dataset
+    assert len(df[PadoColumn.IMAGE].unique()) == 1
+    # break structure
+    df0 = df.copy()
+    df1 = df
+    df1[PadoColumn.IMAGE] = "something else"
+    sdf = pd.concat([df0, df1])
+
+    with pytest.raises(ValueError):
+        structurize_metadata(sdf, PadoColumn.IMAGE, col_map)
