@@ -113,7 +113,7 @@ class PadoAccessor:
 
         def __get__(self, instance, owner):
             if instance is None:
-                return self
+                return self  # pragma: no cover
             # noinspection PyProtectedMember
             return instance._subset(self._col)
 

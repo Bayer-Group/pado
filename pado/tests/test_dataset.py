@@ -197,3 +197,16 @@ def test_pado_dataframe_accessor(dataset, accessor, column):
     assert isinstance(df_subset, pd.DataFrame)
     assert len(df_subset) > 0
     assert all(map(lambda x: x.startswith(column), df_subset.columns))
+
+
+def test_pado_dfa_with_incorrect_df(dataset):
+    df = pd.DataFrame({"A": [1, 2, 3]})
+    with pytest.raises(AttributeError):
+        _ = df.pado
+
+    df = dataset.metadata
+    # "-" is an invalid column name character
+    df["IMAGE__ABC-INCORRECT"] = df["IMAGE"]
+
+    with pytest.raises(AttributeError):
+        _ = df.pado
