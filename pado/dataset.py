@@ -129,16 +129,7 @@ class PadoAccessor:
     findings = _SubsetDescriptor(c.FINDING)
 
 
-DatasetIOMode = Union[
-    Literal["r"],
-    Literal["r+"],
-    Literal["w"],
-    Literal["w+"],
-    Literal["a"],
-    Literal["a+"],
-    Literal["x"],
-    Literal["x+"],
-]
+DatasetIOMode = Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"]
 
 
 class PadoDataSourceDict(TypedDict):
