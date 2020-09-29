@@ -33,7 +33,6 @@ def test_subcolumn_allowed_values(subcolumn):
 
 
 def test_verify_columns():
-
     # reserved columns are accepted
     assert verify_columns([PadoReserved.DATA_SOURCE_ID]) is True
 
