@@ -21,8 +21,6 @@ from typing import (
 from shapely.geometry import asShape
 from shapely.geometry.base import BaseGeometry
 
-from pado.images import ImageId
-
 
 class AnnotationResource(NamedTuple):
     """keep compatibility with paquo in mind"""
@@ -99,10 +97,10 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
         self._data_cache = {}
         self._updated = set()
 
-    def __iter__(self) -> Iterator[ImageId]:
+    def __iter__(self) -> Iterator[str]:
         return iter(set().union(self._data_cache, self._data_paths))
 
-    def __getitem__(self, item: ImageId) -> Sequence[AnnotationResource]:
+    def __getitem__(self, item: str) -> Sequence[AnnotationResource]:
         try:
             return self._data_cache[item]
         except KeyError:
@@ -113,13 +111,11 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
     def __len__(self) -> int:
         return len(set().union(self._data_cache, self._data_paths))
 
-    def __setitem__(
-        self, item: ImageId, annotations_resources: AnnotationsDict
-    ) -> None:
+    def __setitem__(self, item: str, annotations_resources: AnnotationsDict) -> None:
         self._data_cache[item] = annotations_resources
         self._updated.add(item)
 
-    def __delitem__(self, item: ImageId) -> None:
+    def __delitem__(self, item: str) -> None:
         with suppress(KeyError):
             del self._data_cache[item]
         path: Path = self._data_paths.pop(item)
@@ -178,7 +174,7 @@ class MergedAnnotationsProvider(AnnotationsProvider):
         if self._len < sum(map(len, self._providers)):
             raise ValueError("duplicated keys between providers")
 
-    def __getitem__(self, item: ImageId) -> Sequence[AnnotationResource]:
+    def __getitem__(self, item: str) -> Sequence[AnnotationResource]:
         for provider in self._providers:
             try:
                 return provider[item]
@@ -189,7 +185,7 @@ class MergedAnnotationsProvider(AnnotationsProvider):
     def __len__(self) -> int:
         return self._len
 
-    def __iter__(self) -> Iterator[ImageId]:
+    def __iter__(self) -> Iterator[str]:
         return itertools.chain.from_iterable(self._providers)
 
     def __contains__(self, item) -> bool:
