@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
+from pado.annotations import AnnotationsProvider
 from pado.images import ImageResourcesProvider
 from pado.metadata import (
     PadoColumn,
@@ -29,6 +30,11 @@ class DataSource(ABC):
     @property
     @abstractmethod
     def images(self) -> ImageResourcesProvider:
+        ...
+
+    @property
+    @abstractmethod
+    def annotations(self) -> AnnotationsProvider:
         ...
 
     def acquire(self, raise_if_missing: bool = False):
