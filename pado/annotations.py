@@ -1,8 +1,7 @@
 import itertools
 import json
 import lzma
-from abc import abstractmethod
-from collections import Sequence
+from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
 from typing import (
@@ -11,9 +10,9 @@ from typing import (
     Iterator,
     List,
     Mapping,
-    MutableMapping,
     NamedTuple,
     Optional,
+    Sequence,
     Type,
     TypedDict,
 )
@@ -81,17 +80,7 @@ class AnnotationResource(NamedTuple):
 
 
 class AnnotationsProvider(Mapping[ImageId, Sequence[AnnotationResource]]):
-    @abstractmethod
-    def __iter__(self) -> Iterator[ImageId]:
-        ...
-
-    @abstractmethod
-    def __getitem__(self, item: ImageId) -> Sequence[AnnotationResource]:
-        ...
-
-    @abstractmethod
-    def __len__(self) -> int:
-        ...
+    pass
 
 
 class AnnotationsDict(TypedDict):
