@@ -17,7 +17,7 @@ from typing import (
     TypedDict,
 )
 
-from shapely.geometry import asShape
+from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
 
 
@@ -69,6 +69,7 @@ class Annotation(NamedTuple):
         return {
             "type": "Feature",
             "id": "PathAnnotationObject",
+            "geometry": mapping(self.roi),
             "properties": {
                 "classification": {"name": self.class_name},
                 "isLocked": self.locked,
