@@ -14,6 +14,7 @@ dependencies:
   - tifffile
   - numpy
   - toml
+  - shapely
   - importlib_resources
   - pytest>=6
   - pytest-cov
