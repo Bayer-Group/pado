@@ -16,7 +16,11 @@ except ImportError:
 import pandas as pd
 import toml
 
-from pado.annotations import AnnotationsProvider, MergedAnnotationsProvider
+from pado.annotations import (
+    AnnotationsProvider,
+    MergedAnnotationsProvider,
+    SerializableAnnotationsProvider,
+)
 from pado.datasource import DataSource
 from pado.images import (
     ImageResourceCopier,
@@ -201,6 +205,7 @@ class PadoDataset(DataSource):
         # internal paths
         self._path_images = self._path / "images"
         self._path_metadata = self._path / "metadata"
+        self._path_annotations = self._path / "annotations"
 
         # identifier
         if identifier is None:
@@ -226,6 +231,7 @@ class PadoDataset(DataSource):
             self._path.mkdir(exist_ok=True)
             self._path_images.mkdir(exist_ok=True)
             self._path_metadata.mkdir(exist_ok=True)
+            self._path_annotations.mkdir(exist_ok=True)
             # write initial dataset toml
             self._info = self._store_dataset_toml(_info={"identifier": identifier})
 
@@ -233,6 +239,7 @@ class PadoDataset(DataSource):
         self._metadata_df = None
         self._metadata_colmap = None
         self._image_provider = None
+        self._annotations_provider = None
 
     @property
     def path(self):
@@ -282,6 +289,19 @@ class PadoDataset(DataSource):
             self._metadata_colmap = build_column_map(df.columns)
         return self._metadata_df
 
+    @property
+    def annotations(self) -> AnnotationsProvider:
+        """a mapping-like interface for all annotations per image"""
+        if self._annotations_provider is None:
+            # TODO: needs a merged implementation like ImageResourcesProvider
+            providers = []
+            for p in filter(os.path.isdir, self._path_annotations.glob("*")):
+                providers.append(
+                    SerializableAnnotationsProvider(p.name, self._path_annotations)
+                )
+            self._image_provider = MergedAnnotationsProvider(providers)
+        return self._annotations_provider
+
     def __getitem__(self, item: int) -> Dict:
         image = self.images[item]
         if isinstance(image, RemoteImageResource):
@@ -294,8 +314,9 @@ class PadoDataset(DataSource):
         metadata_dict = structurize_metadata(
             metadata, PadoColumn.IMAGE, self._metadata_colmap
         )
+        annotations = self.annotations[image.id_str]
 
-        return {"image": image, "metadata": metadata_dict}
+        return {"image": image, "metadata": metadata_dict, "annotations": annotations}
 
     def __len__(self):
         return len(self.images)
