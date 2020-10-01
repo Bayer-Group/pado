@@ -7,7 +7,7 @@ import pytest
 from pado.dataset import PadoDataset
 from pado.datasource import DataSource
 from pado.images import SerializableImageResourcesProvider
-from pado.structure import PadoColumn
+from pado.metadata import PadoColumn
 
 
 def count_images(ds: PadoDataset):

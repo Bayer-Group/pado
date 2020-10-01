@@ -25,7 +25,7 @@ from pado.images import (
     RemoteImageResource,
     SerializableImageResourcesProvider,
 )
-from pado.structure import (
+from pado.metadata import (
     PadoColumn,
     PadoInvalid,
     PadoReserved,

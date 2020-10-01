@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 
 from pado.images import ImageResourcesProvider
-from pado.structure import (
+from pado.metadata import (
     PadoColumn,
     build_column_map,
     structurize_metadata,

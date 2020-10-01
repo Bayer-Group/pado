@@ -3,7 +3,7 @@ import itertools
 import pandas as pd
 import pytest
 
-from pado.structure import (
+from pado.metadata import (
     PadoColumn,
     PadoInvalid,
     PadoReserved,
@@ -32,7 +32,7 @@ def test_column_enums():
 )
 def test_subcolumn_allowed_values(subcolumn):
     # noinspection PyProtectedMember
-    from pado.structure import SEPARATOR
+    from pado.metadata import SEPARATOR
 
     assert SEPARATOR == "__"
 

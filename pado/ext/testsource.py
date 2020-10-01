@@ -11,7 +11,7 @@ import pandas as pd
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
 from pado.images import ImageResource, ImageResourcesProvider, LocalImageResource
-from pado.structure import PadoColumn
+from pado.metadata import PadoColumn
 
 try:
     from pado._version import __version__
