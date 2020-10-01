@@ -166,7 +166,7 @@ class SerializableAnnotationResourcesProvider(
         data = annotations_dict["metadata"].copy()
         data["annotations"] = [a.to_geojson() for a in annotations_dict["annotations"]]
 
-        with lzma.open(file_path, "w") as writer:
+        with lzma.open(file_path, "wt") as writer:
             json.dump(data, writer)
 
 

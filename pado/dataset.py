@@ -4,7 +4,7 @@ import pathlib
 import re
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 try:
     from typing import Literal, TypedDict
@@ -334,9 +334,10 @@ class PadoDataset(DataSource):
         with source:
             self._store_metadata(source)
             self._store_image_provider(source, copy_images)
+            self._store_annotation_provider(source)
             self._store_dataset_toml(add_source=source)
 
-    def _store_metadata(self, source):
+    def _store_metadata(self, source: DataSource):
         """store the metadata in the dataset"""
         identifier = source.identifier
         metadata_path = self._path_metadata / f"{identifier}.parquet.gzip"
@@ -346,7 +347,12 @@ class PadoDataset(DataSource):
 
         source.metadata.to_parquet(metadata_path, compression="gzip")
 
-    def _store_image_provider(self, source, copy_images=True, copier=None):
+    def _store_image_provider(
+        self,
+        source: DataSource,
+        copy_images: bool = True,
+        copier: Optional[Callable[[ImageResourcesProvider], None]] = None,
+    ):
         """store the image provider to the dataset"""
         identifier = source.identifier
 
@@ -357,6 +363,14 @@ class PadoDataset(DataSource):
             if copier is None:
                 copier = ImageResourceCopier(identifier, self._path_images)
             copier(ip)
+
+    def _store_annotation_provider(self, source: DataSource):
+        """store the annotation provider to the dataset"""
+        identifier = source.identifier
+
+        _ = SerializableAnnotationResourcesProvider.from_provider(
+            identifier, self._path_annotations, source.annotations
+        )
 
     def _store_dataset_toml(
         self, add_source: Optional[DataSource] = None, *, _info=None
