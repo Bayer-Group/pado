@@ -94,7 +94,10 @@ class SerializableAnnotationResourcesProvider(
     def __init__(self, identifier, base_path):
         self._identifier = identifier
         self._path = Path(base_path) / self._identifier
-        self._data_paths = {p.stem: p for p in self._path.glob(f"*{self.STORAGE_FMT}")}
+        self._data_paths = {
+            p.name[: -len(self.STORAGE_FMT)]: p
+            for p in self._path.glob(f"*{self.STORAGE_FMT}")
+        }
         self._data_cache = {}
         self._updated = set()
 
