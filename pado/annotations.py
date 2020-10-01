@@ -1,6 +1,7 @@
 import itertools
 import json
 import lzma
+from abc import ABC
 from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
@@ -79,7 +80,7 @@ class AnnotationResource(NamedTuple):
         }
 
 
-class AnnotationsProvider(Mapping[ImageId, Sequence[AnnotationResource]]):
+class AnnotationsProvider(Mapping[str, Sequence[AnnotationResource]], ABC):
     pass
 
 
