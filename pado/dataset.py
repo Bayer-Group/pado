@@ -15,6 +15,7 @@ import pandas as pd
 import toml
 
 from pado.annotations import (
+    AnnotationResources,
     AnnotationResourcesProvider,
     MergedAnnotationResourcesProvider,
     SerializableAnnotationResourcesProvider,
@@ -313,9 +314,14 @@ class PadoDataset(DataSource):
         metadata_dict = structurize_metadata(
             metadata, PadoColumn.IMAGE, self._metadata_colmap
         )
-        annotations = self.annotations.get(image.id_str, [])
-
-        return {"image": image, "metadata": metadata_dict, "annotations": annotations}
+        annotation_dict = self.annotations.get(image.id_str, {}).copy()
+        annotations = annotation_dict.pop("annotations", [])
+        # TODO: annotation_dict should be included in metadata_dict
+        return {
+            "image": image,
+            "metadata": metadata_dict,
+            "annotations": annotations,
+        }
 
     def __len__(self):
         return len(self.images)
