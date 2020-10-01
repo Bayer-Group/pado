@@ -4,11 +4,17 @@ import random
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Iterator
 
 import numpy as np
 import pandas as pd
+from shapely.geometry import Polygon
 
-from pado.annotations import AnnotationResourcesProvider
+from pado.annotations import (
+    Annotation,
+    AnnotationResources,
+    AnnotationResourcesProvider,
+)
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
 from pado.images import ImageResource, ImageResourcesProvider, LocalImageResource
@@ -101,6 +107,26 @@ class _TestImageResourcesProvider(ImageResourcesProvider):
         return len(self._images)
 
 
+class _TestAnnotationResourcesProvider(AnnotationResourcesProvider):
+    def __init__(self, images):
+        self._image_ids = [img_id for img_id, *_ in images]
+
+    def __getitem__(self, k: str) -> AnnotationResources:
+        return AnnotationResources(
+            annotations=[
+                Annotation(Polygon.from_bounds(10, 10, 20, 20), "A"),
+                Annotation(Polygon.from_bounds(30, 30, 40, 40), "B"),
+            ],
+            metadata={"annotator": "someone", "other_data": "something"},
+        )
+
+    def __len__(self) -> int:
+        return len(self._image_ids)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._image_ids)
+
+
 class TestDataSource(DataSource):
     identifier = "testsource"
 
@@ -114,6 +140,7 @@ class TestDataSource(DataSource):
         # cache
         self._md = None
         self._im = None
+        self._an = None
 
     def acquire(self, raise_if_missing: bool = True):
         """prepare the temporary test images"""
@@ -156,4 +183,8 @@ class TestDataSource(DataSource):
     @property
     def annotations(self) -> AnnotationResourcesProvider:
         # noinspection PyTypeChecker
-        return {}
+        if self._stack is None:
+            raise RuntimeError("need to access via contextmanager or acquire resource")
+        if self._an is None:
+            self._an = _TestAnnotationResourcesProvider(self._images)
+        return self._an
