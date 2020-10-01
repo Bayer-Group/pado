@@ -6,19 +6,31 @@ channels:
   - defaults
 
 dependencies:
-  - python>=3.8
+  # python relevant things
+  - python>=3.6
   - pip
-  - pandas
-  - jpype1>=1.0.1
-  - pyarrow
-  - tifffile
-  - numpy
-  - toml
-  - shapely
+  - typing_extensions
   - importlib_resources
+  - setuptools_scm
+
+  # pado requirements
+  - toml
+  - tqdm
+  - pyarrow
+  - numpy
+  - pandas
+  - shapely
+
+  # support for pado.ext.testsource
+  - tifffile
+
+
+  - JPype1>=1
+
+  # testing relevant things
   - pytest>=6
   - pytest-cov
 
+  # pip installs
   - pip:
-    - dynaconf>=3,!=3.1.0
     - "-e ."
