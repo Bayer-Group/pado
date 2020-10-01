@@ -14,12 +14,13 @@ import pandas as pd
 from tqdm import tqdm
 
 ImageId = Tuple[str, ...]
+ImageStrId = str
 SEPARATOR = "__"
 
 
 class _SerializedImageResource(NamedTuple):
     type: str
-    image_id: str
+    image_id: ImageStrId
     uri: str
     md5: Optional[str]
 
@@ -53,7 +54,7 @@ class ImageResource(ABC):
         return self._image_id
 
     @property
-    def id_str(self) -> str:
+    def id_str(self) -> ImageStrId:
         return self._str_image_id
 
     @property
