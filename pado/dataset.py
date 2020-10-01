@@ -311,7 +311,7 @@ class PadoDataset(DataSource):
         metadata_dict = structurize_metadata(
             metadata, PadoColumn.IMAGE, self._metadata_colmap
         )
-        annotations = self.annotations[image.id_str]
+        annotations = self.annotations.get(image.id_str, [])
 
         return {"image": image, "metadata": metadata_dict, "annotations": annotations}
 
