@@ -291,13 +291,12 @@ class PadoDataset(DataSource):
     def annotations(self) -> AnnotationsProvider:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
-            # TODO: needs a merged implementation like ImageResourcesProvider
             providers = []
             for p in filter(os.path.isdir, self._path_annotations.glob("*")):
                 providers.append(
                     SerializableAnnotationsProvider(p.name, self._path_annotations)
                 )
-            self._image_provider = MergedAnnotationsProvider(providers)
+            self._annotations_provider = MergedAnnotationsProvider(providers)
         return self._annotations_provider
 
     def __getitem__(self, item: int) -> Dict:
