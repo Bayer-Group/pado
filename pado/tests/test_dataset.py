@@ -1,11 +1,13 @@
 import shutil
+from operator import itemgetter
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from pado.dataset import PadoDataset
+from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
+from pado.ext.testsource import TestDataSource
 from pado.images import SerializableImageResourcesProvider
 from pado.metadata import PadoColumn
 
@@ -24,88 +26,65 @@ def test_pado_testsource_verification(datasource: DataSource):
     datasource.verify(acquire=True)
 
 
-def test_pado_test_datasource(datasource):
-    with pytest.raises(RuntimeError):
-        _ = datasource.images
-    with pytest.raises(RuntimeError):
-        _ = datasource.metadata
-
+def test_pado_test_datasource_usage(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
         for image in datasource.images:
             assert image.id is not None
             assert image.size > 0
+        for annotation in datasource.annotations:
+            assert isinstance(annotation, str)
+
+
+def test_pado_test_datasource_error_without_with(datasource):
+    with pytest.raises(RuntimeError):
+        _ = datasource.images
+    with pytest.raises(RuntimeError):
+        _ = datasource.metadata
 
 
 def test_write_pado_dataset(datasource, tmp_path):
-
-    dataset_path = tmp_path / "my_dataset"
-
-    ds = PadoDataset(dataset_path, mode="x")
+    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
     ds.add_source(datasource)
-
     assert count_images(ds) == 1
     assert isinstance(ds.metadata, pd.DataFrame)
     assert len(ds.metadata) == 10
 
 
 def test_add_multiple_datasets(tmp_path):
-    from pado.ext.testsource import TestDataSource
-
-    dataset_path = tmp_path / "my_dataset"
-    ds = PadoDataset(dataset_path, mode="x")
-
+    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
     ds.add_source(TestDataSource(num_images=2, num_findings=12, identifier="s0"))
     ds.add_source(TestDataSource(num_images=1, num_findings=7, identifier="s1"))
-
     assert isinstance(ds.metadata, pd.DataFrame)
     assert len(ds.metadata) == 19
     assert count_images(ds) == 3
 
 
-@pytest.fixture()
-def dataset(datasource, tmp_path):
-    dataset_path = tmp_path / "my_dataset"
-    ds = PadoDataset(dataset_path, mode="x")
-    ds.add_source(datasource)
-    yield ds
-
-
-@pytest.fixture()
-def dataset_ro(datasource, tmp_path):
-    dataset_path = tmp_path / "my_dataset"
-    ds = PadoDataset(dataset_path, mode="x")
-    ds.add_source(datasource)
-    del ds
-    yield PadoDataset(dataset_path, mode="r")
-
-
 def test_is_pado_dataset(dataset: PadoDataset, tmp_path):
-    from pado.dataset import is_pado_dataset
-
     assert not is_pado_dataset(tmp_path)
     assert is_pado_dataset(dataset.path)
 
 
-@pytest.mark.parametrize("failure", ["dataset", "folders", "sources"])
-def test_pado_dataset_integrity(dataset: PadoDataset, tmp_path, failure):
-    from pado.dataset import verify_pado_dataset_integrity
+def test_pado_dataset_integrity_fail_dataset(tmp_path):
+    with pytest.raises(ValueError):
+        verify_pado_dataset_integrity(tmp_path)  # empty folder
 
+
+def test_pado_dataset_integrity_fail_folders(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
     p.mkdir(parents=True)
+    shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+    shutil.rmtree(p / "images")  # break the dataset
+    with pytest.raises(ValueError):
+        verify_pado_dataset_integrity(p)
 
-    if failure == "dataset":
-        pass
-    elif failure == "folders":
-        shutil.copytree(dataset.path, p, dirs_exist_ok=True)
-        shutil.rmtree(p / "images")
-    elif failure == "sources":
-        shutil.copytree(dataset.path, p, dirs_exist_ok=True)
-        for md in p.glob(f"metadata/*"):
-            md.unlink(missing_ok=True)
-    else:  # pragma: no cover
-        raise RuntimeError("incorrect failure mode")
 
+def test_pado_dataset_integrity_fail_sources(dataset: PadoDataset, tmp_path):
+    p = Path(tmp_path) / "incomplete"
+    p.mkdir(parents=True)
+    shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+    for md in p.glob(f"metadata/*"):
+        md.unlink(missing_ok=True)  # break the dataset
     with pytest.raises(ValueError):
         verify_pado_dataset_integrity(p)
 
@@ -178,20 +157,20 @@ def test_iterate_dataset(dataset_ro):
         assert md["metadata"]
 
 
-_accessors = {
-    "studies": PadoColumn.STUDY,
-    "experiments": PadoColumn.EXPERIMENT,
-    "groups": PadoColumn.GROUP,
-    "animals": PadoColumn.ANIMAL,
-    "compounds": PadoColumn.COMPOUND,
-    "organs": PadoColumn.ORGAN,
-    "slides": PadoColumn.SLIDE,
-    "images": PadoColumn.IMAGE,
-    "findings": PadoColumn.FINDING,
-}
-
-
-@pytest.mark.parametrize("accessor,column", _accessors.items(), ids=_accessors.keys())
+@pytest.mark.parametrize(
+    "accessor,column",
+    [
+        ("studies", PadoColumn.STUDY),
+        ("experiments", PadoColumn.EXPERIMENT),
+        ("groups", PadoColumn.GROUP),
+        ("animals", PadoColumn.ANIMAL),
+        ("compounds", PadoColumn.COMPOUND),
+        ("organs", PadoColumn.ORGAN),
+        ("slides", PadoColumn.SLIDE),
+        ("images", PadoColumn.IMAGE),
+        ("findings", PadoColumn.FINDING),
+    ],
+)
 def test_pado_dataframe_accessor(dataset, accessor, column):
     # this is testing, i.e.: dataset.metadata.pado.organs
     df_subset = getattr(dataset.metadata.pado, accessor)
