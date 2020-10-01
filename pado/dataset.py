@@ -16,8 +16,9 @@ except ImportError:
 import pandas as pd
 import toml
 
-from pado.resource import (
-    DataSource,
+from pado.annotations import AnnotationsProvider, MergedAnnotationsProvider
+from pado.datasource import DataSource
+from pado.images import (
     ImageResourceCopier,
     ImageResourcesProvider,
     MergedImageResourcesProvider,
@@ -243,7 +244,20 @@ class PadoDataset(DataSource):
         return self._info["identifier"]
 
     @property
+    def images(self) -> ImageResourcesProvider:
+        """a sequence-like interface to all images in the dataset"""
+        if self._image_provider is None:
+            providers = []
+            for p in filter(os.path.isdir, self._path_images.glob("*")):
+                providers.append(
+                    SerializableImageResourcesProvider(p.name, self._path_images)
+                )
+            self._image_provider = MergedImageResourcesProvider(providers)
+        return self._image_provider
+
+    @property
     def metadata(self) -> pd.DataFrame:
+        """a pandas DataFrame providing all metadata stored in the dataset"""
         _ext = ".parquet.gzip"
 
         if self._metadata_df is None:
@@ -267,17 +281,6 @@ class PadoDataset(DataSource):
             self._metadata_df = df
             self._metadata_colmap = build_column_map(df.columns)
         return self._metadata_df
-
-    @property
-    def images(self) -> ImageResourcesProvider:
-        if self._image_provider is None:
-            providers = []
-            for p in filter(os.path.isdir, self._path_images.glob("*")):
-                providers.append(
-                    SerializableImageResourcesProvider(p.name, self._path_images)
-                )
-            self._image_provider = MergedImageResourcesProvider(providers)
-        return self._image_provider
 
     def __getitem__(self, item: int) -> Dict:
         image = self.images[item]

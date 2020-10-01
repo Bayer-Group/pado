@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
-from pado.resource import ImageResourcesProvider
+from pado.images import ImageResourcesProvider
 from pado.structure import (
     PadoColumn,
     build_column_map,

@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 from pado.dataset import PadoDataset
-from pado.resource import DataSource, SerializableImageResourcesProvider
+from pado.datasource import DataSource
+from pado.images import SerializableImageResourcesProvider
 from pado.structure import PadoColumn
 
 
@@ -207,6 +208,5 @@ def test_pado_dfa_with_incorrect_df(dataset):
     df = dataset.metadata
     # "-" is an invalid column name character
     df["IMAGE__ABC-INCORRECT"] = df["IMAGE"]
-
     with pytest.raises(AttributeError):
         _ = df.pado
