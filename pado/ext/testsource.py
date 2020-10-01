@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 
-from pado.annotations import AnnotationsProvider
+from pado.annotations import AnnotationResourcesProvider
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
 from pado.images import ImageResource, ImageResourcesProvider, LocalImageResource
@@ -154,6 +154,6 @@ class TestDataSource(DataSource):
         return self._im
 
     @property
-    def annotations(self) -> AnnotationsProvider:
+    def annotations(self) -> AnnotationResourcesProvider:
         # noinspection PyTypeChecker
         return {}

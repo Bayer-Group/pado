@@ -13,7 +13,6 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
-    Sequence,
     Type,
     TypedDict,
 )
@@ -22,7 +21,7 @@ from shapely.geometry import asShape
 from shapely.geometry.base import BaseGeometry
 
 
-class AnnotationResource(NamedTuple):
+class Annotation(NamedTuple):
     """keep compatibility with paquo in mind"""
 
     roi: BaseGeometry
@@ -31,8 +30,8 @@ class AnnotationResource(NamedTuple):
     locked: bool = False
 
     @classmethod
-    def from_geojson(cls, geojson: dict) -> "AnnotationResource":
-        """create an AnnotationResource from a QuPath geojson dict"""
+    def from_geojson(cls, geojson: dict) -> "Annotation":
+        """create an Annotation from a QuPath geojson dict"""
         cls: "Type['AnnotationsResource']"  # pycharm issue PY-33140
         # note these two asserts are only here for development...
         # these should go...
@@ -48,8 +47,8 @@ class AnnotationResource(NamedTuple):
         )
 
     @classmethod
-    def from_paquo(cls, path_annotation) -> "AnnotationResource":
-        """create an AnnotationResource from a paquo QuPathPathAnnotationObject"""
+    def from_paquo(cls, path_annotation) -> "Annotation":
+        """create an Annotation from a paquo QuPathPathAnnotationObject"""
         cls: "Type['AnnotationsResource']"  # pycharm issue PY-33140
         try:
             roi = path_annotation.roi
@@ -78,16 +77,18 @@ class AnnotationResource(NamedTuple):
         }
 
 
-class AnnotationsProvider(Mapping[str, Sequence[AnnotationResource]], ABC):
-    pass
-
-
-class AnnotationsDict(TypedDict):
-    annotations: List[AnnotationResource]
+class AnnotationResources(TypedDict):
+    annotations: List[Annotation]
     metadata: Dict[str, Any]
 
 
-class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
+class AnnotationResourcesProvider(Mapping[str, AnnotationResources], ABC):
+    pass
+
+
+class SerializableAnnotationResourcesProvider(
+    AnnotationResourcesProvider, MutableMapping
+):
     STORAGE_FMT = ".geojson.xz"
 
     def __init__(self, identifier, base_path):
@@ -100,18 +101,20 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
     def __iter__(self) -> Iterator[str]:
         return iter(set().union(self._data_cache, self._data_paths))
 
-    def __getitem__(self, item: str) -> Sequence[AnnotationResource]:
+    def __getitem__(self, item: str) -> AnnotationResources:
         try:
             return self._data_cache[item]
         except KeyError:
             fn = self._data_paths[item]
             resource = self._data_cache[item] = self.deserialize_annotations(fn)
-            return resource["annotations"]
+            return resource
 
     def __len__(self) -> int:
         return len(set().union(self._data_cache, self._data_paths))
 
-    def __setitem__(self, item: str, annotations_resources: AnnotationsDict) -> None:
+    def __setitem__(
+        self, item: str, annotations_resources: AnnotationResources
+    ) -> None:
         self._data_cache[item] = annotations_resources
         self._updated.add(item)
 
@@ -139,7 +142,7 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
     @classmethod
     def deserialize_annotations(
         cls, file_path: Path, drop_unclassified: bool = True
-    ) -> AnnotationsDict:
+    ) -> AnnotationResources:
         # load file
         with lzma.open(file_path, "r") as reader:
             data: dict = json.load(reader)
@@ -151,14 +154,14 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
                 a for a in annotation_dicts if "classification" in a["properties"]
             ]
 
-        return AnnotationsDict(
-            annotations=list(map(AnnotationResource.from_geojson, annotation_dicts)),
+        return AnnotationResources(
+            annotations=list(map(Annotation.from_geojson, annotation_dicts)),
             metadata=data,
         )
 
     @classmethod
     def serialize_annotations(
-        cls, file_path: Path, annotations_dict: AnnotationsDict
+        cls, file_path: Path, annotations_dict: AnnotationResources
     ) -> None:
         data = annotations_dict["metadata"].copy()
         data["annotations"] = [a.to_geojson() for a in annotations_dict["annotations"]]
@@ -167,14 +170,14 @@ class SerializableAnnotationsProvider(AnnotationsProvider, MutableMapping):
             json.dump(data, writer)
 
 
-class MergedAnnotationsProvider(AnnotationsProvider):
+class MergedAnnotationResourcesProvider(AnnotationResourcesProvider):
     def __init__(self, annotation_providers):
         self._providers = list(annotation_providers)
         self._len = len(set().union(*self._providers))
         if self._len < sum(map(len, self._providers)):
             raise ValueError("duplicated keys between providers")
 
-    def __getitem__(self, item: str) -> Sequence[AnnotationResource]:
+    def __getitem__(self, item: str) -> AnnotationResources:
         for provider in self._providers:
             try:
                 return provider[item]

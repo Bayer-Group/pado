@@ -15,9 +15,9 @@ import pandas as pd
 import toml
 
 from pado.annotations import (
-    AnnotationsProvider,
-    MergedAnnotationsProvider,
-    SerializableAnnotationsProvider,
+    AnnotationResourcesProvider,
+    MergedAnnotationResourcesProvider,
+    SerializableAnnotationResourcesProvider,
 )
 from pado.datasource import DataSource
 from pado.images import (
@@ -288,15 +288,17 @@ class PadoDataset(DataSource):
         return self._metadata_df
 
     @property
-    def annotations(self) -> AnnotationsProvider:
+    def annotations(self) -> AnnotationResourcesProvider:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
             providers = []
             for p in filter(os.path.isdir, self._path_annotations.glob("*")):
                 providers.append(
-                    SerializableAnnotationsProvider(p.name, self._path_annotations)
+                    SerializableAnnotationResourcesProvider(
+                        p.name, self._path_annotations
+                    )
                 )
-            self._annotations_provider = MergedAnnotationsProvider(providers)
+            self._annotations_provider = MergedAnnotationResourcesProvider(providers)
         return self._annotations_provider
 
     def __getitem__(self, item: int) -> Dict:
