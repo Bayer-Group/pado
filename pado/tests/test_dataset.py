@@ -72,8 +72,7 @@ def test_pado_dataset_integrity_fail_dataset(tmp_path):
 
 def test_pado_dataset_integrity_fail_folders(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
-    p.mkdir(parents=True)
-    shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+    shutil.copytree(dataset.path, p)
     shutil.rmtree(p / "images")  # break the dataset
     with pytest.raises(ValueError):
         verify_pado_dataset_integrity(p)
@@ -81,8 +80,7 @@ def test_pado_dataset_integrity_fail_folders(dataset: PadoDataset, tmp_path):
 
 def test_pado_dataset_integrity_fail_sources(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
-    p.mkdir(parents=True)
-    shutil.copytree(dataset.path, p, dirs_exist_ok=True)
+    shutil.copytree(dataset.path, p)
     for md in p.glob(f"metadata/*"):
         md.unlink(missing_ok=True)  # break the dataset
     with pytest.raises(ValueError):

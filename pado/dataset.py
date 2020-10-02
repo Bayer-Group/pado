@@ -6,11 +6,6 @@ import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
-try:
-    from typing import Literal, TypedDict
-except ImportError:
-    from typing_extensions import Literal, TypedDict
-
 import pandas as pd
 import toml
 
@@ -36,6 +31,12 @@ from pado.metadata import (
     structurize_metadata,
     verify_columns,
 )
+
+try:
+    from typing import Literal, TypedDict  # novermin
+except ImportError:
+    from typing_extensions import Literal, TypedDict
+
 
 PathOrStr = Union[str, os.PathLike]
 

@@ -5,20 +5,15 @@ from abc import ABC
 from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
-from typing import (
-    Any,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Type,
-    TypedDict,
-)
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Type
 
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
+
+try:
+    from typing import TypedDict  # novermin
+except ImportError:
+    from typing_extensions import TypedDict
 
 
 class Annotation(NamedTuple):
