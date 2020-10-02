@@ -188,3 +188,7 @@ class TestDataSource(DataSource):
         if self._an is None:
             self._an = _TestAnnotationResourcesProvider(self._images)
         return self._an
+
+
+# don't collect via pytest: https://github.com/pytest-dev/pytest/issues/2007
+TestDataSource.__test__ = False
