@@ -82,7 +82,7 @@ def test_pado_dataset_integrity_fail_sources(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
     shutil.copytree(dataset.path, p)
     for md in p.glob(f"metadata/*"):
-        md.unlink(missing_ok=True)  # break the dataset
+        md.unlink()  # break the dataset
     with pytest.raises(ValueError, match=".* missing metadata"):
         verify_pado_dataset_integrity(p)
 
