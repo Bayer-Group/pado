@@ -10,7 +10,6 @@ import pandas as pd
 import toml
 
 from pado.annotations import (
-    AnnotationResources,
     AnnotationResourcesProvider,
     MergedAnnotationResourcesProvider,
     SerializableAnnotationResourcesProvider,
@@ -237,7 +236,7 @@ class PadoDataset(DataSource):
 
         # cached metadata dataframe and image_provider
         self._metadata_df = None
-        self._metadata_colmap = None
+        self._metadata_col_map = None
         self._image_provider = None
         self._annotations_provider = None
 
@@ -286,7 +285,7 @@ class PadoDataset(DataSource):
                 .reset_index(drop=True)
             )
             self._metadata_df = df
-            self._metadata_colmap = build_column_map(df.columns)
+            self._metadata_col_map = build_column_map(df.columns)
         return self._metadata_df
 
     @property
@@ -313,7 +312,7 @@ class PadoDataset(DataSource):
         metadata = _df[_df[PadoColumn.IMAGE] == image.id_str]
         # this is where a relational database would be great...
         metadata_dict = structurize_metadata(
-            metadata, PadoColumn.IMAGE, self._metadata_colmap
+            metadata, PadoColumn.IMAGE, self._metadata_col_map
         )
         annotation_dict = self.annotations.get(image.id_str, {}).copy()
         annotations = annotation_dict.pop("annotations", [])

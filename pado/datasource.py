@@ -68,11 +68,11 @@ class DataSource(ABC):
                     "metadata IMAGE column must have 1 or more rows for each image"
                 )
             # verify the metadata structure per image
-            colmap = build_column_map(df.columns)
+            col_map = build_column_map(df.columns)
             for image_id in image_ids:
                 md = df[df[PadoColumn.IMAGE] == image_id]
                 try:
-                    structurize_metadata(md, PadoColumn.IMAGE, colmap)
+                    structurize_metadata(md, PadoColumn.IMAGE, col_map)
                 except Exception:
                     raise ValueError("metadata structure has problems")
         return self
