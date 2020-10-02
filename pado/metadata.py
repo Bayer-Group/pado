@@ -41,24 +41,7 @@ class PadoInvalid(str, enum.Enum):
         return str(self.value)
 
 
-class _SubColumnMixin:
-    """mixin allowing to add sub columns to standardized columns"""
-
-    def subcolumn(self, subcolumn: str):
-        if "__" in subcolumn:
-            raise ValueError("cannot contain double underscore")
-        if not ALLOWED_CHARACTERS.issuperset(subcolumn):
-            raise ValueError("can only contain numbers letters and underscore")
-        if subcolumn in set(PadoReserved):
-            raise ValueError("cannot use reserved string")
-        if subcolumn in set(PadoInvalid):
-            raise ValueError("cannot use invalid string")
-        if subcolumn.startswith("_") or subcolumn.endswith("_"):
-            raise ValueError("may not start or end with an underscore")
-        return SEPARATOR.join([self, subcolumn.upper()])
-
-
-class PadoColumn(_SubColumnMixin, str, enum.Enum):
+class PadoColumn(str, enum.Enum):
     """standardized pado columns"""
 
     __version__ = 1
@@ -75,6 +58,19 @@ class PadoColumn(_SubColumnMixin, str, enum.Enum):
 
     def __str__(self):
         return str(self.value)
+
+    def subcolumn(self, subcolumn: str):
+        if "__" in subcolumn:
+            raise ValueError("cannot contain double underscore")
+        if not ALLOWED_CHARACTERS.issuperset(subcolumn):
+            raise ValueError("can only contain numbers letters and underscore")
+        if subcolumn in set(PadoReserved):
+            raise ValueError("cannot use reserved string")
+        if subcolumn in set(PadoInvalid):
+            raise ValueError("cannot use invalid string")
+        if subcolumn.startswith("_") or subcolumn.endswith("_"):
+            raise ValueError("may not start or end with an underscore")
+        return SEPARATOR.join([self, subcolumn.upper()])
 
 
 def verify_columns(columns: Iterable[str], raise_if_invalid: bool = True) -> bool:
