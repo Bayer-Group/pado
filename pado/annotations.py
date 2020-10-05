@@ -176,30 +176,10 @@ class SerializableAnnotationResourcesProvider(
         inst.save()
         return inst
 
-
-class SimpleDirectoryAnnotationResourcesProvider(
-    AnnotationResourcesProvider, GeoJSONAnnotationSerializer,
-):
-    def __init__(self, path: Path):
-        if not path.is_dir():
-            raise ValueError("path is not a directory")
-        fmt = super().STORAGE_FMT
-        self._data_paths = {p.name[: -len(fmt)]: p for p in path.glob(f"*{fmt}")}
-        self._data_cache = {}
-
-    def __getitem__(self, item: str) -> AnnotationResources:
-        try:
-            return self._data_cache[item]
-        except KeyError:
-            fn = self._data_paths[item]
-            resource = self._data_cache[item] = super().deserialize_annotations(fn)
-            return resource
-
-    def __len__(self) -> int:
-        return len(self._data_paths)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._data_paths)
+    @classmethod
+    def from_directory(cls, directory):
+        # TODO: identifier should be removed and refactored here...
+        return cls(".", directory)
 
 
 class MergedAnnotationResourcesProvider(AnnotationResourcesProvider):
