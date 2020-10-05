@@ -82,18 +82,56 @@ class AnnotationResourcesProvider(Mapping[str, AnnotationResources], ABC):
     pass
 
 
-class SerializableAnnotationResourcesProvider(
-    AnnotationResourcesProvider, MutableMapping
-):
+class GeoJSONAnnotationSerializer:
     STORAGE_FMT = ".geojson.xz"
 
+    @classmethod
+    def deserialize_annotations(
+        cls, file_path: Path, drop_unclassified: bool = True
+    ) -> AnnotationResources:
+        if file_path.suffix != cls.STORAGE_FMT:
+            raise ValueError(
+                f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
+            )
+        # load file
+        with lzma.open(file_path, "r") as reader:
+            data: dict = json.load(reader)
+
+        # get the annotations
+        annotation_dicts = data.pop("annotations", [])
+        if drop_unclassified:
+            annotation_dicts = [
+                a for a in annotation_dicts if "classification" in a["properties"]
+            ]
+
+        return AnnotationResources(
+            annotations=list(map(Annotation.from_geojson, annotation_dicts)),
+            metadata=data,
+        )
+
+    @classmethod
+    def serialize_annotations(
+        cls, file_path: Path, annotations_dict: AnnotationResources
+    ) -> None:
+        if file_path.suffix != cls.STORAGE_FMT:
+            raise ValueError(
+                f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
+            )
+        data = annotations_dict["metadata"].copy()
+        data["annotations"] = [a.to_geojson() for a in annotations_dict["annotations"]]
+
+        with lzma.open(file_path, "wt") as writer:
+            json.dump(data, writer)
+
+
+class SerializableAnnotationResourcesProvider(
+    AnnotationResourcesProvider, MutableMapping, GeoJSONAnnotationSerializer
+):
     def __init__(self, identifier, base_path):
         self._identifier = identifier
         self._path = Path(base_path) / self._identifier
-        self._data_paths = {
-            p.name[: -len(self.STORAGE_FMT)]: p
-            for p in self._path.glob(f"*{self.STORAGE_FMT}")
-        }
+        fmt = super().STORAGE_FMT
+        self._data_paths = {p.name[: -len(fmt)]: p for p in self._path.glob(f"*{fmt}")}
         self._data_cache = {}
         self._updated = set()
 
@@ -105,7 +143,7 @@ class SerializableAnnotationResourcesProvider(
             return self._data_cache[item]
         except KeyError:
             fn = self._data_paths[item]
-            resource = self._data_cache[item] = self.deserialize_annotations(fn)
+            resource = self._data_cache[item] = super().deserialize_annotations(fn)
             return resource
 
     def __len__(self) -> int:
@@ -128,8 +166,8 @@ class SerializableAnnotationResourcesProvider(
     def save(self):
         self._path.mkdir(exist_ok=True)
         for image_id in self._updated:
-            fn = self._path / f"{image_id}{self.STORAGE_FMT}"
-            self.serialize_annotations(fn, self._data_cache[image_id])
+            fn = self._path / f"{image_id}{super().STORAGE_FMT}"
+            super().serialize_annotations(fn, self._data_cache[image_id])
 
     @classmethod
     def from_provider(cls, identifier, base_path, provider):
@@ -137,36 +175,6 @@ class SerializableAnnotationResourcesProvider(
         inst.update(provider)
         inst.save()
         return inst
-
-    @classmethod
-    def deserialize_annotations(
-        cls, file_path: Path, drop_unclassified: bool = True
-    ) -> AnnotationResources:
-        # load file
-        with lzma.open(file_path, "r") as reader:
-            data: dict = json.load(reader)
-
-        # get the annotations
-        annotation_dicts = data.pop("annotations", [])
-        if drop_unclassified:
-            annotation_dicts = [
-                a for a in annotation_dicts if "classification" in a["properties"]
-            ]
-
-        return AnnotationResources(
-            annotations=list(map(Annotation.from_geojson, annotation_dicts)),
-            metadata=data,
-        )
-
-    @classmethod
-    def serialize_annotations(
-        cls, file_path: Path, annotations_dict: AnnotationResources
-    ) -> None:
-        data = annotations_dict["metadata"].copy()
-        data["annotations"] = [a.to_geojson() for a in annotations_dict["annotations"]]
-
-        with lzma.open(file_path, "wt") as writer:
-            json.dump(data, writer)
 
 
 class MergedAnnotationResourcesProvider(AnnotationResourcesProvider):
