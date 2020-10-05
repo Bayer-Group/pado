@@ -78,8 +78,7 @@ class AnnotationResources(TypedDict):
     metadata: Dict[str, Any]
 
 
-class AnnotationResourcesProvider(Mapping[str, AnnotationResources], ABC):
-    pass
+AnnotationResourcesProvider = Mapping[str, AnnotationResources]
 
 
 class GeoJSONAnnotationSerializer:
