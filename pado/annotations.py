@@ -1,3 +1,4 @@
+import collections
 import itertools
 import json
 import lzma
@@ -78,7 +79,14 @@ class AnnotationResources(TypedDict):
     metadata: Dict[str, Any]
 
 
-AnnotationResourcesProvider = Mapping[str, AnnotationResources]
+class AnnotationResourcesProvider(Mapping[str, AnnotationResources], ABC):
+    @classmethod
+    def __instancecheck__(cls, instance):
+        return isinstance(instance, collections.abc.Mapping)
+
+    @classmethod
+    def __subclasscheck__(cls, subclass):
+        return issubclass(subclass, collections.abc.Mapping)
 
 
 class GeoJSONAnnotationSerializer:
@@ -124,7 +132,7 @@ class GeoJSONAnnotationSerializer:
 
 
 class SerializableAnnotationResourcesProvider(
-    AnnotationResourcesProvider, MutableMapping, GeoJSONAnnotationSerializer
+    MutableMapping, AnnotationResourcesProvider, GeoJSONAnnotationSerializer
 ):
     def __init__(self, identifier, base_path):
         self._identifier = identifier
