@@ -89,7 +89,7 @@ class GeoJSONAnnotationSerializer:
     def deserialize_annotations(
         cls, file_path: Path, drop_unclassified: bool = True
     ) -> AnnotationResources:
-        if file_path.suffix != cls.STORAGE_FMT:
+        if not file_path.name.endswith(cls.STORAGE_FMT):
             raise ValueError(
                 f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
             )
@@ -113,7 +113,7 @@ class GeoJSONAnnotationSerializer:
     def serialize_annotations(
         cls, file_path: Path, annotations_dict: AnnotationResources
     ) -> None:
-        if file_path.suffix != cls.STORAGE_FMT:
+        if not file_path.name.endswith(cls.STORAGE_FMT):
             raise ValueError(
                 f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
             )
