@@ -92,6 +92,9 @@ class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
                 fn.unlink(missing_ok=True)
         super().__delitem__(key)
 
+    def __repr__(self):
+        return f"{type(self).__name__}({set(self)})"
+
 
 def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
     """create an AnnotationResourcesProvider for path and format"""
