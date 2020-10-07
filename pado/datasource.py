@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
+from typing import Mapping
 
 import pandas as pd
 
-from pado.annotations import AnnotationResourcesProvider
+from pado.annotations import AnnotationResources
 from pado.images import ImageResourcesProvider
 from pado.metadata import (
     PadoColumn,
@@ -34,7 +35,7 @@ class DataSource(ABC):
 
     @property
     @abstractmethod
-    def annotations(self) -> AnnotationResourcesProvider:
+    def annotations(self) -> Mapping[str, AnnotationResources]:
         ...
 
     def acquire(self, raise_if_missing: bool = False):
