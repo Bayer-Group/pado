@@ -1,12 +1,9 @@
-import collections
-import itertools
 import json
 import lzma
-from abc import ABC
-from collections.abc import MutableMapping
-from contextlib import suppress
+from collections import ChainMap, UserDict
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Type
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional
 
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
@@ -18,200 +15,167 @@ except ImportError:
 
 
 class Annotation(NamedTuple):
-    """keep compatibility with paquo in mind"""
+    """An Annotation combines geometry, class and additional measurements"""
 
     roi: BaseGeometry
     class_name: Optional[str] = None
     measurements: Optional[List[dict]] = None
-    locked: bool = False
-
-    @classmethod
-    def from_geojson(cls, geojson: dict) -> "Annotation":
-        """create an Annotation from a QuPath geojson dict"""
-        cls: "Type['AnnotationsResource']"  # pycharm issue PY-33140
-        # note these two asserts are only here for development...
-        # these should go...
-        # also, this is just relying on the geojson serialization of QuPath
-        assert geojson["type"] == "Feature"
-        assert geojson["id"] == "PathAnnotationObject"
-        properties = geojson["properties"]
-        return cls(
-            roi=asShape(geojson["geometry"]),
-            class_name=properties["classification"].get("name"),
-            measurements=properties["measurements"],
-            locked=properties["isLocked"],
-        )
-
-    @classmethod
-    def from_paquo(cls, path_annotation) -> "Annotation":
-        """create an Annotation from a paquo QuPathPathAnnotationObject"""
-        cls: "Type['AnnotationsResource']"  # pycharm issue PY-33140
-        try:
-            roi = path_annotation.roi
-            path_class = path_annotation.path_class
-            class_name = path_class.name if path_class is not None else None
-            measurements: List[dict] = path_annotation.measurements.to_records()
-            locked: bool = path_annotation.locked
-        except AttributeError:
-            raise TypeError(
-                "path_annotation needs to be a paquo QuPathPathAnnotationObject"
-            )
-        return cls(
-            roi=roi, class_name=class_name, measurements=measurements, locked=locked
-        )
-
-    def to_geojson(self) -> dict:
-        """return a QuPath compatible geojson representation"""
-        return {
-            "type": "Feature",
-            "id": "PathAnnotationObject",
-            "geometry": mapping(self.roi),
-            "properties": {
-                "classification": {"name": self.class_name},
-                "isLocked": self.locked,
-                "measurements": self.measurements,
-            },
-        }
+    locked: bool = False  # this is for QuPath consistency and should go
 
 
 class AnnotationResources(TypedDict):
+    """AnnotationResources combine multiple annotations with common metadata"""
+
     annotations: List[Annotation]
     metadata: Dict[str, Any]
 
 
-class AnnotationResourcesProvider(Mapping[str, AnnotationResources], ABC):
-    @classmethod
-    def __instancecheck__(cls, instance):
-        return isinstance(instance, collections.abc.Mapping)
+class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
+    """An AnnotationResourcesProvider is a map from keys (image_ids) to
+    AnnotationResources.
 
-    @classmethod
-    def __subclasscheck__(cls, subclass):
-        return issubclass(subclass, collections.abc.Mapping)
+    Lazy loads the annotation resources when requested.
+
+    """
+
+    def __init__(self, path, suffix, load, dump=None):
+        """create a new AnnotationResourcesProvider
 
 
-class GeoJSONAnnotationSerializer:
-    STORAGE_FMT = ".geojson.xz"
+        Parameters
+        ----------
+        path :
+            the base directory for the serialized annotations per image_id
+        suffix :
+            the file suffix for each serialized annotation resource
+        load :
+            function for deserializing AnnotationResources from a file
+        dump :
+            function for serializing AnnotationResources to a file
 
-    @classmethod
-    def deserialize_annotations(
-        cls, file_path: Path, drop_unclassified: bool = True
-    ) -> AnnotationResources:
-        if not file_path.name.endswith(cls.STORAGE_FMT):
-            raise ValueError(
-                f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
+        """
+        super().__init__()
+        path = Path(path)
+        self._file = lambda key: path.joinpath(key).with_suffix(suffix)
+        self._load = load
+        self._dump = dump
+        self._files = {
+            p.name[: -len(suffix)]: p for p in path.iterdir() if p.name.endswith(suffix)
+        }
+
+    def __len__(self):
+        return len(set().union(self, self._files))
+
+    def __iter__(self):
+        return iter(set().union(self, self._files))
+
+    def __missing__(self, key: str) -> AnnotationResources:
+        fn = self._files[key]
+        try:
+            with fn.open("r") as fp:
+                super()[key] = resources = self._load(fp)
+                return resources
+        except Exception as exc:
+            raise KeyError(key) from exc
+
+    def __setitem__(self, key: str, value: AnnotationResources):
+        if self._dump:
+            with self._file(key).open("w") as fp:
+                self._dump(value, fp)
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str):
+        if self._dump:  # file deletion only allowed when dump provided
+            if key in self._files:
+                fn = self._files.pop(key)
+                fn.unlink(missing_ok=True)
+        super().__delitem__(key)
+
+
+def merge_providers(*providers) -> Mapping[str, AnnotationResources]:
+    """merge multiple AnnotationResourceProvider instances into one read only provider"""
+    merged = MappingProxyType(ChainMap(*providers))
+    if len(merged) < sum(map(len, providers)):
+        raise ValueError("duplicated keys between providers")
+    return merged
+
+
+# --- Annotation serialization ------------------------------------------------
+
+
+FMT_GEOJSON = ".geojson.xz"
+
+
+def load_geojson(fp, drop_unclassified: bool = True) -> AnnotationResources:
+    """deserialize an AnnotationResource from a file
+
+    Parameters
+    ----------
+    fp:
+        a file pointer or file path
+    drop_unclassified:
+        drop an annotation in case it has no class set
+    """
+    # load file
+    with lzma.open(fp, "rb") as reader:
+        metadata: dict = json.load(reader)
+
+    # get the annotations
+    annotation_dicts = metadata.pop("annotations", [])
+    if drop_unclassified:
+        annotation_dicts = [
+            a for a in annotation_dicts if "classification" in a["properties"]
+        ]
+
+    annotations = []
+    for geojson in annotation_dicts:
+        # note these two asserts here should be removed...
+        # also, this is just relying on the geojson serialization of QuPath
+        assert geojson["type"] == "Feature"
+        assert geojson["id"] == "PathAnnotationObject"
+        properties = geojson["properties"]
+        annotations.append(
+            Annotation(
+                roi=asShape(geojson["geometry"]),
+                class_name=properties["classification"].get("name"),
+                measurements=properties["measurements"],
+                locked=properties["isLocked"],
             )
-        # load file
-        with lzma.open(file_path, "r") as reader:
-            data: dict = json.load(reader)
-
-        # get the annotations
-        annotation_dicts = data.pop("annotations", [])
-        if drop_unclassified:
-            annotation_dicts = [
-                a for a in annotation_dicts if "classification" in a["properties"]
-            ]
-
-        return AnnotationResources(
-            annotations=list(map(Annotation.from_geojson, annotation_dicts)),
-            metadata=data,
         )
 
-    @classmethod
-    def serialize_annotations(
-        cls, file_path: Path, annotations_dict: AnnotationResources
-    ) -> None:
-        if not file_path.name.endswith(cls.STORAGE_FMT):
-            raise ValueError(
-                f"file_path.suffix is not '.geojson.xz' got '{file_path.suffix}'"
-            )
-        data = annotations_dict["metadata"].copy()
-        data["annotations"] = [a.to_geojson() for a in annotations_dict["annotations"]]
-
-        with lzma.open(file_path, "wt") as writer:
-            json.dump(data, writer)
+    return AnnotationResources(annotations=annotations, metadata=metadata)
 
 
-class SerializableAnnotationResourcesProvider(
-    MutableMapping, AnnotationResourcesProvider, GeoJSONAnnotationSerializer
-):
-    def __init__(self, identifier, base_path):
-        self._identifier = identifier
-        self._path = Path(base_path) / self._identifier
-        fmt = super().STORAGE_FMT
-        self._data_paths = {p.name[: -len(fmt)]: p for p in self._path.glob(f"*{fmt}")}
-        self._data_cache = {}
-        self._updated = set()
+def dump_geojson(fp, annotations_dict: AnnotationResources) -> None:
+    """serialize an AnnotationResource to a file
 
-    def __iter__(self) -> Iterator[str]:
-        return iter(set().union(self._data_cache, self._data_paths))
+    Parameters
+    ----------
+    fp:
+        a file pointer or file path
+    annotations_dict:
+        a geojson style dictionary of annotations
 
-    def __getitem__(self, item: str) -> AnnotationResources:
-        try:
-            return self._data_cache[item]
-        except KeyError:
-            fn = self._data_paths[item]
-            resource = self._data_cache[item] = super().deserialize_annotations(fn)
-            return resource
+    """
+    data = annotations_dict["metadata"].copy()
 
-    def __len__(self) -> int:
-        return len(set().union(self._data_cache, self._data_paths))
+    annotations = []
+    for a in annotations_dict["annotations"]:
+        annotations.append(
+            {
+                "type": "Feature",
+                "id": "PathAnnotationObject",
+                "geometry": mapping(a.roi),
+                "properties": {
+                    "classification": {"name": a.class_name},
+                    "isLocked": a.locked,
+                    "measurements": a.measurements,
+                },
+            }
+        )
 
-    def __setitem__(
-        self, item: str, annotations_resources: AnnotationResources
-    ) -> None:
-        self._data_cache[item] = annotations_resources
-        self._updated.add(item)
+    data["annotations"] = annotations
 
-    def __delitem__(self, item: str) -> None:
-        with suppress(KeyError):
-            del self._data_cache[item]
-        path: Path = self._data_paths.pop(item)
-        path.unlink(missing_ok=True)
-
-    ids = Mapping.keys
-
-    def save(self):
-        self._path.mkdir(exist_ok=True)
-        for image_id in self._updated:
-            fn = self._path / f"{image_id}{super().STORAGE_FMT}"
-            super().serialize_annotations(fn, self._data_cache[image_id])
-
-    @classmethod
-    def from_provider(cls, identifier, base_path, provider):
-        inst = cls(identifier, base_path)
-        inst.update(provider)
-        inst.save()
-        return inst
-
-    @classmethod
-    def from_directory(cls, directory):
-        # TODO: identifier should be removed and refactored here...
-        return cls(".", directory)
-
-
-class MergedAnnotationResourcesProvider(AnnotationResourcesProvider):
-    def __init__(self, annotation_providers):
-        self._providers = list(annotation_providers)
-        self._len = len(set().union(*self._providers))
-        if self._len < sum(map(len, self._providers)):
-            raise ValueError("duplicated keys between providers")
-
-    def __getitem__(self, item: str) -> AnnotationResources:
-        for provider in self._providers:
-            try:
-                return provider[item]
-            except KeyError:
-                pass
-        raise KeyError(item)
-
-    def __len__(self) -> int:
-        return self._len
-
-    def __iter__(self) -> Iterator[str]:
-        return itertools.chain.from_iterable(self._providers)
-
-    def __contains__(self, item) -> bool:
-        return any(item in p for p in self._providers)
-
-    def __bool__(self) -> bool:
-        return any(self._providers)
+    # dump file
+    with lzma.open(fp, "wb") as writer:
+        json.dump(data, writer)
