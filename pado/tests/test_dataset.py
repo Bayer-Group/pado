@@ -43,6 +43,13 @@ def test_pado_test_datasource_error_without_with(datasource):
         _ = datasource.metadata
 
 
+def test_pado_test_datasource_image_ids(datasource):
+    datasource.acquire()
+    assert set(datasource.images.ids()) == {("i0.tif",)}  # TODO: revisit
+    assert set(datasource.metadata[PadoColumn.IMAGE]) == {"i0.tif"}
+    assert set(datasource.annotations) == {"i0.tif"}
+
+
 def test_write_pado_dataset(datasource, tmp_path):
     ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
     ds.add_source(datasource)
@@ -139,6 +146,7 @@ def test_add_source_twice(datasource, tmp_path):
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
     dataset_path = tmp_path / "new_dataset"
     ds = PadoDataset(dataset_path, mode="x")
+    assert set(dataset_ro.annotations) == {"i0.tif"}
     ds.add_source(dataset_ro, copy_images=True)
 
 
