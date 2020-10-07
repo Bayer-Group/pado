@@ -35,12 +35,10 @@ class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
     AnnotationResources.
 
     Lazy loads the annotation resources when requested.
-
     """
 
     def __init__(self, path, suffix, load, dump=None):
         """create a new AnnotationResourcesProvider
-
 
         Parameters
         ----------
@@ -92,7 +90,24 @@ class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
         super().__delitem__(key)
 
 
-def merge_providers(*providers) -> Mapping[str, AnnotationResources]:
+def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
+    """create an AnnotationResourcesProvider for path and format"""
+    # todo: determine format from path
+    if fmt == "geojson":
+        return AnnotationResourcesProvider(
+            path, ".geojson.xz", load_geojson, dump_geojson
+        )
+    else:
+        raise ValueError(f"unknown AnnotationResourcesProvider format '{fmt}'")
+
+
+def store_provider(path, provider, fmt="geojson") -> None:
+    """store an AnnotationResourcesProvider at path using the format"""
+    store = get_provider(path, fmt)
+    store.update(provider)
+
+
+def merge_providers(providers) -> Mapping[str, AnnotationResources]:
     """merge multiple AnnotationResourceProvider instances into one read only provider"""
     merged = MappingProxyType(ChainMap(*providers))
     if len(merged) < sum(map(len, providers)):
@@ -101,9 +116,6 @@ def merge_providers(*providers) -> Mapping[str, AnnotationResources]:
 
 
 # --- Annotation serialization ------------------------------------------------
-
-
-FMT_GEOJSON = ".geojson.xz"
 
 
 def load_geojson(fp, drop_unclassified: bool = True) -> AnnotationResources:
