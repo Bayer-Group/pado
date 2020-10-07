@@ -1,46 +1,37 @@
-"""todo pado anonymizer"""
-import hashlib
-import math
-import numbers
+"""provides anonymization for pado Datasets"""
 import secrets
-from abc import ABC, abstractmethod
-from typing import Any, TypeVar, Union
+from hashlib import sha256
+from math import isnan
+from numbers import Real
+
+__all__ = ["anonymize", "make_salt"]
 
 
-class BaseAnonymizer(ABC):
-
-    _T = TypeVar("_T")
-
-    @abstractmethod
-    def __call__(self, item_or_series: _T) -> Union[str, _T]:
-        ...
-
-
-def make_salt(num_bytes=32):
+def make_salt(num_bytes: int = 32) -> str:
+    """generate a salt for anonymization"""
     return secrets.token_hex(2 * num_bytes)
 
 
-class HashAnonymizer(BaseAnonymizer):
-    def __init__(
-        self, salt=None, hasher=hashlib.sha256, obscure_missing=False, collect_map=False
-    ):
-        if salt is None:
-            salt = make_salt()
-        self._salt = salt
-        self._hasher = hasher
-        self._obscure_missing = obscure_missing
-        # store map if requested
-        self.anonymized_map = {} if collect_map else None
+_DEFAULT_SALT = make_salt()
 
-    def __call__(self, data: Any) -> Union[str, None, numbers.Real]:
-        if not self._obscure_missing:
-            if data is None:
-                return None
-            elif isinstance(data, numbers.Real) and math.isnan(data):
-                return data
-        else:
-            data = str(hash(data))
-        anonymized = self._hasher(data + self._salt).hexdigest()
-        if self.anonymized_map is not None:
-            self.anonymized_map[anonymized] = data
-        return anonymized
+
+def anonymize(data, *, keep_na=False, mapping=None, salt=None, hasher=sha256) -> str:
+    """anonymize data to alpha numeric strings"""
+    if salt is None:
+        salt = _DEFAULT_SALT
+
+    if keep_na and _is_none_or_nan(data):
+        return data
+
+    anonymized = hasher(f"{hash(data)}{salt}".encode()).hexdigest()
+    # store map if requested
+    if mapping is not None:
+        mapping[anonymized] = data
+
+    return anonymized
+
+
+def _is_none_or_nan(x) -> bool:
+    if isinstance(x, Real):
+        return isnan(x)
+    return x is None
