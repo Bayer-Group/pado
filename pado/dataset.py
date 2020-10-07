@@ -9,12 +9,13 @@ from typing import Callable, Dict, List, Mapping, Optional, Union
 import pandas as pd
 import toml
 
-from pado.annotations import AnnotationResources
+from pado.annotations import Annotation, AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import merge_providers as merge_annotation_providers
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
 from pado.images import (
+    ImageResource,
     ImageResourceCopier,
     ImageResourcesProvider,
     MergedImageResourcesProvider,
@@ -78,6 +79,12 @@ def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
 
 
 DatasetIOMode = Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"]
+
+
+class PadoDataItemDict(TypedDict):
+    image: ImageResource
+    metadata: Dict[str, str]
+    annotations: List[Annotation]
 
 
 class PadoDataSourceDict(TypedDict):
@@ -242,7 +249,7 @@ class PadoDataset(DataSource):
             self._annotations_provider = merge_annotation_providers(providers)
         return self._annotations_provider
 
-    def __getitem__(self, item: int) -> Dict:
+    def __getitem__(self, item: int) -> PadoDataItemDict:
         image = self.images[item]
         if isinstance(image, RemoteImageResource):
             warnings.warn(
@@ -257,11 +264,9 @@ class PadoDataset(DataSource):
         annotation_dict = self.annotations.get(image.id_str, {}).copy()
         annotations = annotation_dict.pop("annotations", [])
         # TODO: annotation_dict should be included in metadata_dict
-        return {
-            "image": image,
-            "metadata": metadata_dict,
-            "annotations": annotations,
-        }
+        return PadoDataItemDict(
+            image=image, metadata=metadata_dict, annotations=annotations,
+        )
 
     def __len__(self):
         return len(self.images)
