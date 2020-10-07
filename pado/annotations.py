@@ -109,8 +109,7 @@ def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
 
 def store_provider(path, provider, fmt="geojson") -> None:
     """store an AnnotationResourcesProvider at path using the format"""
-    store = get_provider(path, fmt)
-    store.update(provider)
+    get_provider(path, fmt).update(provider)
 
 
 def merge_providers(providers) -> Mapping[str, AnnotationResources]:
