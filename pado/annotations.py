@@ -72,12 +72,10 @@ class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
 
     def __missing__(self, key: str) -> AnnotationResources:
         fn = self._files[key]
-        try:
-            with fn.open("rt") as fp:
-                super()[key] = resources = self._load(fp)
-                return resources
-        except Exception as exc:
-            raise KeyError(key) from exc
+        with fn.open("rb") as fp:
+            resources = self._load(fp)
+        super().__setitem__(key, resources)
+        return resources
 
     def __setitem__(self, key: str, value: AnnotationResources):
         if self._dump:
