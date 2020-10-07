@@ -4,17 +4,13 @@ import random
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Iterator
+from typing import Iterator, Mapping
 
 import numpy as np
 import pandas as pd
 from shapely.geometry import Polygon
 
-from pado.annotations import (
-    Annotation,
-    AnnotationResources,
-    AnnotationResourcesProvider,
-)
+from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
 from pado.images import ImageResource, ImageResourcesProvider, LocalImageResource
@@ -107,7 +103,7 @@ class _TestImageResourcesProvider(ImageResourcesProvider):
         return len(self._images)
 
 
-class _TestAnnotationResourcesProvider(AnnotationResourcesProvider):
+class _TestAnnotationResourcesProvider(Mapping[str, AnnotationResources]):
     def __init__(self, images):
         self._image_ids = [img_id for img_id, *_ in images]
 
@@ -181,7 +177,7 @@ class TestDataSource(DataSource):
         return self._im
 
     @property
-    def annotations(self) -> AnnotationResourcesProvider:
+    def annotations(self) -> Mapping[str, AnnotationResources]:
         # noinspection PyTypeChecker
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
