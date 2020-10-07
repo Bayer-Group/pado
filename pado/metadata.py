@@ -207,3 +207,57 @@ def structurize_metadata(
         md["slide"]["organ"].append(organ)
 
     return md
+
+
+@pd.api.extensions.register_dataframe_accessor("pado")
+class PadoAccessor:
+    """provide pado specific operations on the dataframe"""
+
+    c = PadoColumn
+    """provide shorthand for standardized columns"""
+
+    def __init__(self, pandas_obj: pd.DataFrame):
+        self._validate(pandas_obj)
+        self._df = pandas_obj
+        self._cm = build_column_map(pandas_obj.columns)
+
+    @staticmethod
+    def _validate(obj: pd.DataFrame):
+        """validate the provided dataframe"""
+        # check required columns
+        if not set(PadoColumn).issubset(obj.columns):
+            missing = set(PadoColumn) - set(obj.columns)
+            mc = ", ".join(map(str.__repr__, sorted(missing)))
+            raise AttributeError(f"missing columns: {mc}")
+        # check if columns are compliant
+        try:
+            verify_columns(columns=obj.columns, raise_if_invalid=True)
+        except ValueError as err:
+            raise AttributeError(str(err))
+
+    def _subset(self, column: PadoColumn) -> pd.DataFrame:
+        """return the dataframe subset belonging to a PadoColumn"""
+        return self._df.loc[:, self._cm[column]].drop_duplicates()
+
+    class _SubsetDescriptor:
+        """descriptor for accessing the dataframe subsets"""
+
+        def __init__(self, pado_column: PadoColumn):
+            self._col = pado_column
+
+        def __get__(self, instance, owner):
+            if instance is None:
+                return self  # pragma: no cover
+            # noinspection PyProtectedMember
+            return instance._subset(self._col)
+
+    # the dataframe accessors
+    studies = _SubsetDescriptor(c.STUDY)
+    experiments = _SubsetDescriptor(c.EXPERIMENT)
+    groups = _SubsetDescriptor(c.GROUP)
+    animals = _SubsetDescriptor(c.ANIMAL)
+    compounds = _SubsetDescriptor(c.COMPOUND)
+    organs = _SubsetDescriptor(c.ORGAN)
+    slides = _SubsetDescriptor(c.SLIDE)
+    images = _SubsetDescriptor(c.IMAGE)
+    findings = _SubsetDescriptor(c.FINDING)
