@@ -134,7 +134,7 @@ def load_geojson(fp, *, drop_unclassified: bool = True) -> AnnotationResources:
         drop an annotation in case it has no class set
     """
     # load file
-    with lzma.open(fp, "r") as reader:
+    with lzma.open(fp, "rb") as reader:
         metadata: dict = json.load(reader)
 
     # get the annotations
