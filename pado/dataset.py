@@ -4,16 +4,15 @@ import pathlib
 import re
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Mapping, Optional, Union
 
 import pandas as pd
 import toml
 
-from pado.annotations import (
-    AnnotationResourcesProvider,
-    MergedAnnotationResourcesProvider,
-    SerializableAnnotationResourcesProvider,
-)
+from pado.annotations import AnnotationResources
+from pado.annotations import get_provider as get_annotation_provider
+from pado.annotations import merge_providers as merge_annotation_providers
+from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
 from pado.images import (
     ImageResourceCopier,
@@ -289,17 +288,13 @@ class PadoDataset(DataSource):
         return self._metadata_df
 
     @property
-    def annotations(self) -> AnnotationResourcesProvider:
+    def annotations(self) -> Mapping[str, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
             providers = []
             for p in filter(os.path.isdir, self._path_annotations.glob("*")):
-                providers.append(
-                    SerializableAnnotationResourcesProvider(
-                        p.name, self._path_annotations
-                    )
-                )
-            self._annotations_provider = MergedAnnotationResourcesProvider(providers)
+                providers.append(get_annotation_provider(p))
+            self._annotations_provider = merge_annotation_providers(providers)
         return self._annotations_provider
 
     def __getitem__(self, item: int) -> Dict:
@@ -366,11 +361,8 @@ class PadoDataset(DataSource):
 
     def _store_annotation_provider(self, source: DataSource):
         """store the annotation provider to the dataset"""
-        identifier = source.identifier
-
-        _ = SerializableAnnotationResourcesProvider.from_provider(
-            identifier, self._path_annotations, source.annotations
-        )
+        path = self._path_annotations / source.identifier
+        store_annotation_provider(path, source.annotations)
 
     def _store_dataset_toml(
         self, add_source: Optional[DataSource] = None, *, _info=None
