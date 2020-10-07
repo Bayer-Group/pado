@@ -30,7 +30,7 @@ class AnnotationResources(TypedDict):
     metadata: Dict[str, Any]
 
 
-class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
+class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
     """An AnnotationResourcesProvider is a map from keys (image_ids) to
     AnnotationResources.
 
@@ -54,23 +54,26 @@ class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
         """
         super().__init__()
         path = Path(path)
+        path.mkdir(exist_ok=True)
         self._file = lambda key: path.joinpath(key).with_suffix(suffix)
         self._load = load
         self._dump = dump
-        self._files = {
-            p.name[: -len(suffix)]: p for p in path.iterdir() if p.name.endswith(suffix)
-        }
+        self._files = {}
+        for p in path.iterdir():
+            fn = p.name
+            if fn.endswith(suffix):
+                self._files[fn[: -len(suffix)]] = p
 
     def __len__(self):
-        return len(set().union(self, self._files))
+        return len(set().union(super().__iter__(), self._files))
 
     def __iter__(self):
-        return iter(set().union(self, self._files))
+        return iter(set().union(super().__iter__(), self._files))
 
     def __missing__(self, key: str) -> AnnotationResources:
         fn = self._files[key]
         try:
-            with fn.open("r") as fp:
+            with fn.open("rt") as fp:
                 super()[key] = resources = self._load(fp)
                 return resources
         except Exception as exc:
@@ -78,7 +81,7 @@ class AnnotationResourcesProvider(UserDict[str, AnnotationResources]):
 
     def __setitem__(self, key: str, value: AnnotationResources):
         if self._dump:
-            with self._file(key).open("w") as fp:
+            with self._file(key).open("wb") as fp:
                 self._dump(value, fp)
         super().__setitem__(key, value)
 
@@ -118,7 +121,7 @@ def merge_providers(providers) -> Mapping[str, AnnotationResources]:
 # --- Annotation serialization ------------------------------------------------
 
 
-def load_geojson(fp, drop_unclassified: bool = True) -> AnnotationResources:
+def load_geojson(fp, *, drop_unclassified: bool = True) -> AnnotationResources:
     """deserialize an AnnotationResource from a file
 
     Parameters
@@ -129,7 +132,7 @@ def load_geojson(fp, drop_unclassified: bool = True) -> AnnotationResources:
         drop an annotation in case it has no class set
     """
     # load file
-    with lzma.open(fp, "rb") as reader:
+    with lzma.open(fp, "r") as reader:
         metadata: dict = json.load(reader)
 
     # get the annotations
@@ -158,15 +161,15 @@ def load_geojson(fp, drop_unclassified: bool = True) -> AnnotationResources:
     return AnnotationResources(annotations=annotations, metadata=metadata)
 
 
-def dump_geojson(fp, annotations_dict: AnnotationResources) -> None:
+def dump_geojson(annotations_dict: AnnotationResources, fp) -> None:
     """serialize an AnnotationResource to a file
 
     Parameters
     ----------
-    fp:
-        a file pointer or file path
     annotations_dict:
         a geojson style dictionary of annotations
+    fp:
+        a file pointer or file path
 
     """
     data = annotations_dict["metadata"].copy()
@@ -189,5 +192,5 @@ def dump_geojson(fp, annotations_dict: AnnotationResources) -> None:
     data["annotations"] = annotations
 
     # dump file
-    with lzma.open(fp, "wb") as writer:
+    with lzma.open(fp, "wt") as writer:
         json.dump(data, writer)
