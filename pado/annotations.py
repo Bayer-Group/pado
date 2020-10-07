@@ -55,7 +55,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
         super().__init__()
         path = Path(path)
         path.mkdir(exist_ok=True)
-        self._file = lambda key: path.joinpath(key).with_suffix(suffix)
+        self._file = lambda key: path.joinpath(key + suffix)
         self._load = load
         self._dump = dump
         self._files = {}
