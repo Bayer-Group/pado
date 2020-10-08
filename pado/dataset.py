@@ -261,8 +261,12 @@ class PadoDataset(DataSource):
         metadata_dict = structurize_metadata(
             metadata, PadoColumn.IMAGE, self._metadata_col_map
         )
-        annotation_dict = self.annotations.get(image.id_str, {}).copy()
-        annotations = annotation_dict.pop("annotations", [])
+        try:
+            annotation_dict = self.annotations[image.id_str].copy()
+        except KeyError:
+            annotations = []
+        else:
+            annotations = annotation_dict.pop("annotations", [])
         # TODO: annotation_dict should be included in metadata_dict
         return PadoDataItemDict(
             image=image, metadata=metadata_dict, annotations=annotations,
