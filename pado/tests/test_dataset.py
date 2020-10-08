@@ -23,7 +23,9 @@ def count_images(ds: PadoDataset):
 
 
 def test_pado_testsource_verification(datasource: DataSource):
-    datasource.verify(acquire=True)
+    from pado.datasource import verify_datasource
+
+    assert verify_datasource(datasource, acquire=True)
 
 
 def test_pado_test_datasource_usage(datasource):
