@@ -22,6 +22,16 @@ class Annotation(NamedTuple):
     measurements: Optional[List[dict]] = None
     locked: bool = False  # this is for QuPath consistency and should go
 
+    def __repr__(self):
+        name = type(self).__name__
+        roi = f"'{self.roi.wkt}'"
+        cn = f"'{self.class_name or ''}'"
+        ms = self.measurements
+        if ms:
+            return f"{name}(roi={roi}, class_name={cn}, measurements={ms})"
+        else:
+            return f"{name}(roi={roi}, class_name={cn})"
+
 
 class AnnotationResources(TypedDict):
     """AnnotationResources combine multiple annotations with common metadata"""
