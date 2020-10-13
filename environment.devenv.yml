@@ -6,7 +6,7 @@
 # equivalent to:
 #   PADO_DEVEL="" conda devenv
 # Create the environment, install pado in development mode:
-# PADO_DEVEL=TRUE conda devenv
+#   PADO_DEVEL=TRUE conda devenv
 #
 
 {% set PADO_DEVEL = os.environ.get('PADO_DEVEL', False) %}
