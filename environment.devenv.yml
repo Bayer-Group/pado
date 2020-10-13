@@ -1,0 +1,48 @@
+#
+# Conda devenv environment for pado
+#
+# Create the environment, do not install pado in development mode:
+#   conda devenv
+# equivalent to:
+#   PADO_DEVEL="" conda devenv
+# Create the environment, install pado in development mode:
+# PADO_DEVEL=TRUE conda devenv
+#
+
+{% set PADO_DEVEL = os.environ.get('PADO_DEVEL', False) %}
+
+name: pado
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # python relevant things
+  - python>=3.6
+  - pip
+  - typing_extensions
+  - importlib_resources
+  - setuptools_scm
+
+  # pado requirements
+  - toml
+  - tqdm
+  - pyarrow
+  - numpy
+  - pandas
+  - shapely
+
+  # support for pado.ext.testsource
+  - tifffile
+
+
+  - JPype1>=1
+
+  # testing relevant things
+  - pytest>=6
+  - pytest-cov
+
+  # pip installs
+  - pip:      # [ PADO_DEVEL ]
+    - "-e ."  # [ PADO_DEVEL ]
