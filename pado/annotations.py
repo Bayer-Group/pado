@@ -14,6 +14,24 @@ except ImportError:
     from typing_extensions import TypedDict
 
 
+def is_valid_geometry(geometry) -> bool:
+    """
+    Returns True iff geometry is a valid shapely/geos geometry.
+
+    From the shapely docs:
+    "Shapely does not check the topological simplicity or validity of instances when they
+    are constructed as the cost is unwarranted in most cases. Validating factories
+    are easily implemented using the :attr:is_valid predicate by users that require them."
+
+    See also:
+      https://shapely.readthedocs.io/en/stable/manual.html#object.is_valid
+    """
+    try:
+        return geometry.is_valid
+    except ValueError:
+        return False
+
+
 class Annotation(NamedTuple):
     """An Annotation combines geometry, class and additional measurements"""
 
@@ -131,7 +149,7 @@ def merge_providers(providers) -> Mapping[str, AnnotationResources]:
 # --- Annotation serialization ------------------------------------------------
 
 
-def load_geojson(fp, *, drop_unclassified: bool = True) -> AnnotationResources:
+def load_geojson(fp, *, drop_unclassified: bool = True, drop_broken_geometries: bool = True) -> AnnotationResources:
     """deserialize an AnnotationResource from a file
 
     Parameters
@@ -159,14 +177,21 @@ def load_geojson(fp, *, drop_unclassified: bool = True) -> AnnotationResources:
         assert geojson["type"] == "Feature"
         assert geojson["id"] == "PathAnnotationObject"
         properties = geojson["properties"]
-        annotations.append(
-            Annotation(
-                roi=asShape(geojson["geometry"]),
-                class_name=properties["classification"].get("name"),
-                measurements=properties["measurements"],
-                locked=properties["isLocked"],
+        shape = asShape(geojson["geometry"])
+
+        if not drop_broken_geometries or is_valid_geometry(shape):
+            annotations.append(
+                Annotation(
+                    roi=shape,
+                    class_name=properties["classification"].get("name"),
+                    measurements=properties["measurements"],
+                    locked=properties["isLocked"],
+                )
             )
-        )
+        else:
+            # FIXME Need to add proper logging
+            # FIXME meta should carry what is the image_id
+            print(f'WARNING: ignored broken geometry for {metadata["project"]} {metadata["scan_name"]}')
 
     return AnnotationResources(annotations=annotations, metadata=metadata)
 
