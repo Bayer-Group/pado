@@ -32,8 +32,6 @@ dependencies:
   - numpy
   - pandas
   - shapely
-  # until this gets fixed: https://github.com/libgeos/geos/issues/329
-  - geos <3.8
 
   # support for pado.ext.testsource
   - tifffile
