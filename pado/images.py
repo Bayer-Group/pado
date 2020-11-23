@@ -4,6 +4,7 @@ import platform
 import re
 import warnings
 from abc import ABC, abstractmethod
+from ast import literal_eval
 from itertools import tee
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, List, NamedTuple, Optional, Tuple, Union
@@ -14,19 +15,17 @@ import pandas as pd
 from tqdm import tqdm
 
 ImageId = Tuple[str, ...]
-ImageStrId = str
-SEPARATOR = "__"
 
 
 class _SerializedImageResource(NamedTuple):
     type: str
-    image_id: ImageStrId
+    image_id: str
     uri: str
     md5: Optional[str]
 
 
 class ImageResource(ABC):
-    __slots__ = ("_image_id", "_str_image_id", "_resource", "_md5sum")
+    __slots__ = "_image_id", "_str_image_id", "_resource", "_checksum"
     registry = {}
     resource_type = None
 
@@ -35,32 +34,32 @@ class ImageResource(ABC):
         super().__init_subclass__(**kwargs)
         cls.registry[cls.resource_type] = cls
 
-    def __init__(self, image_id, resource, md5sum=None):
+    def __init__(self, image_id, resource, checksum=None):
         if isinstance(image_id, str):
             str_image_id = image_id
-            image_id = tuple(image_id.split(SEPARATOR))
+            image_id = literal_eval(image_id)
         elif isinstance(image_id, (tuple, list, pd.Series)):
             image_id = tuple(image_id)
-            str_image_id = SEPARATOR.join(image_id)
+            str_image_id = repr(image_id)
         else:
             raise TypeError(f"image_id not str or tuple, got {type(image_id)}")
         self._image_id = image_id
         self._str_image_id = str_image_id
         self._resource = resource
-        self._md5sum = md5sum
+        self._checksum = checksum
 
     @property
     def id(self) -> ImageId:
         return self._image_id
 
     @property
-    def id_str(self) -> ImageStrId:
+    def id_str(self) -> str:
         return self._str_image_id
 
     @property
-    def md5(self) -> str:
-        """return the md5 of the resource"""
-        return self._md5sum
+    def checksum(self) -> str:
+        """return the checksum of the resource"""
+        return self._checksum
 
     @property
     @abstractmethod
@@ -86,26 +85,22 @@ class ImageResource(ABC):
         ...
 
     def serialize(self):
-        """serialize the object"""
-        return _SerializedImageResource(
-            self.resource_type, SEPARATOR.join(self.id), self.uri, self.md5,
-        )
+        return _SerializedImageResource(self.resource_type, self.id_str, self.uri, self.checksum)
 
     @classmethod
     def deserialize(cls, data: Union[_SerializedImageResource, pd.Series]):
-        impl = cls.registry[data.type]
-        return impl(data.image_id, data.uri, data.md5)
+        return cls.registry[data.type](data.image_id, data.uri, data.checksum)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(image_id={self.id})"
 
 
 class LocalImageResource(ImageResource, resource_type="local"):
-    __slots__ = ("_path",)
+    __slots__ = "_path",
     supported_schemes = {"file"}
 
-    def __init__(self, image_id, resource, md5sum=None):
-        super().__init__(image_id, resource, md5sum)
+    def __init__(self, image_id, resource, checksum=None):
+        super().__init__(image_id, resource, checksum)
         if isinstance(resource, Path):
             p = resource
 
@@ -149,11 +144,11 @@ class LocalImageResource(ImageResource, resource_type="local"):
 
 
 class RemoteImageResource(ImageResource, resource_type="remote"):
-    __slots__ = ("_url", "_fp")
+    __slots__ = "_url", "_fp"
     supported_schemes = {"http", "https", "ftp"}
 
-    def __init__(self, image_id, resource, md5sum=None):
-        super().__init__(image_id, resource, md5sum)
+    def __init__(self, image_id, resource, checksum=None):
+        super().__init__(image_id, resource, checksum)
         if not isinstance(resource, str):
             raise TypeError(f"url not str, got {type(resource)}")
         if urlparse(resource).scheme not in self.supported_schemes:
@@ -190,8 +185,8 @@ class InternalImageResource(ImageResource, resource_type="internal"):
     __slots__ = ("_path", "_base_path", "_identifier")
     supported_schemes = {"pado+internal"}
 
-    def __init__(self, image_id, resource, md5sum=None):
-        super().__init__(image_id, resource, md5sum)
+    def __init__(self, image_id, resource, checksum=None):
+        super().__init__(image_id, resource, checksum)
         if isinstance(resource, Path):
             # Paths can directly pass through
             ident, p = None, Path(resource)
@@ -349,9 +344,8 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         return inst
 
 
-_WINDOWS = platform.system() == "Windows"
 _BLOCK_SIZE = {
-    LocalImageResource.__name__: 1024 * 1024 if _WINDOWS else 1024 * 64,
+    LocalImageResource.__name__: 1024 * 1024 if platform.system() == "Windows" else 1024 * 64,
     RemoteImageResource.__name__: 1024 * 8,
 }
 
@@ -364,7 +358,7 @@ def copy_resource(
     """copy an image resource to a local path"""
     md5hash = None
     # in case we provide an md5 build the hash incrementally
-    if resource.md5:
+    if resource.checksum:
         md5hash = hashlib.md5()
 
     with resource.open() as src, path.open("wb") as dst:
@@ -391,7 +385,7 @@ def copy_resource(
     if src_size >= 0 and read < src_size:
         raise RuntimeError(f"{resource.id}: could only copy {read} of {src_size} bytes")
 
-    if md5hash and md5hash.hexdigest() != resource.md5:
+    if md5hash and md5hash.hexdigest() != resource.checksum:
         raise ValueError(f"{resource.id}: md5sum does not match provided md5")
 
 
@@ -431,7 +425,7 @@ class ImageResourceCopier:
                         raise
                     else:
                         images[idx] = InternalImageResource(
-                            image.id, internal_path, image.md5
+                            image.id, internal_path, image.checksum
                         ).attach(self.identifier, self.base_path)
         finally:
             images.save()
