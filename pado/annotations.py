@@ -138,9 +138,23 @@ def store_provider(path, provider, fmt="geojson") -> None:
     get_provider(path, fmt).update(provider)
 
 
+class _ChainMap(ChainMap):
+    # this might be a bug in cpython...
+    # or maybe not a bug, but at least it's unexpected behavior
+    # see: https://bugs.python.org/issue32792
+    # after the above patch was applied ChainMap now calls __getitem__ of
+    # the underlying maps just to iterate...
+    def __iter__(self):
+        d = {}  # the original fix uses a dict here basically as an ordered set...
+        for mapping in reversed(self.maps):
+            # d.update(mapping)  <-- this will call __getitem__ instead of just __iter__ of mapping
+            d.update(dict.fromkeys(mapping))
+        return iter(d)
+
+
 def merge_providers(providers) -> Mapping[str, AnnotationResources]:
     """merge multiple AnnotationResourceProvider instances into one read only provider"""
-    merged = MappingProxyType(ChainMap(*providers))
+    merged = MappingProxyType(_ChainMap(*providers))
     if len(merged) < sum(map(len, providers)):
         raise ValueError("duplicated keys between providers")
     return merged
