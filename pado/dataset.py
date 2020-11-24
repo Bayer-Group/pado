@@ -3,18 +3,21 @@ import os
 import pathlib
 import re
 import warnings
+from collections import defaultdict
+from functools import cached_property
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Union
 
 import pandas as pd
 import toml
 
-from pado.annotations import Annotation, AnnotationResources
+from pado.annotations import Annotation, AnnotationResources, _ChainMap
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import merge_providers as merge_annotation_providers
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
 from pado.images import (
+    ChainedImageResourcesProvider,
     ImageResource,
     ImageResourceCopier,
     ImageResourcesProvider,
@@ -347,3 +350,36 @@ class PadoDataset(DataSource):
         with self._config.open("r") as config:
             dataset_config = toml.load(config)
         return dataset_config
+
+
+class PadoDatasetChain:
+    """Chain multiple pado datasets"""
+
+    def __init__(self, *datasets: PadoDataset):
+        self._datasets = list(datasets)
+        self._image_id_to_dataset = defaultdict(list)
+        self._chained_images = ChainedImageResourcesProvider(
+            *(ds.images for ds in self._datasets)
+        )
+        self._metadata_col_map = {}
+
+    @cached_property
+    def images(self) -> ImageResourcesProvider:
+        """images in the pado dataset"""
+        return self._chained_images
+
+    @cached_property
+    def metadata(self) -> pd.DataFrame:
+        """combined dataframe"""
+        dfs = [ds.metadata for ds in self._datasets]
+        df = pd.concat(dfs).drop_duplicates(keep="first")
+        self._metadata_col_map = build_column_map(df.columns)
+        return df
+
+    @cached_property
+    def annotations(self) -> Mapping[str, AnnotationResources]:
+        """chaining annotations together"""
+        return _ChainMap(*(ds.annotations for ds in self._datasets))
+
+    __getitem__ = PadoDataset.__getitem__
+    __len__ = PadoDataset.__len__

@@ -4,6 +4,7 @@ import platform
 import re
 import warnings
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from itertools import tee
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Iterable, List, NamedTuple, Optional, Tuple, Union
@@ -296,6 +297,43 @@ class MergedImageResourcesProvider(ImageResourcesProvider):
 
     def __len__(self) -> int:
         return self._total_len
+
+
+class ChainedImageResourcesProvider(ImageResourcesProvider):
+    """chain image resource providers
+
+    combines multiple image resource providers and prioritize resources in order of the providers
+    """
+
+    def __init__(self, *providers: ImageResourcesProvider):
+        resources = defaultdict(list)
+        for p in providers:
+            for r in p:
+                resources[r.id].append(r)
+        resources.default_factory = None
+        self._resources = resources
+        self._keys = list(self._resources)
+
+    def ids(self):
+        return iter(self._keys)
+
+    def __getitem__(self, item: int) -> ImageResource:
+        """get the first available image resource
+
+        if not available at all. return the last
+        """
+        resources = self._resources[self._keys[item]]
+        r = None
+        for r in resources:
+            pth: Optional[Path] = r.local_path
+            if pth and pth.is_file():
+                break
+        if not r:
+            raise IndexError(item)
+        return r
+
+    def __len__(self):
+        return len(self._keys)
 
 
 class SerializableImageResourcesProvider(ImageResourcesProvider):
