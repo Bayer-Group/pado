@@ -473,3 +473,18 @@ class ImageResourceCopier:
                         ).attach(self.identifier, self.base_path)
         finally:
             images.save()
+
+
+def get_common_local_paths(image_provider: ImageResourcesProvider):
+    """return common base paths in an image provider"""
+    bases = set()
+    for resource in image_provider:
+        if isinstance(resource, RemoteImageResource):
+            continue
+        id_parts = resource.id
+        parts = resource.local_path.parts
+        assert len(parts) > len(id_parts), f"parts={parts!r}, id_parts={id_parts!r}"
+        base, fn_parts = parts[:-len(id_parts)], parts[-len(id_parts):]
+        assert id_parts == fn_parts, f"{id_parts!r} != {fn_parts!r}"
+        bases.add(Path().joinpath(*base))  # resource.local_paths are guaranteed to be absolute
+    return bases
