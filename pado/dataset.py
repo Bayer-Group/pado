@@ -13,15 +13,12 @@ import toml
 
 from pado.annotations import Annotation, AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
-from pado.annotations import merge_providers as merge_annotation_providers
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
 from pado.images import (
-    ChainedImageResourcesProvider,
     ImageResource,
     ImageResourceCopier,
     ImageResourcesProvider,
-    MergedImageResourcesProvider,
     RemoteImageResource,
     SerializableImageResourcesProvider,
 )
@@ -32,7 +29,7 @@ from pado.metadata import (
     build_column_map,
     structurize_metadata,
 )
-from pado.utils import ChainMap
+from pado.utils import readonly_chain, readonly_priority_chain
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -208,12 +205,10 @@ class PadoDataset(DataSource):
     def images(self) -> ImageResourcesProvider:
         """a sequence-like interface to all images in the dataset"""
         if self._image_provider is None:
-            providers = []
-            for p in filter(os.path.isdir, self._path_images.glob("*")):
-                providers.append(
-                    SerializableImageResourcesProvider(p.name, self._path_images)
-                )
-            self._image_provider = MergedImageResourcesProvider(providers)
+            self._image_provider = readonly_chain([
+                SerializableImageResourcesProvider(p.name, self._path_images)
+                for p in self._path_annotations.glob("*") if p.is_dir()
+            ])
         return self._image_provider
 
     @property
@@ -247,10 +242,10 @@ class PadoDataset(DataSource):
     def annotations(self) -> Mapping[str, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
-            providers = []
-            for p in filter(os.path.isdir, self._path_annotations.glob("*")):
-                providers.append(get_annotation_provider(p))
-            self._annotations_provider = merge_annotation_providers(providers)
+            self._annotations_provider = readonly_chain([
+                get_annotation_provider(p)
+                for p in self._path_annotations.glob("*") if p.is_dir()
+            ])
         return self._annotations_provider
 
     def __getitem__(self, item: int) -> PadoDataItemDict:
@@ -358,16 +353,23 @@ class PadoDatasetChain:
 
     def __init__(self, *datasets: PadoDataset):
         self._datasets = list(datasets)
-        self._image_id_to_dataset = defaultdict(list)
-        self._chained_images = ChainedImageResourcesProvider(
-            *(ds.images for ds in self._datasets)
-        )
         self._metadata_col_map = {}
 
     @cached_property
     def images(self) -> ImageResourcesProvider:
         """images in the pado dataset"""
-        return self._chained_images
+        def first_exists_fallback_last(resources):
+            for r in resources:
+                pth: Optional[Path] = r.local_path
+                if pth and pth.is_file():
+                    return r
+            else:
+                raise StopIteration
+
+        return readonly_priority_chain(
+            (ds.images for ds in self._datasets),
+            priority_func=first_exists_fallback_last
+        )
 
     @cached_property
     def metadata(self) -> pd.DataFrame:
@@ -380,7 +382,7 @@ class PadoDatasetChain:
     @cached_property
     def annotations(self) -> Mapping[str, AnnotationResources]:
         """chaining annotations together"""
-        return merge_annotation_providers((ds.annotations for ds in self._datasets))
+        return readonly_chain([ds.annotations for ds in self._datasets])
 
     __getitem__ = PadoDataset.__getitem__
     __len__ = PadoDataset.__len__

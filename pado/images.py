@@ -4,10 +4,8 @@ import platform
 import re
 import warnings
 from abc import ABC, abstractmethod
-from collections import defaultdict
-from itertools import tee
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Callable, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Mapping, NamedTuple, Optional, Tuple, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
@@ -259,81 +257,7 @@ class InternalImageResource(ImageResource, resource_type="internal"):
         return self
 
 
-class ImageResourcesProvider(ABC):
-    def ids(self) -> Iterable[ImageId]:
-        return (resource.id for resource in self)
-
-    @abstractmethod
-    def __getitem__(self, item: int) -> ImageResource:
-        pass
-
-    @abstractmethod
-    def __len__(self) -> int:
-        pass
-
-
-class MergedImageResourcesProvider(ImageResourcesProvider):
-    def __init__(self, image_providers: List[ImageResourcesProvider]):
-        self._providers = image_providers
-        self._cumulative_lengths = [0]
-        for provider in self._providers:
-            p_len = len(provider)
-            self._cumulative_lengths.append(self._cumulative_lengths[-1] + p_len)
-        self._total_len = self._cumulative_lengths[-1]
-
-    def __getitem__(self, item: int) -> ImageResource:
-        if not isinstance(item, int):
-            raise TypeError("expects integer type")
-        if item < 0 or item >= self._total_len:
-            raise IndexError(f"item index {item} not in range({len(self)})")
-        it0, it1 = tee(self._cumulative_lengths)
-        next(it1, None)
-
-        for low, high, provider in zip(it0, it1, self._providers):
-            if item < high:
-                return provider[item - low]
-        else:
-            raise IndexError(f"item index {item} not in range({len(self)})")
-
-    def __len__(self) -> int:
-        return self._total_len
-
-
-class ChainedImageResourcesProvider(ImageResourcesProvider):
-    """chain image resource providers
-
-    combines multiple image resource providers and prioritize resources in order of the providers
-    """
-
-    def __init__(self, *providers: ImageResourcesProvider):
-        resources = defaultdict(list)
-        for p in providers:
-            for r in p:
-                resources[r.id].append(r)
-        resources.default_factory = None
-        self._resources = resources
-        self._keys = list(self._resources)
-
-    def ids(self):
-        return iter(self._keys)
-
-    def __getitem__(self, item: int) -> ImageResource:
-        """get the first available image resource
-
-        if not available at all. return the last
-        """
-        resources = self._resources[self._keys[item]]
-        r = None
-        for r in resources:
-            pth: Optional[Path] = r.local_path
-            if pth and pth.is_file():
-                break
-        if not r:
-            raise IndexError(item)
-        return r
-
-    def __len__(self):
-        return len(self._keys)
+ImageResourcesProvider = Mapping[str, ImageResource]
 
 
 class SerializableImageResourcesProvider(ImageResourcesProvider):
@@ -344,45 +268,41 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         self._base_path = base_path
         self._df_filename = self._base_path / self._identifier / self.STORAGE_FILE
         if self._df_filename.is_file():
-            self._df = pd.read_parquet(self._df_filename)
+            df = pd.read_parquet(self._df_filename)
         else:
-            self._df = pd.DataFrame(columns=_SerializedImageResource._fields)
+            df = pd.DataFrame(columns=_SerializedImageResource._fields)
+        self._df = df.set_index(df["image_id"])
 
-    def __getitem__(self, item: int) -> ImageResource:
-        row = self._df.iloc[item]
+    def __getitem__(self, item: str) -> ImageResource:
+        row = self._df.loc[item]
         resource = ImageResource.deserialize(row)
         if isinstance(resource, InternalImageResource):
             resource.attach(self._identifier, self._base_path)
-
         return resource
 
-    def __setitem__(self, item: int, resource: ImageResource) -> None:
-        self._df.iloc[item] = resource.serialize()
+    def __setitem__(self, item: str, resource: ImageResource) -> None:
+        self._df.loc[item] = resource.serialize()
 
     def __len__(self) -> int:
         return len(self._df)
 
     def __iter__(self):
-        for row in self._df.itertuples(index=False):
-            resource = ImageResource.deserialize(row)
-            if isinstance(resource, InternalImageResource):
-                resource.attach(self._identifier, self._base_path)
-            yield resource
-
-    def ids(self):
-        return (resource.id for resource in iter(self))
+        yield from self._df["image_id"]
 
     def save(self):
         self._df_filename.parent.mkdir(parents=True, exist_ok=True)
-        self._df.to_parquet(self._df_filename, compression="gzip")
+        df = self._df.reset_index(drop=True)
+        df.to_parquet(self._df_filename, compression="gzip")
 
     @classmethod
     def from_provider(cls, identifier, base_path, provider):
         inst = cls(identifier, base_path)
-        inst._df = pd.DataFrame(
+        df = pd.DataFrame(
             [resource.serialize() for resource in provider],
             columns=_SerializedImageResource._fields,
         )
+        df = df.set_index(df["image_id"])
+        inst._df = df
         inst.save()
         return inst
 
@@ -449,7 +369,7 @@ class ImageResourceCopier:
 
     def __call__(self, images: SerializableImageResourcesProvider):
         try:
-            for idx, image in tqdm(enumerate(images)):
+            for idx, image in tqdm(enumerate(images.values())):
                 if isinstance(image, InternalImageResource):
                     continue  # image already available
 
@@ -478,7 +398,7 @@ class ImageResourceCopier:
 def get_common_local_paths(image_provider: ImageResourcesProvider):
     """return common base paths in an image provider"""
     bases = set()
-    for resource in image_provider:
+    for resource in image_provider.values():
         if isinstance(resource, RemoteImageResource):
             continue
         id_parts = resource.id
