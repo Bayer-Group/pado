@@ -1,5 +1,6 @@
 from collections import ChainMap as _ChainMap
-from typing import Iterable, Iterator, Mapping, Optional, Set, TypeVar
+from types import MappingProxyType
+from typing import Callable, Iterable, Iterator, Mapping, Optional, Set, TypeVar
 
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
@@ -47,3 +48,39 @@ class ChainMap(_ChainMap):
             # d.update(mapping)  <-- this will call __getitem__ instead of just __iter__ of mapping
             d.update(dict.fromkeys(mapping))
         return iter(d)
+
+
+def readonly_chain(mappings: Iterable[Mapping[_KT, _VT]]) -> Mapping[_KT, _VT]:
+    """merge multiple mappings into one read only mapping"""
+    return MappingProxyType(ChainMap(*mappings))
+
+
+class PriorityChainMap(ChainMap):
+    """A PriorityChainMap is a ChainMap that returns the value to a corresponding
+    key according to a provided priority_func from the underlying maps
+    """
+    def __init__(self, *maps: Mapping[_KT, _VT], priority_func: Callable[[Iterable[_VT]], _VT] = next):
+        super().__init__(*maps)
+        self._priority_func = priority_func
+
+    def _iter_maps_getitem_(self, key):
+        for mapping in self.maps:
+            try:
+                yield mapping[key]
+            except KeyError:
+                pass
+
+    def __getitem__(self, key):
+        try:
+            return self._priority_func(self._iter_maps_getitem_(key))
+        except StopIteration:
+            pass
+        return self.__missing__(key)
+
+
+def readonly_priority_chain(
+    mappings: Iterable[Mapping[_KT, _VT]],
+    priority_func: Callable[[Iterable[_VT]], _VT]
+) -> Mapping[_KT, _VT]:
+    """merge multiple mappings into one read only priority mapping"""
+    return MappingProxyType(PriorityChainMap(*mappings, priority_func=priority_func))

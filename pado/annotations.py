@@ -2,13 +2,10 @@ import json
 import lzma
 from collections import UserDict
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, NamedTuple, Optional
 
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
-
-from pado.utils import ChainMap
 
 try:
     from typing import TypedDict  # novermin
@@ -138,11 +135,6 @@ def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
 def store_provider(path, provider, fmt="geojson") -> None:
     """store an AnnotationResourcesProvider at path using the format"""
     get_provider(path, fmt).update(provider)
-
-
-def merge_providers(providers) -> Mapping[str, AnnotationResources]:
-    """merge multiple AnnotationResourceProvider instances into one read only provider"""
-    return MappingProxyType(ChainMap(*providers))
 
 
 # --- Annotation serialization ------------------------------------------------
