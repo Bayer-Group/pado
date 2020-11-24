@@ -11,7 +11,7 @@ from typing import Callable, Dict, List, Mapping, Optional, Union
 import pandas as pd
 import toml
 
-from pado.annotations import Annotation, AnnotationResources, _ChainMap
+from pado.annotations import Annotation, AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import merge_providers as merge_annotation_providers
 from pado.annotations import store_provider as store_annotation_provider
@@ -32,6 +32,7 @@ from pado.metadata import (
     build_column_map,
     structurize_metadata,
 )
+from pado.utils import ChainMap
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -371,15 +372,15 @@ class PadoDatasetChain:
     @cached_property
     def metadata(self) -> pd.DataFrame:
         """combined dataframe"""
-        dfs = [ds.metadata for ds in self._datasets]
-        df = pd.concat(dfs).drop_duplicates(keep="first")
-        self._metadata_col_map = build_column_map(df.columns)
+        df = pd.concat([ds.metadata for ds in self._datasets])
+        df.drop_duplicates(keep="first", inplace=True)
+        self._metadata_col_map = build_column_map(df.columns)  # TODO: abstract away in __getitem__
         return df
 
     @cached_property
     def annotations(self) -> Mapping[str, AnnotationResources]:
         """chaining annotations together"""
-        return _ChainMap(*(ds.annotations for ds in self._datasets))
+        return merge_annotation_providers((ds.annotations for ds in self._datasets))
 
     __getitem__ = PadoDataset.__getitem__
     __len__ = PadoDataset.__len__
