@@ -44,8 +44,9 @@ class PadoInvalid(str, enum.Enum):
 class PadoColumn(str, enum.Enum):
     """standardized pado columns"""
 
-    __version__ = 1
+    __version__ = 2
 
+    SOURCE = "SOURCE"
     STUDY = "STUDY"
     EXPERIMENT = "EXPERIMENT"
     GROUP = "GROUP"
