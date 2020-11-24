@@ -155,8 +155,11 @@ class _ChainMap(ChainMap):
 def merge_providers(providers) -> Mapping[str, AnnotationResources]:
     """merge multiple AnnotationResourceProvider instances into one read only provider"""
     merged = MappingProxyType(_ChainMap(*providers))
-    if len(merged) < sum(map(len, providers)):
-        raise ValueError("duplicated keys between providers")
+
+    # This likely is an overprotective bug
+    # if len(merged) < sum(map(len, providers)):
+    #     raise ValueError("duplicated keys between providers")
+
     return merged
 
 
