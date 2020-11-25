@@ -108,7 +108,7 @@ class _TestImageResourcesProvider(ImageResourcesProvider):
 
 class _TestAnnotationResourcesProvider(Mapping[str, AnnotationResources]):
     def __init__(self, images):
-        self._image_ids = [img_id for img_id, *_ in images]
+        self._image_ids = set(img_id for img_id, *_ in images)
 
     def __getitem__(self, k: str) -> AnnotationResources:
         return AnnotationResources(
