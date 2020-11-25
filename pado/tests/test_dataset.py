@@ -30,7 +30,7 @@ def test_pado_testsource_verification(datasource: DataSource):
 def test_pado_test_datasource_usage(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
-        for image in datasource.images:
+        for image in datasource.images.values():
             assert image.id is not None
             assert image.size > 0
         for annotation in datasource.annotations:
@@ -46,7 +46,7 @@ def test_pado_test_datasource_error_without_with(datasource):
 
 def test_pado_test_datasource_image_ids(datasource):
     datasource.acquire()
-    assert set(datasource.images) == {("i0.tif",)}  # TODO: revisit
+    assert set(datasource.images) == {"i0.tif"}  # TODO: revisit
     assert set(datasource.metadata[PadoColumn.IMAGE]) == {"i0.tif"}
     assert set(datasource.annotations) == {"i0.tif"}
 
