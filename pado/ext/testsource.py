@@ -93,14 +93,17 @@ def _get_test_data(num_images=3, num_rows=10):
 
 class _TestImageResourcesProvider(ImageResourcesProvider):
     def __init__(self, images):
-        self._images = images
+        self._image_map = {i[0]: i for i in images}
 
-    def __getitem__(self, item: int) -> ImageResource:
-        img_id, img_path, img_md5 = self._images[item]
+    def __iter__(self):
+        return iter(self._image_map)
+
+    def __getitem__(self, item: str) -> ImageResource:
+        img_id, img_path, img_md5 = self._image_map[item]
         return LocalImageResource(img_id, img_path, img_md5)
 
     def __len__(self) -> int:
-        return len(self._images)
+        return len(self._image_map)
 
 
 class _TestAnnotationResourcesProvider(Mapping[str, AnnotationResources]):
