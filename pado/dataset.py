@@ -3,7 +3,6 @@ import os
 import pathlib
 import re
 import warnings
-from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Union
@@ -248,20 +247,27 @@ class PadoDataset(DataSource):
             ])
         return self._annotations_provider
 
-    def __getitem__(self, item: int) -> PadoDataItemDict:
+    def __iter__(self):
+        yield from self.images
+
+    def __getitem__(self, item: str) -> PadoDataItemDict:
         image = self.images[item]
         if isinstance(image, RemoteImageResource):
             warnings.warn(
                 "you're requesting data from a dataset that contains remote image resources"
             )  # pragma: no cover
         _df = self.metadata
-        metadata = _df[_df[PadoColumn.IMAGE] == image.id_str]
+        metadata = _df[_df[PadoColumn.IMAGE] == item]
+
+        # build the column map lazily
+        if not getattr(self, "_metadata_col_map", None):
+            self._metadata_col_map = build_column_map(_df.columns)
         # this is where a relational database would be great...
         metadata_dict = structurize_metadata(
             metadata, PadoColumn.IMAGE, self._metadata_col_map
         )
         try:
-            annotation_dict = self.annotations[image.id_str].copy()
+            annotation_dict = self.annotations[item].copy()
         except KeyError:
             annotations = []
         else:
@@ -376,7 +382,6 @@ class PadoDatasetChain:
         """combined dataframe"""
         df = pd.concat([ds.metadata for ds in self._datasets])
         df.drop_duplicates(keep="first", inplace=True)
-        self._metadata_col_map = build_column_map(df.columns)  # TODO: abstract away in __getitem__
         return df
 
     @cached_property
