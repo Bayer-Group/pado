@@ -226,7 +226,10 @@ class PadoAccessor:
     def _validate(obj: pd.DataFrame):
         """validate the provided dataframe"""
         # check required columns
-        if not set(PadoColumn).issubset(obj.columns):
+        req = set(PadoColumn)
+        # so not require SOURCE
+        req.remove("SOURCE")  # FIXME: need to revisit when columns get revisited
+        if not req.issubset(obj.columns):
             missing = set(PadoColumn) - set(obj.columns)
             mc = ", ".join(map(str.__repr__, sorted(missing)))
             raise AttributeError(f"missing columns: {mc}")
