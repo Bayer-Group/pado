@@ -207,7 +207,7 @@ class PadoDataset(DataSource):
         if self._image_provider is None:
             self._image_provider = make_chain([
                 SerializableImageResourcesProvider(p.name, self._path_images)
-                for p in self._path_annotations.glob("*") if p.is_dir()
+                for p in self._path_images.glob("*") if p.is_dir()
             ])
         return self._image_provider
 
