@@ -274,6 +274,8 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         self._df = df.set_index(df["image_id"])
 
     def __getitem__(self, item: str) -> ImageResource:
+        if not isinstance(item, str):
+            raise TypeError(f"requires str. got `{type(item)}`")
         row = self._df.loc[item]
         resource = ImageResource.deserialize(row)
         if isinstance(resource, InternalImageResource):
@@ -281,6 +283,8 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         return resource
 
     def __setitem__(self, item: str, resource: ImageResource) -> None:
+        if not isinstance(item, str):
+            raise TypeError(f"requires str. got `{type(item)}`")
         self._df.loc[item] = resource.serialize()
 
     def __len__(self) -> int:
@@ -369,7 +373,7 @@ class ImageResourceCopier:
 
     def __call__(self, images: SerializableImageResourcesProvider):
         try:
-            for idx, image in tqdm(enumerate(images.values())):
+            for idx, (image_id, image) in tqdm(enumerate(images.items())):
                 if isinstance(image, InternalImageResource):
                     continue  # image already available
 
@@ -388,7 +392,7 @@ class ImageResourceCopier:
                         # todo: remove file?
                         raise
                     else:
-                        images[idx] = InternalImageResource(
+                        images[image_id] = InternalImageResource(
                             image.id, internal_path, image.md5
                         ).attach(self.identifier, self.base_path)
         finally:
