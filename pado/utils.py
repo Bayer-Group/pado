@@ -1,6 +1,39 @@
 from collections import ChainMap as _ChainMap
-from types import MappingProxyType
 from typing import Callable, Iterable, Iterator, Mapping, Optional, Set, TypeVar
+
+try:
+    # noinspection PyUnresolvedReferences
+    from functools import cached_property as _cached_property  # type: ignore
+
+    # noinspection PyPep8Naming
+    class cached_property(_cached_property):
+        def __set__(self, obj, value):
+            raise AttributeError(f"readonly attribute {self.attrname}")
+except ImportError:
+    # noinspection PyPep8Naming
+    class cached_property:  # type: ignore  # https://github.com/python/mypy/issues/1153
+        _NOCACHE = object()
+
+        def __init__(self, fget):
+            self.fget = fget
+            self.attrname = None
+            self.__doc__ = fget.__doc__
+
+        def __set_name__(self, owner, name):
+            self.attrname = name
+
+        def __get__(self, obj, objtype=None):
+            if obj is None:
+                return self  # pragma: no cover
+            cache = obj.__dict__
+            val = cache.get(self.attrname, self._NOCACHE)
+            if val is self._NOCACHE:
+                val = cache[self.attrname] = self.fget(obj)
+            return val
+
+        def __set__(self, obj, value):
+            raise AttributeError(f"readonly attribute {self.fget.__name__}")
+
 
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")

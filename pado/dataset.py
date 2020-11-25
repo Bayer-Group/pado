@@ -4,7 +4,6 @@ import pathlib
 import re
 import warnings
 from collections.abc import Hashable
-from functools import cached_property
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Union
 
@@ -29,7 +28,7 @@ from pado.metadata import (
     build_column_map,
     structurize_metadata,
 )
-from pado.utils import make_chain, make_priority_chain
+from pado.utils import cached_property, make_chain, make_priority_chain
 
 try:
     from typing import Literal, TypedDict  # novermin
