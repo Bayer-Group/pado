@@ -298,7 +298,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
     def from_provider(cls, identifier, base_path, provider):
         inst = cls(identifier, base_path)
         df = pd.DataFrame(
-            [resource.serialize() for resource in provider],
+            [resource.serialize() for resource in provider.values()],
             columns=_SerializedImageResource._fields,
         )
         df = df.set_index(df["image_id"])
