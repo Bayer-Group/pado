@@ -3,6 +3,7 @@ import os
 import pathlib
 import re
 import warnings
+from collections.abc import Hashable
 from functools import cached_property
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Union
@@ -388,7 +389,16 @@ class PadoDatasetChain:
     def metadata(self) -> pd.DataFrame:
         """combined dataframe"""
         df = pd.concat([ds.metadata for ds in self._datasets])
-        df.drop_duplicates(keep="first", inplace=True)
+
+        # some columns stored in dataframes might not be hashable...
+        hashable_columns = []
+        for col in df:
+            series = df[col]
+            column_types = series.apply(type).unique()
+            if all(issubclass(t, Hashable) for t in column_types):
+                hashable_columns.append(col)
+
+        df.drop_duplicates(subset=hashable_columns, keep="first", inplace=True)
         return df
 
     @cached_property
