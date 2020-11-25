@@ -301,6 +301,8 @@ class PadoDataset(DataSource):
             raise ValueError("source already exists")
 
         source.metadata.to_parquet(metadata_path, compression="gzip")
+        # clear cache
+        self._metadata_df = self._metadata_col_map = None
 
     def _store_image_provider(
         self,
@@ -318,11 +320,15 @@ class PadoDataset(DataSource):
             if copier is None:
                 copier = ImageResourceCopier(identifier, self._path_images)
             copier(ip)
+        # clear cache
+        self._image_provider = None
 
     def _store_annotation_provider(self, source: DataSource):
         """store the annotation provider to the dataset"""
         path = self._path_annotations / source.identifier
         store_annotation_provider(path, source.annotations)
+        # clear cache
+        self._annotations_provider = None
 
     def _store_dataset_toml(
         self, add_source: Optional[DataSource] = None, *, _info=None
