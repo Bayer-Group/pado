@@ -390,5 +390,6 @@ class PadoDatasetChain:
         """chaining annotations together"""
         return readonly_chain([ds.annotations for ds in self._datasets])
 
+    __iter__ = PadoDataset.__iter__
     __getitem__ = PadoDataset.__getitem__
     __len__ = PadoDataset.__len__
