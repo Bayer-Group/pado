@@ -130,6 +130,60 @@ def test_pado_dataset_open_with_different_identifier(dataset: PadoDataset):
     assert ds.identifier == "new_identifier"
 
 
+def test_datasource_image_serializing(datasource, tmp_path):
+    with datasource:
+        ip = SerializableImageResourcesProvider.from_provider(
+            "placeholder", tmp_path, datasource.images
+        )
+
+    for _ in ip.values():
+        pass
+
+    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+
+
+def test_serializable_image_resources_provider(datasource, tmp_path):
+    with datasource:
+        ip_old = SerializableImageResourcesProvider.from_provider(
+            "placeholder", tmp_path, datasource.images
+        )
+
+    ip = SerializableImageResourcesProvider("placeholder", tmp_path)
+    for _ in ip.values():
+        pass
+
+    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+
+
+@pytest.mark.parametrize(
+    "copy_images", [False, True], ids=["nocopy", "copy"]
+)
+def test_reload_dataset(datasource, tmp_path, copy_images):
+    dataset_path = tmp_path / "another_dataset"
+    ds = PadoDataset(dataset_path, mode="x")
+    assert len(ds.images) == 0
+    assert len(ds.images.maps) == 1 and isinstance(ds.images.maps[0], dict) and ds.images.maps[0] == {}
+    _old_ip = ds.images
+
+    # add the source
+    ds.add_source(datasource, copy_images=copy_images)
+
+    assert ds.images is not _old_ip
+    assert len(ds.images) > 0
+    assert len(ds.images.maps) == 1
+    assert isinstance(ds.images.maps[0], SerializableImageResourcesProvider)
+    assert len(ds.images.maps[0]._df) == 1
+
+    for image_id, image_resource in ds.images.items():
+        assert image_id == image_resource.id_str
+
+
+def test_dataset_ro_image_access(dataset_ro):
+    im = dataset_ro.images
+    list(im)  # get keys
+    list(im.values())  # get values
+
+
 def test_add_source_to_readonly_dataset(dataset_ro, datasource):
     with pytest.raises(RuntimeError):
         dataset_ro.add_source(datasource, copy_images=True)
@@ -142,6 +196,17 @@ def test_add_source_twice(datasource, tmp_path):
 
     with pytest.raises(ValueError):
         ds.add_source(datasource, copy_images=True)
+
+
+def test_datasource_df(datasource):
+    with datasource:
+        assert len(datasource.images) > 0
+        for img_id, img in datasource.images.items():
+            assert img_id == img.id_str
+
+
+def test_dataset_ro_df_len(dataset_ro):
+    assert len(dataset_ro.images.maps[0]._df) == len(dataset_ro.images)
 
 
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
