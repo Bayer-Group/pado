@@ -217,14 +217,16 @@ def test_use_dataset_as_datasource(dataset_ro, tmp_path):
 
 
 def test_random_access_dataset(dataset_ro):
-    idx = len(dataset_ro) // 2
-    md = dataset_ro[idx]
+    image_ids = list(dataset_ro)
+    idx = len(image_ids) // 2
+    md = dataset_ro[image_ids[idx]]
     assert md["image"]
     assert md["metadata"]
 
 
 def test_iterate_dataset(dataset_ro):
-    for md in dataset_ro:
+    for k in dataset_ro:
+        md = dataset_ro[k]
         assert md["image"]
         assert md["metadata"]
 
