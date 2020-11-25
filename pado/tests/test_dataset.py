@@ -1,5 +1,4 @@
 import shutil
-from operator import itemgetter
 from pathlib import Path
 
 import pandas as pd
@@ -47,7 +46,7 @@ def test_pado_test_datasource_error_without_with(datasource):
 
 def test_pado_test_datasource_image_ids(datasource):
     datasource.acquire()
-    assert set(datasource.images.ids()) == {("i0.tif",)}  # TODO: revisit
+    assert set(datasource.images) == {("i0.tif",)}  # TODO: revisit
     assert set(datasource.metadata[PadoColumn.IMAGE]) == {"i0.tif"}
     assert set(datasource.annotations) == {"i0.tif"}
 
