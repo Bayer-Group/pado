@@ -361,6 +361,11 @@ class PadoDatasetChain:
         self._datasets = list(datasets)
         self._metadata_col_map = {}
 
+    @property
+    def path(self):
+        """root folder of first pado dataset"""
+        return self._datasets[0].path
+
     @staticmethod
     def _first_exists_fallback_last_(resources, default):
         r = default
