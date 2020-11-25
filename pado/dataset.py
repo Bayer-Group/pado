@@ -364,13 +364,14 @@ class PadoDatasetChain:
     @cached_property
     def images(self) -> ImageResourcesProvider:
         """images in the pado dataset"""
-        def first_exists_fallback_last(resources):
+        def first_exists_fallback_last(resources, default):
+            r = default
             for r in resources:
                 pth: Optional[Path] = r.local_path
                 if pth and pth.is_file():
                     return r
             else:
-                raise StopIteration
+                return r
 
         return readonly_priority_chain(
             (ds.images for ds in self._datasets),

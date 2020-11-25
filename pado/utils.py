@@ -59,7 +59,7 @@ class PriorityChainMap(ChainMap):
     """A PriorityChainMap is a ChainMap that returns the value to a corresponding
     key according to a provided priority_func from the underlying maps
     """
-    def __init__(self, *maps: Mapping[_KT, _VT], priority_func: Callable[[Iterable[_VT]], _VT] = next):
+    def __init__(self, *maps: Mapping[_KT, _VT], priority_func: Callable = next):
         super().__init__(*maps)
         self._priority_func = priority_func
 
@@ -71,11 +71,12 @@ class PriorityChainMap(ChainMap):
                 pass
 
     def __getitem__(self, key):
-        try:
-            return self._priority_func(self._iter_maps_getitem_(key))
-        except StopIteration:
-            pass
-        return self.__missing__(key)
+        missing = object()
+        value = self._priority_func(self._iter_maps_getitem_(key), missing)
+        if value is missing:
+            # noinspection PyUnresolvedReferences
+            return self.__missing__(key)
+        return value
 
 
 def readonly_priority_chain(
