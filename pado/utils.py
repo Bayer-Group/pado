@@ -50,9 +50,9 @@ class ChainMap(_ChainMap):
         return iter(d)
 
 
-def readonly_chain(mappings: Iterable[Mapping[_KT, _VT]]) -> Mapping[_KT, _VT]:
+def make_chain(mappings: Iterable[Mapping[_KT, _VT]]) -> Mapping[_KT, _VT]:
     """merge multiple mappings into one read only mapping"""
-    return MappingProxyType(ChainMap(*mappings))
+    return ChainMap(*mappings)
 
 
 class PriorityChainMap(ChainMap):
@@ -79,9 +79,9 @@ class PriorityChainMap(ChainMap):
         return value
 
 
-def readonly_priority_chain(
+def make_priority_chain(
     mappings: Iterable[Mapping[_KT, _VT]],
     priority_func: Callable[[Iterable[_VT]], _VT]
 ) -> Mapping[_KT, _VT]:
     """merge multiple mappings into one read only priority mapping"""
-    return MappingProxyType(PriorityChainMap(*mappings, priority_func=priority_func))
+    return PriorityChainMap(*mappings, priority_func=priority_func)

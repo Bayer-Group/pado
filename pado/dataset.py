@@ -28,7 +28,7 @@ from pado.metadata import (
     build_column_map,
     structurize_metadata,
 )
-from pado.utils import readonly_chain, readonly_priority_chain
+from pado.utils import make_chain, make_priority_chain
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -204,7 +204,7 @@ class PadoDataset(DataSource):
     def images(self) -> ImageResourcesProvider:
         """a sequence-like interface to all images in the dataset"""
         if self._image_provider is None:
-            self._image_provider = readonly_chain([
+            self._image_provider = make_chain([
                 SerializableImageResourcesProvider(p.name, self._path_images)
                 for p in self._path_annotations.glob("*") if p.is_dir()
             ])
@@ -241,7 +241,7 @@ class PadoDataset(DataSource):
     def annotations(self) -> Mapping[str, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
-            self._annotations_provider = readonly_chain([
+            self._annotations_provider = make_chain([
                 get_annotation_provider(p)
                 for p in self._path_annotations.glob("*") if p.is_dir()
             ])
@@ -361,21 +361,22 @@ class PadoDatasetChain:
         self._datasets = list(datasets)
         self._metadata_col_map = {}
 
+    @staticmethod
+    def _first_exists_fallback_last_(resources, default):
+        r = default
+        for r in resources:
+            pth: Optional[Path] = r.local_path
+            if pth and pth.is_file():
+                return r
+        else:
+            return r
+
     @cached_property
     def images(self) -> ImageResourcesProvider:
         """images in the pado dataset"""
-        def first_exists_fallback_last(resources, default):
-            r = default
-            for r in resources:
-                pth: Optional[Path] = r.local_path
-                if pth and pth.is_file():
-                    return r
-            else:
-                return r
-
-        return readonly_priority_chain(
+        return make_priority_chain(
             (ds.images for ds in self._datasets),
-            priority_func=first_exists_fallback_last
+            priority_func=self._first_exists_fallback_last_
         )
 
     @cached_property
@@ -388,7 +389,7 @@ class PadoDatasetChain:
     @cached_property
     def annotations(self) -> Mapping[str, AnnotationResources]:
         """chaining annotations together"""
-        return readonly_chain([ds.annotations for ds in self._datasets])
+        return make_chain([ds.annotations for ds in self._datasets])
 
     __iter__ = PadoDataset.__iter__
     __getitem__ = PadoDataset.__getitem__
