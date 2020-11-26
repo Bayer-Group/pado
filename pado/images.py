@@ -310,6 +310,9 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         inst.save()
         return inst
 
+    def __repr__(self):
+        return f'{type(self).__name__}(identifier={self._identifier!r}, base_path={self._base_path!r})'
+
 
 _WINDOWS = platform.system() == "Windows"
 _BLOCK_SIZE = {
