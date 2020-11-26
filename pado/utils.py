@@ -85,6 +85,9 @@ class ChainMap(_ChainMap):
 
 def make_chain(mappings: Iterable[Mapping[_KT, _VT]]) -> Mapping[_KT, _VT]:
     """merge multiple mappings into one read only mapping"""
+    mappings = list(mappings)
+    if len(mappings) == 1:
+        return mappings[0]
     return ChainMap(*mappings)
 
 
@@ -117,4 +120,7 @@ def make_priority_chain(
     priority_func: Callable[[Iterable[_VT]], _VT]
 ) -> Mapping[_KT, _VT]:
     """merge multiple mappings into one read only priority mapping"""
+    mappings = list(mappings)
+    if len(mappings) == 1:
+        return mappings[0]
     return PriorityChainMap(*mappings, priority_func=priority_func)
