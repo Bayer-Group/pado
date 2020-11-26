@@ -1,4 +1,5 @@
 import contextlib
+import glob
 import hashlib
 import platform
 import re
@@ -324,7 +325,8 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
 
         _local_path_name = self._df.apply(_fn, axis=1)
 
-        for p in Path(search_path).glob(search_pattern):
+        for p in glob.glob(f"{search_path}/{search_pattern}", recursive=True):
+            p = Path(p)
             select = _local_path_name == p.name
             num_select = select.sum()
             if num_select.sum() != 1:
