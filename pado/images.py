@@ -313,6 +313,30 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
     def __repr__(self):
         return f'{type(self).__name__}(identifier={self._identifier!r}, base_path={self._base_path!r})'
 
+    def reassociate_resources(self, search_path, search_pattern="**/*.svs"):
+        """search a path and re-associate resources by filename"""
+
+        def _fn(x):
+            pth = ImageResource.deserialize(x).local_path
+            if pth is None:
+                return None
+            return pth.name
+
+        _local_path_name = self._df.apply(_fn, axis=1)
+
+        for p in Path(search_path).glob(search_pattern):
+            select = _local_path_name == p.name
+            num_select = select.sum()
+            if num_select.sum() != 1:
+                if num_select > 1:
+                    warnings.warn(f"can't reassociate {p.name} due to multiple matches")
+                continue
+            row = self._df.loc[select].iloc[0]
+            resource = ImageResource.deserialize(row)
+            p = p.expanduser().absolute().resolve()
+            new_resource = LocalImageResource(resource.id, p, resource.md5)
+            self[new_resource.id_str] = new_resource
+
 
 _WINDOWS = platform.system() == "Windows"
 _BLOCK_SIZE = {
