@@ -28,7 +28,7 @@ from pado.metadata import (
     build_column_map,
     structurize_metadata,
 )
-from pado.utils import cached_property, make_chain, make_priority_chain
+from pado.utils import cached_property, make_chain, make_priority_chain, FilteredMapping
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -109,6 +109,7 @@ class PadoDataset(DataSource):
         path: Union[str, pathlib.Path],
         mode: DatasetIOMode = "r",
         identifier: Optional[str] = None,
+        query: Optional[str] = None,
     ):
         """open or create a new PadoDataset
 
@@ -191,6 +192,9 @@ class PadoDataset(DataSource):
         self._image_provider = None
         self._annotations_provider = None
 
+        # keep query string
+        self._metadata_query_str = query
+
     @property
     def path(self):
         """root folder of pado dataset"""
@@ -208,6 +212,11 @@ class PadoDataset(DataSource):
                 SerializableImageResourcesProvider(p.name, self._path_images)
                 for p in self._path_images.glob("*") if p.is_dir()
             ])
+
+            if self._metadata_query_str is not None:
+                unique_image_ids = sorted(self.metadata[PadoColumn.IMAGE].unique())
+                self._image_provider = FilteredMapping(self._image_provider, valid_keys=unique_image_ids)
+
         return self._image_provider
 
     @property
@@ -234,6 +243,10 @@ class PadoDataset(DataSource):
                 .reset_index(drop=True)
             )
             self._metadata_df = df
+
+            if self._metadata_query_str is not None:
+                self._metadata_df.query(expr=self._metadata_query_str, inplace=True)
+
             self._metadata_col_map = build_column_map(df.columns)
         return self._metadata_df
 
