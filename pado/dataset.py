@@ -123,6 +123,13 @@ class PadoDataset(DataSource):
             'a' = 'a+' --> read/write, create if not there, append if there
             'w' = 'w+' --> read/write, create if not there, truncate if there
             'x' = 'x+' --> read/write, create if not there, error if there
+        identifier:
+            an optional string identifier in case you want to use a PadoDataset
+            as a DataSource for another PadoDataset
+        query:
+            a query string in the expr format that pandas.DataFrame.query expects
+            which can be used to create a subset of a PadoDataset.
+            (The query is used on `PadoDataset().metadata`)
 
         """
         self._config = pathlib.Path(path)
