@@ -253,7 +253,7 @@ class PadoDataset(DataSource):
             # todo: revisit
             for col in df:
                 non_hashable_iterables = map(
-                    lambda x: isinstance(x, Iterable) and not isinstance(x, Hashable),
+                    lambda t: issubclass(t, Iterable) and not issubclass(t, Hashable),
                     df[col].apply(type).unique().tolist()
                 )
                 if any(non_hashable_iterables):
