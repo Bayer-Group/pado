@@ -1,7 +1,8 @@
 import enum
 import string
 from collections import defaultdict
-from typing import Dict, Iterable, List
+from collections.abc import Hashable
+from typing import Dict, Iterable, List, Set
 
 import pandas as pd
 
@@ -110,14 +111,17 @@ def build_column_map(columns: Iterable[str]) -> Dict[str, List[str]]:
     return output
 
 
-def _collapse_dataframe_to_dict(df: pd.DataFrame, structure: Dict, col_map: Dict):
+def _collapse_dataframe_to_dict(df: pd.DataFrame, structure: Dict, col_map: Dict, hashable_columns: Set):
     """helper function to collapse the dataframe into a dictionary"""
     # flatten
     columns = []
+    subset = []
     for toplevel in structure.values():
-        columns.extend(col_map[toplevel])
+        col = col_map[toplevel]
+        columns.extend(col)
+        subset.extend(hashable_columns.intersection(col))
 
-    sdf = df[columns].drop_duplicates()
+    sdf = df[columns].drop_duplicates(subset=subset, keep="first")
     if len(sdf) > 1:
         raise ValueError("can't collapse...")
 
@@ -180,11 +184,15 @@ def structurize_metadata(
     #     ]
     #   }
 
+    hashable_columns = set(
+        col for col in df
+        if all(issubclass(t, Hashable) for t in df[col].apply(type).unique())
+    )
     structure = {
         (): PadoColumn.IMAGE,
         ("slide",): PadoColumn.SLIDE,
     }
-    md = _collapse_dataframe_to_dict(df, structure, col_map)
+    md = _collapse_dataframe_to_dict(df, structure, col_map, hashable_columns)
     md["slide"]["organ"] = []
 
     for _, odf in df.groupby([PadoColumn.ORGAN, PadoColumn.ANIMAL]):
@@ -196,13 +204,13 @@ def structurize_metadata(
             ("animal", "group", "experiment", "compound"): PadoColumn.COMPOUND,
             ("animal", "group", "experiment", "study"): PadoColumn.STUDY,
         }
-        organ = _collapse_dataframe_to_dict(odf, organ_structure, col_map)
+        organ = _collapse_dataframe_to_dict(odf, organ_structure, col_map, hashable_columns)
         organ["finding"] = []
         for _, fdf in odf.groupby(col_map[PadoColumn.FINDING]):
             finding_structure = {
                 (): PadoColumn.FINDING,
             }
-            finding = _collapse_dataframe_to_dict(fdf, finding_structure, col_map)
+            finding = _collapse_dataframe_to_dict(fdf, finding_structure, col_map, hashable_columns)
             organ["finding"].append(finding)
 
         md["slide"]["organ"].append(organ)
