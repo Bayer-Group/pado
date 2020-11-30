@@ -1,4 +1,5 @@
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 import pandas as pd
@@ -162,17 +163,15 @@ def test_reload_dataset(datasource, tmp_path, copy_images):
     dataset_path = tmp_path / "another_dataset"
     ds = PadoDataset(dataset_path, mode="x")
     assert len(ds.images) == 0
-    assert len(ds.images.maps) == 1 and isinstance(ds.images.maps[0], dict) and ds.images.maps[0] == {}
+    assert isinstance(ds.images, Mapping)
     _old_ip = ds.images
 
     # add the source
     ds.add_source(datasource, copy_images=copy_images)
 
     assert ds.images is not _old_ip
-    assert len(ds.images) > 0
-    assert len(ds.images.maps) == 1
-    assert isinstance(ds.images.maps[0], SerializableImageResourcesProvider)
-    assert len(ds.images.maps[0]._df) == 1
+    assert len(ds.images) == 1
+    assert isinstance(ds.images, Mapping)
 
     for image_id, image_resource in ds.images.items():
         assert image_id == image_resource.id_str
@@ -206,7 +205,9 @@ def test_datasource_df(datasource):
 
 
 def test_dataset_ro_df_len(dataset_ro):
-    assert len(dataset_ro.images.maps[0]._df) == len(dataset_ro.images)
+    assert len(dataset_ro.images) > 0
+    if isinstance(dataset_ro, SerializableImageResourcesProvider):
+        assert len(dataset_ro.images._df) == len(dataset_ro.images)
 
 
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
