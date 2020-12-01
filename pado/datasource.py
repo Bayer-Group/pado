@@ -50,8 +50,6 @@ class DataSource(ABC):
 def verify_datasource(ds: DataSource, acquire=False):
     from pado.metadata import (
         PadoColumn,
-        build_column_map,
-        structurize_metadata,
         verify_columns,
     )
 
@@ -67,12 +65,4 @@ def verify_datasource(ds: DataSource, acquire=False):
             raise ValueError(
                 "metadata IMAGE column must have 1 or more rows for each image"
             )
-        # verify the metadata structure per image
-        col_map = build_column_map(df.columns)
-        for image_id in image_ids:
-            md = df[df[PadoColumn.IMAGE] == image_id]
-            try:
-                structurize_metadata(md, PadoColumn.IMAGE, col_map)
-            except Exception:
-                raise ValueError("metadata structure has problems")
     return ds

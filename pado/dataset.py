@@ -5,7 +5,7 @@ import re
 import warnings
 from collections.abc import Hashable
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Optional, Union, Iterable
+from typing import Callable, List, Mapping, Optional, Union, Iterable
 
 import pandas as pd
 import toml
@@ -25,8 +25,6 @@ from pado.metadata import (
     PadoColumn,
     PadoInvalid,
     PadoReserved,
-    build_column_map,
-    structurize_metadata,
 )
 from pado.utils import cached_property, make_chain, make_priority_chain, FilteredMapping
 
@@ -83,7 +81,7 @@ DatasetIOMode = Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"]
 
 class PadoDataItemDict(TypedDict):
     image: ImageResource
-    metadata: Dict[str, str]
+    metadata: pd.DataFrame
     annotations: List[Annotation]
 
 
@@ -264,7 +262,6 @@ class PadoDataset(DataSource):
             if self._metadata_query_str is not None:
                 self._metadata_df.query(expr=self._metadata_query_str, inplace=True)
 
-            self._metadata_col_map = build_column_map(df.columns)
         return self._metadata_df
 
     @property
@@ -289,13 +286,6 @@ class PadoDataset(DataSource):
         _df = self.metadata
         metadata = _df[_df[PadoColumn.IMAGE] == item]
 
-        # build the column map lazily
-        if not getattr(self, "_metadata_col_map", None):
-            self._metadata_col_map = build_column_map(_df.columns)
-        # this is where a relational database would be great...
-        metadata_dict = structurize_metadata(
-            metadata, PadoColumn.IMAGE, self._metadata_col_map
-        )
         try:
             annotation_dict = self.annotations[item].copy()
         except KeyError:
@@ -304,7 +294,7 @@ class PadoDataset(DataSource):
             annotations = annotation_dict.pop("annotations", [])
         # TODO: annotation_dict should be included in metadata_dict
         return PadoDataItemDict(
-            image=image, metadata=metadata_dict, annotations=annotations,
+            image=image, metadata=metadata, annotations=annotations,
         )
 
     def __len__(self):
