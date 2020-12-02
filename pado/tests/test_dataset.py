@@ -222,14 +222,15 @@ def test_random_access_dataset(dataset_ro):
     idx = len(image_ids) // 2
     md = dataset_ro[image_ids[idx]]
     assert md["image"]
-    assert md["metadata"]
+    assert isinstance(md["metadata"], pd.DataFrame)
+    assert md["metadata"].size > 0
+    assert "annotations" in md
 
 
 def test_iterate_dataset(dataset_ro):
     for k in dataset_ro:
         md = dataset_ro[k]
-        assert md["image"]
-        assert md["metadata"]
+        assert {"image", "metadata", "annotations"}.issubset(md)
 
 
 @pytest.mark.parametrize(
