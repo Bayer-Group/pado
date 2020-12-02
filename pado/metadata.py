@@ -1,5 +1,6 @@
 import enum
 import string
+from collections import defaultdict
 from typing import Iterable
 
 import pandas as pd
@@ -102,6 +103,7 @@ class PadoAccessor:
     def __init__(self, pandas_obj: pd.DataFrame):
         self._validate(pandas_obj)
         self._df = pandas_obj
+        self._cm = self._parse_column_structure(pandas_obj.columns)
 
     @staticmethod
     def _validate(obj: pd.DataFrame):
@@ -119,6 +121,19 @@ class PadoAccessor:
             verify_columns(columns=obj.columns, raise_if_invalid=True)
         except ValueError as err:
             raise AttributeError(str(err))
+
+    @staticmethod
+    def _parse_column_structure(columns):
+        output = defaultdict(list)
+        ignore = set(PadoReserved)
+        valid = set(PadoColumn)
+        for col in columns:
+            key, _, _ = col.partition(SEPARATOR)
+            if key not in ignore:
+                output[key].append(str(col))
+        if not (output.keys() <= valid):  # Set comparison
+            raise ValueError(f"unsupported keys {set(output) - set(PadoColumn)}")
+        return dict(output)
 
     def _subset(self, column: PadoColumn) -> pd.DataFrame:
         """return the dataframe subset belonging to a PadoColumn"""
