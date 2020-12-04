@@ -5,7 +5,7 @@ import re
 import warnings
 from collections.abc import Hashable
 from pathlib import Path
-from typing import Callable, List, Mapping, Optional, Union, Iterable
+from typing import Callable, List, Mapping, Optional, Union
 
 import pandas as pd
 import toml
@@ -247,16 +247,6 @@ class PadoDataset(DataSource):
                 )
                 .reset_index(drop=True)
             )
-
-            # todo: revisit
-            for col in df:
-                non_hashable_iterables = map(
-                    lambda t: issubclass(t, Iterable) and not issubclass(t, Hashable),
-                    df[col].apply(type).unique().tolist()
-                )
-                if any(non_hashable_iterables):
-                    df[col] = df[col].apply(tuple)
-
             self._metadata_df = df
 
             if self._metadata_query_str is not None:
