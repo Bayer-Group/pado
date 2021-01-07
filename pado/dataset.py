@@ -34,9 +34,6 @@ except ImportError:
     from typing_extensions import Literal, TypedDict
 
 
-PathOrStr = Union[str, os.PathLike]
-
-
 def is_pado_dataset(path: Path, load_data=False):
     """check if the given path is a valid pado dataset"""
     path = Path(path)
@@ -53,7 +50,7 @@ def is_pado_dataset(path: Path, load_data=False):
         return {} if load_data else False
 
 
-def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
+def verify_pado_dataset_integrity(path: Union[str, os.PathLike]) -> bool:
     """verify file integrity of a pado dataset"""
     path = Path(path)
     data = is_pado_dataset(path, load_data=True)
@@ -74,9 +71,6 @@ def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
             raise ValueError(f"identifier {identifier} is missing metadata")
 
     return True
-
-
-DatasetIOMode = Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"]
 
 
 class PadoDataItemDict(TypedDict):
@@ -105,7 +99,7 @@ class PadoDataset(DataSource):
     def __init__(
         self,
         path: Union[str, pathlib.Path],
-        mode: DatasetIOMode = "r",
+        mode: Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"] = "r",
         identifier: Optional[str] = None,
         query: Optional[str] = None,
     ):
