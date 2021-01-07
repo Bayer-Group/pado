@@ -79,18 +79,18 @@ class PadoDataItemDict(TypedDict):
     annotations: List[Annotation]
 
 
-class PadoDataSourceDict(TypedDict):
+class _PadoDataSourceDict(TypedDict):
     identifier: str
     added: datetime.datetime
     num_images: int
 
 
-class PadoInfoDict(TypedDict):
+class _PadoInfoDict(TypedDict):
     identifier: str
     created: datetime.datetime
     updated: datetime.datetime
     version: int
-    sources: List[PadoDataSourceDict]
+    sources: List[_PadoDataSourceDict]
 
 
 class PadoDataset(DataSource):
@@ -335,11 +335,11 @@ class PadoDataset(DataSource):
 
     def _store_dataset_toml(
         self, add_source: Optional[DataSource] = None, *, _info=None
-    ) -> PadoInfoDict:
+    ) -> _PadoInfoDict:
         if _info is None:
             _info = self._info
 
-        info_dict = PadoInfoDict(
+        info_dict = _PadoInfoDict(
             identifier=_info["identifier"],
             created=_info.get("created", datetime.datetime.now()),
             updated=datetime.datetime.now(),
@@ -347,7 +347,7 @@ class PadoDataset(DataSource):
             sources=_info.get("sources", []),
         )
         if add_source:
-            source_dict = PadoDataSourceDict(
+            source_dict = _PadoDataSourceDict(
                 identifier=add_source.identifier,
                 added=datetime.datetime.now(),
                 num_images=len(add_source.images),
@@ -358,7 +358,7 @@ class PadoDataset(DataSource):
             toml.dump(info_dict, config)
         return info_dict
 
-    def _load_dataset_toml(self) -> PadoInfoDict:
+    def _load_dataset_toml(self) -> _PadoInfoDict:
         with self._config.open("r") as config:
             dataset_config = toml.load(config)
         return dataset_config
