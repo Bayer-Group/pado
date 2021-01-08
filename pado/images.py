@@ -26,12 +26,10 @@ class _SerializedImageResource(NamedTuple):
 
 
 class ImageResource(ABC):
-    __slots__ = ("_image_id", "_str_image_id", "_resource", "_md5sum")
     registry = {}
     resource_type = None
 
     def __init_subclass__(cls, **kwargs):
-        cls.resource_type = kwargs.pop("resource_type")
         super().__init_subclass__(**kwargs)
         cls.registry[cls.resource_type] = cls
 
@@ -100,9 +98,9 @@ class ImageResource(ABC):
         return f"{self.__class__.__name__}(image_id={self.id})"
 
 
-class LocalImageResource(ImageResource, resource_type="local"):
-    __slots__ = ("_path",)
+class LocalImageResource(ImageResource):
     supported_schemes = {"file"}
+    resource_type = "local"
 
     def __init__(self, image_id, resource, md5sum=None):
         super().__init__(image_id, resource, md5sum)
@@ -148,9 +146,9 @@ class LocalImageResource(ImageResource, resource_type="local"):
         return self._path
 
 
-class RemoteImageResource(ImageResource, resource_type="remote"):
-    __slots__ = ("_url", "_fp")
+class RemoteImageResource(ImageResource):
     supported_schemes = {"http", "https", "ftp"}
+    resource_type = "remote"
 
     def __init__(self, image_id, resource, md5sum=None):
         super().__init__(image_id, resource, md5sum)
@@ -186,9 +184,9 @@ class RemoteImageResource(ImageResource, resource_type="remote"):
         return None
 
 
-class InternalImageResource(ImageResource, resource_type="internal"):
-    __slots__ = ("_path", "_base_path", "_identifier")
+class InternalImageResource(ImageResource):
     supported_schemes = {"pado+internal"}
+    resource_type = "internal"
 
     def __init__(self, image_id, resource, md5sum=None):
         super().__init__(image_id, resource, md5sum)
