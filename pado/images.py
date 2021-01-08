@@ -5,22 +5,79 @@ import platform
 import re
 import warnings
 from abc import ABC, abstractmethod
-from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Callable, Mapping, NamedTuple, Optional, Tuple, Union
+from ast import literal_eval
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
+from typing import Callable, Mapping, NamedTuple, Optional, Union
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
 import pandas as pd
 from tqdm import tqdm
 
-ImageId = Tuple[str, ...]
-ImageStrId = str
-SEPARATOR = "__"
+
+class ImageId(tuple):
+    """ImageId for images in pado datasets"""
+
+    _regex = re.compile(r"ImageId(\(.*\))")
+
+    def __new__(cls, *args):
+        if not args:
+            raise ValueError("can not create an empty ImageId()")
+
+        if not all(isinstance(x, str) for x in args):
+            item_types = [type(x).__name__ for x in args]
+            raise ValueError(f"all image_id elements must be of type str, received: {item_types!r}")
+
+        if any(cls._regex.match(x) for x in args):
+            if len(args) == 1:
+                raise ValueError("use ImageId.from_str() to convert a serialized ImageId()")
+            raise ValueError("a provided element matches a serialized image id")
+
+        return super().__new__(cls, args)
+
+    def __repr__(self):
+        return f"{type(self).__name__}{super().__repr__()}"
+
+    to_str = __str__ = __repr__
+
+    @classmethod
+    def from_str(cls, image_id: str):
+        """create a new ImageId instance from an image id string
+
+        >>> ImageId.from_str("ImageId('abc', '123.svs')")
+        ImageId('abc', '123.svs')
+
+        """
+        if not isinstance(image_id, str):
+            raise TypeError(f"image_id must be of type 'str', got: '{type(image_id)}'")
+
+        m = cls._regex.match(image_id)
+        if not m:
+            raise ValueError(f"provided image_id str is not an ImageId(), got: '{image_id}'")
+
+        try:
+            image_id_elements = literal_eval(m.group(1))
+        except (ValueError, SyntaxError):
+            raise ValueError(f"provided image_id is unparsable: '{image_id}'")
+
+        if not isinstance(image_id_elements, tuple):
+            raise ValueError(f"not a ImageId(): '{image_id}'")
+
+        return cls(*image_id_elements)
+
+    def __fspath__(self) -> str:
+        return str(self.to_path())
+
+    def to_path(self):
+        """return the ImageId as a relative path"""
+        image_path = PurePath(*self)
+        assert not image_path.is_absolute()
+        return image_path
 
 
 class _SerializedImageResource(NamedTuple):
     type: str
-    image_id: ImageStrId
+    image_id: str
     uri: str
     md5: Optional[str]
 
@@ -34,16 +91,15 @@ class ImageResource(ABC):
         cls._registry[cls.resource_type] = cls
 
     def __init__(self, image_id, resource, md5sum=None):
+        # NOTE: only subclasses of ImageResource can be instantiated directly
         if isinstance(image_id, str):
-            str_image_id = image_id
-            image_id = tuple(image_id.split(SEPARATOR))
+            image_id = ImageId.from_str(image_id)
         elif isinstance(image_id, (tuple, list, pd.Series)):
-            image_id = tuple(image_id)
-            str_image_id = SEPARATOR.join(image_id)
+            image_id = ImageId(*image_id)
         else:
-            raise TypeError(f"image_id not str or tuple, got {type(image_id)}")
+            raise TypeError(f"can not convert to ImageId, got {type(image_id)}")
         self._image_id = image_id
-        self._str_image_id = str_image_id
+        self._str_image_id = str(image_id)
         self._resource = resource
         self._md5sum = md5sum
 
@@ -52,7 +108,7 @@ class ImageResource(ABC):
         return self._image_id
 
     @property
-    def id_str(self) -> ImageStrId:
+    def id_str(self) -> str:
         return self._str_image_id
 
     @property
@@ -86,7 +142,7 @@ class ImageResource(ABC):
     def serialize(self):
         """serialize the object"""
         return _SerializedImageResource(
-            self.resource_type, SEPARATOR.join(self.id), self.uri, self.md5,
+            self.resource_type, self.id_str, self.uri, self.md5,
         )
 
     @classmethod
