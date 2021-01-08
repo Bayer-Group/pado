@@ -26,12 +26,12 @@ class _SerializedImageResource(NamedTuple):
 
 
 class ImageResource(ABC):
-    registry = {}
+    _registry = {}
     resource_type = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        cls.registry[cls.resource_type] = cls
+        cls._registry[cls.resource_type] = cls
 
     def __init__(self, image_id, resource, md5sum=None):
         if isinstance(image_id, str):
@@ -91,7 +91,7 @@ class ImageResource(ABC):
 
     @classmethod
     def deserialize(cls, data: Union[_SerializedImageResource, pd.Series]):
-        impl = cls.registry[data.type]
+        impl = cls._registry[data.type]
         return impl(data.image_id, data.uri, data.md5)
 
     def __repr__(self):
