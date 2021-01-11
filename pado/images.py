@@ -334,25 +334,25 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
             df = pd.DataFrame(columns=_SerializedImageResource._fields)
         self._df = df.set_index(df["image_id"])
 
-    def __getitem__(self, item: str) -> ImageResource:
-        if not isinstance(item, str):
-            raise TypeError(f"requires str. got `{type(item)}`")
-        row = self._df.loc[item]
+    def __getitem__(self, item: ImageId) -> ImageResource:
+        if not isinstance(item, ImageId):
+            raise TypeError(f"requires ImageId. got `{type(item)}`")
+        row = self._df.loc[item.to_str()]
         resource = ImageResource.deserialize(row)
         if isinstance(resource, InternalImageResource):
             resource.attach(self._identifier, self._base_path)
         return resource
 
-    def __setitem__(self, item: str, resource: ImageResource) -> None:
-        if not isinstance(item, str):
-            raise TypeError(f"requires str. got `{type(item)}`")
-        self._df.loc[item] = resource.serialize()
+    def __setitem__(self, item: ImageId, resource: ImageResource) -> None:
+        if not isinstance(item, ImageId):
+            raise TypeError(f"requires ImageId. got `{type(item)}`")
+        self._df.loc[item.to_str()] = resource.serialize()
 
     def __len__(self) -> int:
         return len(self._df)
 
     def __iter__(self):
-        yield from self._df["image_id"]
+        yield from (ImageId.from_str(x) for x in self._df["image_id"])
 
     def save(self):
         self._df_filename.parent.mkdir(parents=True, exist_ok=True)
