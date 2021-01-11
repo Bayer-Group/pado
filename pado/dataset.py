@@ -15,6 +15,7 @@ from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
 from pado.images import (
+    ImageId,
     ImageResource,
     ImageResourceCopier,
     ImageResourcesProvider,
@@ -249,7 +250,7 @@ class PadoDataset(DataSource):
         return self._metadata_df
 
     @property
-    def annotations(self) -> Mapping[str, AnnotationResources]:
+    def annotations(self) -> Mapping[ImageId, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
             self._annotations_provider = make_chain([
@@ -261,14 +262,14 @@ class PadoDataset(DataSource):
     def __iter__(self):
         yield from self.images
 
-    def __getitem__(self, item: str) -> PadoDataItemDict:
+    def __getitem__(self, item: ImageId) -> PadoDataItemDict:
         image = self.images[item]
         if isinstance(image, RemoteImageResource):
             warnings.warn(
                 "you're requesting data from a dataset that contains remote image resources"
             )  # pragma: no cover
         _df = self.metadata
-        metadata = _df[_df[PadoColumn.IMAGE] == item]
+        metadata = _df[_df[PadoColumn.IMAGE] == item.to_str()]
 
         try:
             annotation_dict = self.annotations[item].copy()
