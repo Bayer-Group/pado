@@ -175,6 +175,9 @@ def load_geojson(fp, *, drop_unclassified: bool = True, drop_broken_geometries: 
         a file pointer or file path
     drop_unclassified:
         drop an annotation in case it has no class set
+    drop_broken_geometries:
+        drop an annotation in case it is broken
+
     """
     # load file
     with lzma.open(fp, "rb") as reader:
