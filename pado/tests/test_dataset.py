@@ -175,7 +175,7 @@ def test_reload_dataset(datasource, tmp_path, copy_images):
     assert isinstance(ds.images, Mapping)
 
     for image_id, image_resource in ds.images.items():
-        assert image_id == image_resource.id_str
+        assert image_id == image_resource.id
 
 
 def test_dataset_ro_image_access(dataset_ro):
@@ -202,7 +202,7 @@ def test_datasource_df(datasource):
     with datasource:
         assert len(datasource.images) > 0
         for img_id, img in datasource.images.items():
-            assert img_id == img.id_str
+            assert img_id == img.id
 
 
 def test_dataset_ro_df_len(dataset_ro):
@@ -214,7 +214,7 @@ def test_dataset_ro_df_len(dataset_ro):
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
     dataset_path = tmp_path / "new_dataset"
     ds = PadoDataset(dataset_path, mode="x")
-    assert set(dataset_ro.annotations) == {"i0.tif"}
+    assert set(dataset_ro.annotations) == {ImageId("i0.tif")}
     ds.add_source(dataset_ro, copy_images=True)
 
 
