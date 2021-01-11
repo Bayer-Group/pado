@@ -8,7 +8,7 @@ import pytest
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
 from pado.ext.testsource import TestDataSource
-from pado.images import SerializableImageResourcesProvider
+from pado.images import ImageId, SerializableImageResourcesProvider
 from pado.metadata import PadoColumn
 
 
@@ -34,8 +34,8 @@ def test_pado_test_datasource_usage(datasource):
         for image in datasource.images.values():
             assert image.id is not None
             assert image.size > 0
-        for annotation in datasource.annotations:
-            assert isinstance(annotation, str)
+        for image_id in datasource.annotations:
+            assert isinstance(image_id, ImageId)
 
 
 def test_pado_test_datasource_error_without_with(datasource):
@@ -47,9 +47,9 @@ def test_pado_test_datasource_error_without_with(datasource):
 
 def test_pado_test_datasource_image_ids(datasource):
     datasource.acquire()
-    assert set(datasource.images) == {"i0.tif"}  # TODO: revisit
-    assert set(datasource.metadata[PadoColumn.IMAGE]) == {"i0.tif"}
-    assert set(datasource.annotations) == {"i0.tif"}
+    assert set(datasource.images) == {ImageId("i0.tif")}  # TODO: revisit
+    assert set(datasource.metadata[PadoColumn.IMAGE]) == {ImageId("i0.tif")}
+    assert set(datasource.annotations) == {ImageId("i0.tif")}
 
 
 def test_write_pado_dataset(datasource, tmp_path):

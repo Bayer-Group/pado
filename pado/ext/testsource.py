@@ -51,7 +51,7 @@ def _get_test_data(num_images=3, num_rows=10):
 
     # set the number of individual images
     for idx, num_f in zip(range(num_images), num_findings):
-        image = f"i{idx}.tif"
+        image = ImageId(f"i{idx}.tif").to_str()
         image_scanner = random.choice(["scanner0", "scanner1"])
         slide = f"slide_{idx}"
         organ = f"o{idx}"
@@ -106,11 +106,11 @@ class _TestImageResourcesProvider(ImageResourcesProvider):
         return len(self._image_map)
 
 
-class _TestAnnotationResourcesProvider(Mapping[str, AnnotationResources]):
+class _TestAnnotationResourcesProvider(Mapping[ImageId, AnnotationResources]):
     def __init__(self, images):
         self._image_ids = set(img_id for img_id, *_ in images)
 
-    def __getitem__(self, k: str) -> AnnotationResources:
+    def __getitem__(self, k: ImageId) -> AnnotationResources:
         return AnnotationResources(
             annotations=[
                 Annotation(Polygon.from_bounds(10, 10, 20, 20), "A"),
@@ -122,7 +122,7 @@ class _TestAnnotationResourcesProvider(Mapping[str, AnnotationResources]):
     def __len__(self) -> int:
         return len(self._image_ids)
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[ImageId]:
         return iter(self._image_ids)
 
 
