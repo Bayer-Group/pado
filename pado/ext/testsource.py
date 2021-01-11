@@ -13,7 +13,7 @@ from shapely.geometry import Polygon
 from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
-from pado.images import ImageResource, ImageResourcesProvider, LocalImageResource
+from pado.images import ImageId, ImageResource, ImageResourcesProvider, LocalImageResource
 from pado.metadata import PadoColumn
 
 try:
@@ -148,7 +148,7 @@ class TestDataSource(DataSource):
             return
         self._stack = ExitStack()
         for idx in range(self._num_images):
-            img_id = f"i{idx}.tif"
+            img_id = ImageId(f"i{idx}.tif")
             img = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
             md5 = hash_file(img, hasher=hashlib.md5)
             self._images.append((img_id, img, md5))
