@@ -4,7 +4,7 @@ from typing import Mapping
 import pandas as pd
 
 from pado.annotations import AnnotationResources
-from pado.images import ImageResourcesProvider
+from pado.images import ImageId, ImageResourcesProvider
 
 
 class DataSource(ABC):
@@ -61,7 +61,7 @@ def verify_datasource(ds: DataSource, acquire=False):
         verify_columns(df.columns, raise_if_invalid=True)
         # every image_id is present in metadata
         image_ids = set(ds.images)
-        if image_ids != set(df[PadoColumn.IMAGE]):  # maybe we should relax this
+        if image_ids != set(map(ImageId.from_str, df[PadoColumn.IMAGE].unique())):  # maybe we should relax this
             raise ValueError(
                 "metadata IMAGE column must have 1 or more rows for each image"
             )
