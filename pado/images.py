@@ -318,7 +318,7 @@ class InternalImageResource(ImageResource):
         return self
 
 
-ImageResourcesProvider = Mapping[str, ImageResource]
+ImageResourcesProvider = Mapping[ImageId, ImageResource]
 
 
 class SerializableImageResourcesProvider(ImageResourcesProvider):
@@ -397,7 +397,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
             resource = ImageResource.deserialize(row)
             p = p.expanduser().absolute().resolve()
             new_resource = LocalImageResource(resource.id, p, resource.md5)
-            self[new_resource.id_str] = new_resource
+            self[new_resource.id] = new_resource
 
 
 _WINDOWS = platform.system() == "Windows"
