@@ -1,11 +1,14 @@
 import json
 import lzma
+import warnings
 from collections import UserDict
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional
 
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
+
+from pado.images import ImageId
 
 try:
     from typing import TypedDict  # novermin
@@ -57,7 +60,7 @@ class AnnotationResources(TypedDict):
     metadata: Dict[str, Any]
 
 
-class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
+class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources]):
     """An AnnotationResourcesProvider is a map from keys (image_ids) to
     AnnotationResources.
 
@@ -82,35 +85,52 @@ class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
         super().__init__()
         path = Path(path)
         path.mkdir(exist_ok=True)
-        self._file = lambda key: path.joinpath(key + suffix)
+        self._path = path
+        self._suffix = suffix
         self._load = load
         self._dump = dump
-        self._files = {}
+        self._files: Dict[ImageId, Path] = {}
         for p in path.iterdir():
             fn = p.name
-            if fn.endswith(suffix):
-                self._files[fn[: -len(suffix)]] = p
+
+            if not fn.endswith(suffix):
+                continue  # skip if not an annotation file
+
+            fn = fn[: -len(suffix)]
+
+            try:
+                image_id = ImageId.from_str(fn)
+            except ValueError:
+                continue
+
+            self._files[image_id] = p
+
+    def _file(self, key: ImageId) -> Path:
+        assert isinstance(key, ImageId)
+        p = self._path.joinpath(key.to_str())
+        return p.with_name(p.name + self._suffix)
 
     def __len__(self):
         return len(set().union(super().__iter__(), self._files))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[ImageId]:
         return iter(set().union(super().__iter__(), self._files))
 
-    def __missing__(self, key: str) -> AnnotationResources:
+    def __missing__(self, key: ImageId) -> AnnotationResources:
         fn = self._files[key]
         with fn.open("rb") as fp:
             resources = self._load(fp)
         super().__setitem__(key, resources)
         return resources
 
-    def __setitem__(self, key: str, value: AnnotationResources):
+    def __setitem__(self, key: ImageId, value: AnnotationResources):
         if self._dump:
             with self._file(key).open("wb") as fp:
                 self._dump(value, fp)
         super().__setitem__(key, value)
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: ImageId):
+        # FIXME
         if self._dump:  # file deletion only allowed when dump provided
             if key in self._files:
                 fn = self._files.pop(key)
