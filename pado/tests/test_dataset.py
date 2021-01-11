@@ -46,9 +46,10 @@ def test_pado_test_datasource_error_without_with(datasource):
 
 
 def test_pado_test_datasource_image_ids(datasource):
+    # TODO: revisit
     datasource.acquire()
-    assert set(datasource.images) == {ImageId("i0.tif")}  # TODO: revisit
-    assert set(datasource.metadata[PadoColumn.IMAGE]) == {ImageId("i0.tif")}
+    assert set(datasource.images) == {ImageId("i0.tif")}
+    assert set(map(ImageId.from_str, datasource.metadata[PadoColumn.IMAGE])) == {ImageId("i0.tif")}
     assert set(datasource.annotations) == {ImageId("i0.tif")}
 
 
