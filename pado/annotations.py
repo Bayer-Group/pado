@@ -67,7 +67,9 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
     Lazy loads the annotation resources when requested.
     """
 
-    def __init__(self, path, suffix, load, dump=None):
+    LEGACY_SUPPORT_SEPARATOR = "__"
+
+    def __init__(self, path, suffix, load, dump=None, legacy_support=True):
         """create a new AnnotationResourcesProvider
 
         Parameters
@@ -101,7 +103,11 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
             try:
                 image_id = ImageId.from_str(fn)
             except ValueError:
-                continue
+                if legacy_support:
+                    warnings.warn(f"legacy: convert '{p.name}' to newer annotation storage fmt")
+                    image_id = ImageId(*fn.split(self.LEGACY_SUPPORT_SEPARATOR))
+                else:
+                    continue
 
             self._files[image_id] = p
 
