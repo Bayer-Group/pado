@@ -1,4 +1,5 @@
 import datetime
+import glob
 import os
 import pathlib
 import re
@@ -68,7 +69,7 @@ def verify_pado_dataset_integrity(path: Union[str, os.PathLike]) -> bool:
 
     identifiers = [ds["identifier"] for ds in data["sources"]]
     for identifier in identifiers:
-        if not list(dataset_dir.glob(f"metadata/{identifier}.*")):
+        if not list(glob.glob(os.fspath(dataset_dir / f"metadata/{identifier}.*"))):
             raise ValueError(f"identifier {identifier} is missing metadata")
 
     return True
@@ -209,8 +210,8 @@ class PadoDataset(DataSource):
         """a sequence-like interface to all images in the dataset"""
         if self._image_provider is None:
             self._image_provider = make_chain([
-                SerializableImageResourcesProvider(p.name, self._path_images)
-                for p in self._path_images.glob("*") if p.is_dir()
+                SerializableImageResourcesProvider(os.path.basename(p), self._path_images)
+                for p in glob.glob(os.fspath(self._path_images / "*")) if os.path.isdir(p)
             ])
 
             if self._metadata_query_str is not None:
@@ -227,9 +228,9 @@ class PadoDataset(DataSource):
         if self._metadata_df is None:
             md_dir = self._path_metadata
             dfs, keys = [], []
-            for metadata_file in md_dir.glob(f"*{_ext}"):
+            for metadata_file in glob.glob(os.fspath(md_dir / f"*{_ext}")):
                 dfs.append(pd.read_parquet(metadata_file))
-                keys.append(metadata_file.name[: -len(_ext)])
+                keys.append(os.path.basename(metadata_file)[: -len(_ext)])
             # build the combined df and allow differentiating data sources
             df = pd.concat(dfs, keys=keys)
             # this implicitly assumes that "level_0" is reserved
@@ -255,7 +256,7 @@ class PadoDataset(DataSource):
         if self._annotations_provider is None:
             self._annotations_provider = make_chain([
                 get_annotation_provider(p)
-                for p in self._path_annotations.glob("*") if p.is_dir()
+                for p in glob.glob(os.fspath(self._path_annotations / "*")) if os.path.isdir(p)
             ])
         return self._annotations_provider
 

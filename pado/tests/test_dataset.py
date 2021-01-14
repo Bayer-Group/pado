@@ -1,3 +1,5 @@
+import glob
+import os
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
@@ -16,9 +18,9 @@ def count_images(ds: PadoDataset):
     """helper to count images in a pado dataset"""
 
     def is_image_file(p):
-        return p.is_file() and p.name != SerializableImageResourcesProvider.STORAGE_FILE
+        return os.path.isfile(p) and os.path.basename(p) != SerializableImageResourcesProvider.STORAGE_FILE
 
-    images = list(filter(is_image_file, (ds.path / "images").glob("**/*")))
+    images = list(filter(is_image_file, glob.glob(os.fspath(ds.path / "images/**/*"), recursive=True)))
     return len(images)
 
 
@@ -91,8 +93,8 @@ def test_pado_dataset_integrity_fail_folders(dataset: PadoDataset, tmp_path):
 def test_pado_dataset_integrity_fail_sources(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
     shutil.copytree(dataset.path, p)
-    for md in p.glob(f"metadata/*"):
-        md.unlink()  # break the dataset
+    for md in glob.glob(os.fspath(p / f"metadata/*")):
+        os.unlink(md)  # break the dataset
     with pytest.raises(ValueError, match=".* missing metadata"):
         verify_pado_dataset_integrity(p)
 
