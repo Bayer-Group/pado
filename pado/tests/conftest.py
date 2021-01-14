@@ -27,7 +27,7 @@ def dataset_ro(datasource, tmp_path):
 
 
 @pytest.fixture(scope="function", autouse=True)
-def mock_response(monkeypatch):
+def mock_delete_pathlib_glob(monkeypatch):
     """pathlib.Path.glob suffers from a bug regarding symlinks:
 
     https://bugs.python.org/issue33428
