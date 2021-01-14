@@ -16,7 +16,7 @@ except ImportError:
     from typing_extensions import TypedDict
 
 
-def is_valid_geometry(geometry) -> bool:
+def check_geometry(geometry, *, instantiate: bool = True, validate: bool = False) -> bool:
     """
     Returns True iff geometry is a valid shapely/geos geometry.
 
@@ -29,7 +29,11 @@ def is_valid_geometry(geometry) -> bool:
       https://shapely.readthedocs.io/en/stable/manual.html#object.is_valid
     """
     try:
-        return geometry.is_valid
+        if validate:
+            return geometry.is_valid
+        if instantiate:
+            str(geometry)
+        return True
     except ValueError:
         return False
 
@@ -199,7 +203,7 @@ def load_geojson(fp, *, drop_unclassified: bool = True, drop_broken_geometries: 
         properties = geojson["properties"]
         shape = asShape(geojson["geometry"])
 
-        if not drop_broken_geometries or is_valid_geometry(shape):
+        if not drop_broken_geometries or check_geometry(shape):
             annotations.append(
                 Annotation(
                     roi=shape,
