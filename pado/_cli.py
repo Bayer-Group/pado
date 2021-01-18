@@ -47,7 +47,11 @@ def cli_info_cmd(dataset_path):
 
     ds = PadoDataset(dataset_path, mode="r")
 
-    return textwrap.dedent("""\
-    
-    
+    return textwrap.dedent(f"""\
+        Path: {ds.path}
+        Images: {len(ds.images)}
+        Image Metadata: {len(ds.metadata.pado.images)}
+        Annotated Images: {len(ds.annotations)}
+        Findings Metadata: {len(ds.metadata)}
+        Annotations: {sum(map(lambda x: len(x['annotations']), ds.annotations.values()))}
     """)
