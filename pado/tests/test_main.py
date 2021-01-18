@@ -27,6 +27,10 @@ def test_version():
     assert run(main, ['--version']) == (0, __version__)
 
 
-def test_export_cmd(tmpdir):
+def test_info_cmd(tmpdir):
     # help
-    assert run(main, ['info']).return_code == -1
+    dataset_path = tmpdir.mkdir("not_a_dataset")
+    output = run(main, ["info", str(dataset_path)])
+    assert output.return_code == -1
+    assert "error" in output.stdout
+    assert "not_a_dataset" in output.stdout

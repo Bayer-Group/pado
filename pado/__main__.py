@@ -3,7 +3,7 @@ import functools
 import sys
 from pathlib import Path
 
-from pado._cli import subcommand, argument, DirectoryType
+from pado._cli import subcommand, argument, DirectoryType, cli_info_cmd
 from pado.dataset import PadoDataset
 
 
@@ -43,17 +43,16 @@ def main(commandline=None):
 )
 def info_(args, subparser):
     """show pado dataset information"""
-    print("???")
     if not args.dataset_path:
         print(subparser.format_help())
         return 0
-
     try:
-        dataset_path = PadoDataset(args.dataset_path, mode="r")
-    except FileNotFoundError:
-        print(dataset_path)
+        print(cli_info_cmd(args.dataset_path))
+    except FileNotFoundError as e:
+        print(f"error: not a pado dataset '{e}'")
         return -1
-    return 0
+    else:
+        return 0
 
 
 if __name__ == "__main__":  # pragma: no cover
