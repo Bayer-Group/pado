@@ -55,5 +55,35 @@ def info_(args, subparser):
         return 0
 
 
+@subcommand(
+    argument("search_paths", nargs="+", help="paths to search for files"),
+    argument("--ext", nargs=1, metavar=("file_extension",), help="paths to search for files", action="append"),
+)
+def file_search(args, subparser):
+    """search for files at locations"""
+    import itertools
+    from pado.fileutils import file_finder
+
+    if not args.search_paths:
+        print(subparser.format_help())
+        return 0
+
+    if not args.ext:
+        exts = ('.svs', )
+    else:
+        exts = tuple(e if e[0] == "." else f".{e}" for e in args.ext)
+
+    files = file_finder(args.search_paths, extensions=exts)
+    try:
+        f = next(files)
+    except StopIteration:
+        print("no files found", file=sys.stderr)
+        return -1
+
+    for f in sorted(itertools.chain([f], files)):
+        print(f)
+    return 0
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

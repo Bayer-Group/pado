@@ -1,9 +1,14 @@
 """file utility functions"""
 import hashlib
+import os
 import shutil
 from collections import defaultdict
 from pathlib import Path
 from zipfile import ZipFile
+
+from pado._logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 def hash_file(path, hasher=hashlib.sha256) -> str:
@@ -66,3 +71,20 @@ def zip_inplace(dest_dir, path, delete_path=False, file_format="zip"):
     )
     if delete_path:
         shutil.rmtree(path)
+
+
+def file_finder(*paths, extensions=None):
+    """iterate over the files with matching extensions at all paths"""
+    if not paths:
+        raise TypeError("file_finder requires at least one path")
+    if len(paths) == 1 and isinstance(paths[0], (list, tuple)):
+        paths = paths[0]
+
+    for p in paths:
+        _p = os.path.abspath(p)
+        if not os.path.isdir(_p):
+            raise NotADirectoryError(p)
+
+        for root, dirs, files in os.walk(_p):
+            _logger.debug(f"visiting {root}")
+            yield from (os.path.join(root, f) for f in files if f.endswith(extensions))
