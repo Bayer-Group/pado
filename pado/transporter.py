@@ -33,6 +33,8 @@ subparsers = parser.add_subparsers(dest="cmd", title="pado.transporter command")
 subcommand = functools.partial(subcommand, parent=subparsers)
 parser.add_argument('--version', action='store_true', help="print version")
 parser.add_argument('-v', '--verbose', action='store_true', help="print more info")
+parser.add_argument('--target', metavar=('remote',), default=None, help="target remote")
+parser.add_argument('--tunnel', metavar=('tunnel',), default=None, help="tunnel remote")
 
 # logging objects
 logger = get_logger(__name__)
@@ -113,8 +115,8 @@ class _CommandIter:
         self.poll_timeout = float(poll_timeout)
 
     def __iter__(self):
-        logger.info(f"rsync: {self.command!r}")
-        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, env=os.environ)
+        logger.info(f"rsync: {subprocess.list2cmdline(self.command)}")
+        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
         process_running = True
         try:
             while process_running:
@@ -130,6 +132,7 @@ class _CommandIter:
             process.kill()
             raise
         finally:
+            logger.debug(process.stderr.read().decode())
             process.wait()
 
 
@@ -153,7 +156,7 @@ def _make_remote_path(remote, path):
     return f'{remote}:"{os.fspath(path)}"'
 
 
-def list_files_on_remote(path, *, target, tunnel=None, recursive=True):
+def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False):
     """list files on the remote"""
 
     options = ["-avz", "--list-only"]
@@ -166,32 +169,72 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True):
     cmd = _make_rsync_cmd(*options, remote_shell=remote_shell)
     cmd.append(remote_location)
 
-    it = _CommandIter(cmd)
-    for line in it:
-        print(line)
-    if it.return_code != 0:
-        raise RuntimeError("rsync command failed with return_code:", it.return_code)
+    cmd_iter = _CommandIter(cmd)
+    it = iter(cmd_iter)
+    line0 = next(it)
 
+    status_msgs = {"receiving file list ... done", "receiving incremental file list"}
+    assert line0 in status_msgs, f"received: '{line0!r}'"
+    # parse files
+    for line in it:
+        try:
+            permission, size, date, mtime, filename = line.split(maxsplit=4)
+        except ValueError:
+            break  # we reached the end of the file list
+        if long:
+            print(line)
+        else:
+            print(filename)
+
+    # parse summary
+    summary0, summary1 = it
+
+    if cmd_iter.return_code != 0:
+        raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
+
+
+# -- commands ---------------------------------------------------------
 
 def main(argv=None):
     global parser
     args = parser.parse_args(argv)
+
+    if args.cmd is None:
+        if args.version:
+            from pado import __version__
+            print(f"{__version__}")
+        else:
+            parser.print_help()
+        return 0
 
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
     else:
         logging.basicConfig(level=logging.WARN)
 
+    if args.target is None:
+        try:
+            target, tunnel = _get_default_target_and_tunnel()
+        except FileNotFoundError:
+            print("ERROR: please provide target or configure via `config` subcommand")
+            return -1
+        else:
+            args.target = target
+            args.tunnel = tunnel
 
-    try:
-        target, tunnel = _get_default_target_and_tunnel()
-    except FileNotFoundError:
-        print("ERROR: please provide target or configure via `config` subcommand")
-        return -1
+    return args.cmd_func(args)
 
 
-if __name__ == "__main__":
-    # main(sys.argv)
+@subcommand(
+    argument("-r", "--recursive", action="store_true", help="recurse subdirectories"),
+    argument("-l", "--long", action="store_true", help="list details"),
+    argument("path", help="base directory to start ls")
+)
+def ls(args, subparser):
+    """list files on remote"""
+    list_files_on_remote(
+        args.path, target=args.target, tunnel=args.tunnel, recursive=args.recursive, long=args.long
+    )
 
 
 if __name__ == "__main__":
