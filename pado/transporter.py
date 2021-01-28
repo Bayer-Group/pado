@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 from textwrap import dedent
 
@@ -193,8 +194,13 @@ def main(argv=None):
 if __name__ == "__main__":
     # main(sys.argv)
 
+
+if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
         print(f"{parser.prog} terminated on user request")
+        sys.exit(-1)
+    except Exception:
+        traceback.print_exc()
         sys.exit(-1)
