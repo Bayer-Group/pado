@@ -25,8 +25,7 @@ parser = argparse.ArgumentParser(
 (_   _)/ ___|____ |  _ \ /___)  _ \ / _ \ / ___|_   _) ___ |/ ___)
   | |_| |   / ___ | | | |___ | |_| | |_| | |     | |_| ____| |    
    \__)_|   \_____|_| |_(___/|  __/ \___/|_|      \__)_____)_|    
-                             |_|                                  
-       """,
+                             |_|                               """,
     epilog="#### [PA]thological [D]ata [O]bsession ####",
     formatter_class=argparse.RawDescriptionHelpFormatter,
 )
