@@ -36,6 +36,7 @@ parser.add_argument('--version', action='store_true', help="print version")
 parser.add_argument('-v', '--verbose', action='store_true', help="print more info")
 parser.add_argument('--target', metavar=('remote',), default=None, help="target remote")
 parser.add_argument('--tunnel', metavar=('tunnel',), default=None, help="tunnel remote")
+parser.add_argument('--root', action='store_true', help="reference from '/' on remote")
 
 # logging objects
 logger = get_logger(__name__)
@@ -211,6 +212,12 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
         raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
 
 
+def _make_path(path, *, base):
+    if base is None:
+        base = "/"
+    return os.path.join(base, path)
+
+
 # -- commands ---------------------------------------------------------
 
 def main(argv=None):
@@ -242,6 +249,17 @@ def main(argv=None):
             args.target = target
             args.tunnel = tunnel
 
+    # base_path can only be set via config and disabled via --root
+    if args.root and args.cmd != "config":
+        args.base_path = None
+    elif args.cmd != "config":
+        try:
+            cfg = _get_default_config()
+            args.base_path = cfg["base_path"]
+        except (FileNotFoundError, KeyError):
+            print("ERROR: please configure base_path via `config` subcommand or allow root")
+            return -1
+
     return args.cmd_func(args)
 
 
@@ -249,6 +267,7 @@ def main(argv=None):
     argument("--show", action="store_true", help="show configuration"),
     argument("--target", help="set default target host"),
     argument("--tunnel", help="set default tunnel host"),
+    argument("--base-path", help="set default base path"),
 )
 def config(args, subparser):
     """configure default settings"""
@@ -274,6 +293,10 @@ def config(args, subparser):
         new_config['target'] = args.target
     if args.tunnel:
         new_config['tunnel'] = args.tunnel
+    if args.base_path:
+        if not os.path.isabs(args.base_path):
+            logger.warn("--base-path requires an absolute path. please verify")
+        new_config['base_path'] = os.path.abspath(args.base_path)
 
     if new_config != config:
         _set_default_config(new_config)
@@ -291,7 +314,7 @@ def config(args, subparser):
 def ls(args, subparser):
     """list files on remote"""
     list_files_on_remote(
-        path=args.path,
+        path=_make_path(args.path, base=args.base_path),
         target=args.target,
         tunnel=args.tunnel,
         recursive=args.recursive,
