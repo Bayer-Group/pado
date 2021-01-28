@@ -45,14 +45,24 @@ SSH_EXECUTABLE = "ssh"
 RSYNC_EXECUTABLE = "rsync"
 
 
-def _get_default_target_and_tunnel():
+def _get_default_config_file():
     config_dir = user_config_dir("pado.transporter", version="0.1")
     config_file = Path(config_dir) / "pado-transporter-config.toml"
+    return config_file
+
+
+def _get_default_config():
+    config_file = _get_default_config_file()
     with config_file.open("r") as f:
         config = toml.load(f)
-    target = config['target_host']
-    tunnel = config.get('tunnel_host', None)
-    return target, tunnel
+    return config
+
+
+def _set_default_config(obj):
+    config_file = _get_default_config_file()
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with config_file.open("w") as f:
+        toml.dump(obj, f)
 
 
 def _make_ssh_command(remote, *cmd):
@@ -220,10 +230,12 @@ def main(argv=None):
     else:
         logging.basicConfig(level=logging.WARN)
 
-    if args.target is None:
+    if args.target is None and args.cmd != "config":
         try:
-            target, tunnel = _get_default_target_and_tunnel()
-        except FileNotFoundError:
+            cfg = _get_default_config()
+            target = cfg["target"]
+            tunnel = cfg.get("tunnel", None)
+        except (FileNotFoundError, KeyError):
             print("ERROR: please provide target or configure via `config` subcommand")
             return -1
         else:
@@ -231,6 +243,43 @@ def main(argv=None):
             args.tunnel = tunnel
 
     return args.cmd_func(args)
+
+
+@subcommand(
+    argument("--show", action="store_true", help="show configuration"),
+    argument("--target", help="set default target host"),
+    argument("--tunnel", help="set default tunnel host"),
+)
+def config(args, subparser):
+    """configure default settings"""
+    try:
+        config = _get_default_config()
+    except FileNotFoundError:
+        config = {}
+
+    def _show_config(cfg):
+        if not cfg:
+            print("no pado-transporter configuration set")
+        else:
+            print("pado-transporter configuration:")
+            for key, value in sorted(cfg.items()):
+                print(key, "=", value)
+
+    if args.show:
+        _show_config(config)
+        return 0
+
+    new_config = config.copy()
+    if args.target:
+        new_config['target'] = args.target
+    if args.tunnel:
+        new_config['tunnel'] = args.tunnel
+
+    if new_config != config:
+        _set_default_config(new_config)
+
+    _show_config(new_config)
+    return 0
 
 
 @subcommand(
