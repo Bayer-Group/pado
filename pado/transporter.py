@@ -300,7 +300,7 @@ def ls(args, subparser):
     )
 
 
-if __name__ == "__main__":
+def cli_main():
     try:
         sys.exit(main())
     except KeyboardInterrupt:
@@ -309,3 +309,7 @@ if __name__ == "__main__":
     except Exception:
         traceback.print_exc()
         sys.exit(-1)
+
+
+if __name__ == "__main__":
+    cli_main()
