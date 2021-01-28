@@ -26,6 +26,7 @@ dependencies:
   - setuptools_scm
 
   # pado requirements
+  - appdirs
   - toml
   - tqdm
   - pyarrow
