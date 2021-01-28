@@ -2,6 +2,7 @@ import argparse
 import functools
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -156,7 +157,7 @@ def _make_remote_path(remote, path):
     return f'{remote}:"{os.fspath(path)}"'
 
 
-def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False):
+def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False, regex=None):
     """list files on the remote"""
 
     options = ["-avz", "--list-only"]
@@ -168,6 +169,9 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
 
     cmd = _make_rsync_cmd(*options, remote_shell=remote_shell)
     cmd.append(remote_location)
+
+    if regex is not None:
+        regex = re.compile(regex)
 
     cmd_iter = _CommandIter(cmd)
     it = iter(cmd_iter)
@@ -181,6 +185,10 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
             permission, size, date, mtime, filename = line.split(maxsplit=4)
         except ValueError:
             break  # we reached the end of the file list
+
+        if regex and not regex.search(filename):
+            continue
+
         if long:
             print(line)
         else:
@@ -228,12 +236,18 @@ def main(argv=None):
 @subcommand(
     argument("-r", "--recursive", action="store_true", help="recurse subdirectories"),
     argument("-l", "--long", action="store_true", help="list details"),
+    argument("--match", help="match regex"),
     argument("path", help="base directory to start ls")
 )
 def ls(args, subparser):
     """list files on remote"""
     list_files_on_remote(
-        args.path, target=args.target, tunnel=args.tunnel, recursive=args.recursive, long=args.long
+        path=args.path,
+        target=args.target,
+        tunnel=args.tunnel,
+        recursive=args.recursive,
+        long=args.long,
+        regex=args.match,
     )
 
 
