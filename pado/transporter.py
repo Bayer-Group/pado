@@ -241,6 +241,22 @@ def _make_path(path, *, base):
     return os.path.join(base, path)
 
 
+def pull_files_from_remote(*, local_path, remote_base_path, files, target, tunnel=None):
+    """pull files from the remote"""
+
+    options = ["-avz", "--ignore-existing", "--partial", "--progress", f"--files-from={files}"]
+
+    remote_shell = _make_remote_shell_option(tunnel) if tunnel else None
+    remote_location = _make_remote_path(target, remote_base_path)
+    cmd = _make_rsync_cmd(*options, remote_shell=remote_shell)
+    cmd.append(remote_location)
+    cmd.append(local_path)
+
+    proc = subprocess.run(cmd, env=os.environ)
+    if proc.return_code != 0:
+        raise RuntimeError("rsync command failed with return_code:", proc.return_code)
+
+
 # -- commands ---------------------------------------------------------
 
 def main(argv=None):
@@ -350,6 +366,21 @@ def ls(args, subparser):
         long=args.long,
         regex=args.match,
         image_id_json=image_id_json,
+    )
+
+
+@subcommand(
+    argument("--files-from", required=True, help="text file with files to copy"),
+    argument("dest_local", help="local destination path"),
+)
+def pull(args, subparser):
+    """pull files from remote"""
+    pull_files_from_remote(
+        local_path=args.dest_local,
+        remote_base_path=args.base_path,
+        files=args.files_from,
+        target=args.target,
+        tunnel=args.tunnel,
     )
 
 
