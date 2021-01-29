@@ -4,10 +4,8 @@ import json
 import logging
 import os
 import re
-import shlex
 import subprocess
 import sys
-import time
 import traceback
 from collections import defaultdict
 from pathlib import Path
@@ -57,8 +55,7 @@ def _get_default_config_file():
 def _get_default_config():
     config_file = _get_default_config_file()
     with config_file.open("r") as f:
-        config = toml.load(f)
-    return config
+        return toml.load(f)
 
 
 def _set_default_config(obj):
@@ -229,7 +226,7 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
             print(filename)
 
     # parse summary
-    summary0, summary1 = it
+    _, _ = it  # ignore the two summary lines for now
 
     if cmd_iter.return_code != 0:
         raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
@@ -253,8 +250,8 @@ def pull_files_from_remote(*, local_path, remote_base_path, files, target, tunne
     cmd.append(local_path)
 
     proc = subprocess.run(cmd, env=os.environ)
-    if proc.return_code != 0:
-        raise RuntimeError("rsync command failed with return_code:", proc.return_code)
+    if proc.returncode != 0:
+        raise RuntimeError("rsync command failed with return_code:", proc.returncode)
 
 
 # -- commands ---------------------------------------------------------
@@ -265,6 +262,7 @@ def main(argv=None):
 
     if args.cmd is None:
         if args.version:
+            # noinspection PyProtectedMember
             from pado import __version__
             print(f"{__version__}")
         else:
@@ -308,12 +306,12 @@ def main(argv=None):
     argument("--tunnel", help="set default tunnel host"),
     argument("--base-path", help="set default base path"),
 )
-def config(args, subparser):
+def config(args, _):
     """configure default settings"""
     try:
-        config = _get_default_config()
+        _config = _get_default_config()
     except FileNotFoundError:
-        config = {}
+        _config = {}
 
     def _show_config(cfg):
         if not cfg:
@@ -324,10 +322,10 @@ def config(args, subparser):
                 print(key, "=", value)
 
     if args.show:
-        _show_config(config)
+        _show_config(_config)
         return 0
 
-    new_config = config.copy()
+    new_config = _config.copy()
     if args.target:
         new_config['target'] = args.target
     if args.tunnel:
@@ -337,7 +335,7 @@ def config(args, subparser):
             logger.warn("--base-path requires an absolute path. please verify")
         new_config['base_path'] = os.path.abspath(args.base_path)
 
-    if new_config != config:
+    if new_config != _config:
         _set_default_config(new_config)
 
     _show_config(new_config)
@@ -351,7 +349,7 @@ def config(args, subparser):
     argument("--select-image-id-json", help="matches defined in json file"),
     argument("path", help="base directory to start ls")
 )
-def ls(args, subparser):
+def ls(args, _):
     """list files on remote"""
     image_id_json = None
     if args.select_image_id_json:
@@ -373,7 +371,7 @@ def ls(args, subparser):
     argument("--files-from", required=True, help="text file with files to copy"),
     argument("dest_local", help="local destination path"),
 )
-def pull(args, subparser):
+def pull(args, _):
     """pull files from remote"""
     pull_files_from_remote(
         local_path=args.dest_local,
@@ -385,6 +383,7 @@ def pull(args, subparser):
 
 
 def cli_main():
+    # noinspection PyBroadException
     try:
         sys.exit(main())
     except KeyboardInterrupt:
