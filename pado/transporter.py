@@ -1,5 +1,6 @@
 import argparse
 import functools
+import json
 import logging
 import os
 import re
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import time
 import traceback
+from collections import defaultdict
 from pathlib import Path
 from textwrap import dedent
 
@@ -170,7 +172,7 @@ def _make_remote_path(remote, path):
     return f'{remote}:"{os.fspath(path)}"'
 
 
-def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False, regex=None):
+def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False, regex=None, image_id_json=None):
     """list files on the remote"""
 
     options = ["-avz", "--list-only"]
@@ -185,6 +187,13 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
 
     if regex is not None:
         regex = re.compile(regex)
+
+    if image_id_json is not None:
+        _image_id_map = defaultdict(set)
+        for record in image_id_json:
+            iid = tuple(record["image_id"])
+            _image_id_map[len(iid)].add(iid)
+        image_id_json = dict(sorted(_image_id_map.items()))
 
     cmd_iter = _CommandIter(cmd)
     it = iter(cmd_iter)
@@ -205,6 +214,14 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
 
         if regex and not regex.search(filename):
             continue
+
+        if image_id_json:
+            fn_parts = Path(filename).parts
+            for length, image_ids in image_id_json.items():
+                if fn_parts[-length:] in image_ids:
+                    break
+            else:
+                continue
 
         if long:
             print(line)
@@ -315,10 +332,16 @@ def config(args, subparser):
     argument("-r", "--recursive", action="store_true", help="recurse subdirectories"),
     argument("-l", "--long", action="store_true", help="list details"),
     argument("--match", help="match regex"),
+    argument("--select-image-id-json", help="matches defined in json file"),
     argument("path", help="base directory to start ls")
 )
 def ls(args, subparser):
     """list files on remote"""
+    image_id_json = None
+    if args.select_image_id_json:
+        with open(args.select_image_id_json, "r") as f:
+            image_id_json = json.load(f)
+
     list_files_on_remote(
         path=_make_path(args.path, base=args.base_path),
         target=args.target,
@@ -326,6 +349,7 @@ def ls(args, subparser):
         recursive=args.recursive,
         long=args.long,
         regex=args.match,
+        image_id_json=image_id_json,
     )
 
 
