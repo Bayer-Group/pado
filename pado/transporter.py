@@ -125,6 +125,7 @@ class _CommandIter:
         self.return_code = None
         self.max_timeout_counter = max(1, int(max_timeout / poll_timeout))
         self.poll_timeout = float(poll_timeout)
+        self.stderr = None
 
     def __iter__(self):
         logger.info(f"rsync: {subprocess.list2cmdline(self.command)}")
@@ -144,7 +145,8 @@ class _CommandIter:
             process.kill()
             raise
         finally:
-            logger.debug(process.stderr.read().decode())
+            self.stderr = process.stderr.read().decode()
+            logger.debug(self.stderr)
             process.wait()
 
 
@@ -186,7 +188,11 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
 
     cmd_iter = _CommandIter(cmd)
     it = iter(cmd_iter)
-    line0 = next(it)
+    try:
+        line0 = next(it)
+    except StopIteration:
+        print(cmd_iter.stderr, file=sys.stderr)
+        raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
 
     status_msgs = {"receiving file list ... done", "receiving incremental file list"}
     assert line0 in status_msgs, f"received: '{line0!r}'"
