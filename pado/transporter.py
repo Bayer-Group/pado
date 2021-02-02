@@ -306,7 +306,7 @@ def main(argv=None):
     argument("--tunnel", help="set default tunnel host"),
     argument("--base-path", help="set default base path"),
 )
-def config(args, _):
+def config(args, subparser):
     """configure default settings"""
     try:
         _config = _get_default_config()
@@ -349,7 +349,7 @@ def config(args, _):
     argument("--select-image-id-json", help="matches defined in json file"),
     argument("path", help="base directory to start ls")
 )
-def ls(args, _):
+def ls(args, subparser):
     """list files on remote"""
     image_id_json = None
     if args.select_image_id_json:
@@ -371,7 +371,7 @@ def ls(args, _):
     argument("--files-from", required=True, help="text file with files to copy"),
     argument("dest_local", help="local destination path"),
 )
-def pull(args, _):
+def pull(args, subparser):
     """pull files from remote"""
     pull_files_from_remote(
         local_path=args.dest_local,
