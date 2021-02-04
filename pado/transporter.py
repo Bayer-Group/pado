@@ -367,6 +367,19 @@ def ls(args, subparser):
     )
 
 
+@subcommand()
+def remote_shell(args, subparser):
+    """open a remote shell on the target"""
+    cmd_args = [SSH_EXECUTABLE]
+    if args.tunnel:
+        cmd_args.extend(["-J", args.tunnel])
+    cmd_args.append(args.target)
+    if args.base_path:
+        cmd_args.extend(["-t", f"cd '{args.base_path}'; exec $SHELL --login"])
+    # drop to remote shell
+    os.execvp(SSH_EXECUTABLE, cmd_args)
+
+
 @subcommand(
     argument("--files-from", required=True, help="text file with files to copy"),
     argument("dest_local", help="local destination path"),
