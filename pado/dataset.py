@@ -28,7 +28,7 @@ from pado.metadata import (
     PadoInvalid,
     PadoReserved,
 )
-from pado.utils import cached_property, make_chain, make_priority_chain, FilteredMapping
+from pado.utils import cached_property, make_chain, make_priority_chain, FilteredMapping, ChainMap
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -219,6 +219,23 @@ class PadoDataset(DataSource):
                 self._image_provider = FilteredMapping(self._image_provider, valid_keys=unique_image_ids)
 
         return self._image_provider
+
+    def _reassociate_images(self, *paths: Union[str, Path]):
+        if self._image_provider is None:
+            _ = self.images
+        if isinstance(self._image_provider, FilteredMapping):
+            raise NotImplementedError("not supported for filtered datasets")
+        elif isinstance(self._image_provider, ChainMap):
+            for ip in self._image_provider.maps:
+                for path in paths:
+                    ip.reassociate_resources(path)
+                ip.save()
+        elif isinstance(self._image_provider, SerializableImageResourcesProvider):
+            for path in paths:
+                self._image_provider.reassociate_resources(path)
+            self._image_provider.save()
+        else:
+            raise NotImplementedError(f"unexpected image provider type '{self._image_provider}'")
 
     @property
     def metadata(self) -> pd.DataFrame:
