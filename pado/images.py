@@ -24,6 +24,9 @@ class ImageId(tuple):
         if not args:
             raise ValueError("can not create an empty ImageId()")
 
+        if len(args) == 1 and isinstance(args[0], tuple):
+            args = args[0]  # support creating and image_id from an image_id/tuple
+
         if not all(isinstance(x, str) for x in args):
             item_types = [type(x).__name__ for x in args]
             raise ValueError(f"all image_id elements must be of type str, received: {item_types!r}")
@@ -332,6 +335,10 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
             df = pd.read_parquet(self._df_filename)
         else:
             df = pd.DataFrame(columns=_SerializedImageResource._fields)
+        # support older format
+        if 'md5' in df.columns:
+            df = df.rename(columns={'md5': 'checksum'})
+            df['image_id'] = df['image_id'].apply(lambda x: f'ImageId{tuple(x.split("__"))!r}')
         self._df = df.set_index(df["image_id"])
 
     def __getitem__(self, item: ImageId) -> ImageResource:
@@ -393,10 +400,11 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
                 if num_select > 1:
                     warnings.warn(f"can't reassociate {p.name} due to multiple matches")
                 continue
+            print(self._identifier, "reassociating", p.name)
             row = self._df.loc[select].iloc[0]
             resource = ImageResource.deserialize(row)
             p = p.expanduser().absolute().resolve()
-            new_resource = LocalImageResource(resource.id, p, resource.md5)
+            new_resource = LocalImageResource(resource.id, p, resource.checksum)
             self[new_resource.id] = new_resource
 
 

@@ -288,6 +288,10 @@ class PadoDataset(DataSource):
             )  # pragma: no cover
         _df = self.metadata
         metadata = _df[_df[PadoColumn.IMAGE] == item.to_str()]
+        if metadata.size == 0:
+            # workaround...
+            warnings.warn("needs revisiting after refactor")
+            metadata = _df[_df[PadoColumn.IMAGE] == "__".join(item)]
 
         try:
             annotation_dict = self.annotations[item].copy()
