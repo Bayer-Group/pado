@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import contextlib
 import glob
 import hashlib
+import os.path as op
 import platform
 import re
 import warnings
@@ -69,7 +72,8 @@ class ImageId(tuple):
         return cls(*image_id_elements)
 
     def __fspath__(self) -> str:
-        return str(self.to_path())
+        """return the ImageId as a relative path"""
+        return op.join(*self)
 
     def to_path(self):
         """return the ImageId as a relative path"""
