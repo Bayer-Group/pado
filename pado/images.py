@@ -158,21 +158,37 @@ class ImageId(tuple):
 
         return cls(*image_id_list, site=data.get('site'))
 
-    def __fspath__(self) -> str:
-        """return the ImageId as a relative path"""
-        return op.join(*self)
-
-    def to_path(self) -> PurePath:
-        """return the ImageId as a relative path"""
-        return PurePath(*self)
-
-    # note:
+    # --- hashing and comparison methods ------------------------------
     # __hash__ is tuple.__hash__
     # __eq__ is tuple.__eq__
 
     def to_url_hash(self) -> str:
         """return a one way hash of the image_id"""
         return hash_str(self.to_str())
+
+    # --- path methods ------------------------------------------------
+
+    _site_mapper = {
+        None: lambda x: x,
+    }
+
+    # noinspection PyPropertyAccess
+    def __fspath__(self) -> str:
+        """return the ImageId as a relative path"""
+        try:
+            fs_parts = self._site_mapper[self.site](self.parts)
+        except KeyError:
+            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+        return op.join(*fs_parts)
+
+    # noinspection PyPropertyAccess
+    def to_path(self) -> PurePath:
+        """return the ImageId as a relative path"""
+        try:
+            fs_parts = self._site_mapper[self.site](self.parts)
+        except KeyError:
+            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+        return PurePath(*fs_parts)
 
 
 class _SerializedImageResource(NamedTuple):
