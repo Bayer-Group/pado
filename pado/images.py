@@ -23,25 +23,27 @@ from pado.fileutils import hash_str
 class ImageId(tuple):
     """ImageId for images in pado datasets"""
 
-    _regex = re.compile(r"ImageId(\(.*\))")
+    # string matching rather than regex for speedup `ImageId('1', '2')`
+    _prefix, _suffix = f"{__qualname__}(", ")"
 
-    def __new__(cls, *args):
-        if not args:
-            raise ValueError("can not create an empty ImageId()")
+    def __new__(cls, *parts: str, site: Optional[str] = None):
+        """Create a new ImageId instance"""
+        try:
+            part, *more_parts = parts
+        except ValueError:
+            raise ValueError(f"can not create an empty {cls.__name__}()")
 
-        if len(args) == 1 and isinstance(args[0], tuple):
-            args = args[0]  # support creating and image_id from an image_id/tuple
+        if any(not isinstance(x, str) for x in parts):
+            if not more_parts:
+                raise ValueError(f"all parts must be of type str. Did you mean `{cls.__name__}.make({part!r})`?")
+            else:
+                item_types = [type(x).__name__ for x in parts]
+                raise ValueError(f"all parts must be of type str. Received: {item_types!r}")
 
-        if not all(isinstance(x, str) for x in args):
-            item_types = [type(x).__name__ for x in args]
-            raise ValueError(f"all image_id elements must be of type str, received: {item_types!r}")
+        if part.startswith(cls._prefix) and part.endswith(cls._suffix):
+            raise ValueError(f"use {cls.__name__}.from_str() to convert a serialized object")
 
-        if any(cls._regex.match(x) for x in args):
-            if len(args) == 1:
-                raise ValueError("use ImageId.from_str() to convert a serialized ImageId()")
-            raise ValueError("a provided element matches a serialized image id")
-
-        return super().__new__(cls, args)
+        return super().__new__(cls, [site, *parts])
 
     if TYPE_CHECKING:
         # Pycharm doesn't understand cls in classmethods otherwise...
@@ -57,34 +59,44 @@ class ImageId(tuple):
         return cls(*parts, site=site)
 
     def __repr__(self):
-        return f"{type(self).__name__}{super().__repr__()}"
+        """Return a nicely formatted representation string"""
+        site, *parts = self
+        args = [repr(p) for p in parts]
+        if site is not None:
+            args.append(f"site={site!r}")
+        return f"{type(self).__name__}({', '.join(args)})"
 
     to_str = __str__ = __repr__
+    to_str.__doc__ = """serialize the ImageId instance to str"""
 
     @classmethod
-    def from_str(cls, image_id: str):
+    def from_str(cls, image_id_str: str):
         """create a new ImageId instance from an image id string
 
         >>> ImageId.from_str("ImageId('abc', '123.svs')")
         ImageId('abc', '123.svs')
 
         """
-        if not isinstance(image_id, str):
-            raise TypeError(f"image_id must be of type 'str', got: '{type(image_id)}'")
+        if not isinstance(image_id_str, str):
+            raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_str)}'")
 
-        m = cls._regex.match(image_id)
-        if not m:
-            raise ValueError(f"provided image_id str is not an ImageId(), got: '{image_id}'")
+        # let's verify the input a tiny little bit
+        if not (image_id_str.startswith(cls._prefix) and image_id_str.endswith(cls._suffix)):
+            raise ValueError(f"provided image_id str is not an ImageId(), got: '{image_id_str}'")
 
         try:
-            image_id_elements = literal_eval(m.group(1))
+            # ... i know it's bad, but it's the easiest way right now to support
+            #   kwargs in the calling interface
+            image_id = eval(image_id_str, {cls.__name__: cls})
         except (ValueError, SyntaxError):
-            raise ValueError(f"provided image_id is unparsable: '{image_id}'")
+            raise ValueError(f"provided image_id is unparsable: '{image_id_str}'")
 
-        if not isinstance(image_id_elements, tuple):
+        if type(image_id) != cls:
+            # note: the above is correct. We want to guarantee that it's the same class
+            #   an instance of a subclass would be considered incorrect
             raise ValueError(f"not a ImageId(): '{image_id}'")
 
-        return cls(*image_id_elements)
+        return image_id
 
     def __fspath__(self) -> str:
         """return the ImageId as a relative path"""
