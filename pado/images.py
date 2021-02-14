@@ -10,7 +10,7 @@ import warnings
 from abc import ABC, abstractmethod
 from ast import literal_eval
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
-from typing import Callable, Mapping, NamedTuple, Optional, Union
+from typing import Callable, Mapping, NamedTuple, Optional, Union, Iterable, TYPE_CHECKING
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
@@ -42,6 +42,19 @@ class ImageId(tuple):
             raise ValueError("a provided element matches a serialized image id")
 
         return super().__new__(cls, args)
+
+    if TYPE_CHECKING:
+        # Pycharm doesn't understand cls in classmethods otherwise...
+        __init__ = tuple.__init__
+
+    @classmethod
+    def make(cls, parts: Iterable[str], site: Optional[str] = None):
+        """Create a new ImageId instance from an iterable"""
+        if isinstance(parts, str):
+            raise TypeError(
+                f"{cls.__name__}.make() requires a Sequence[str]. Did you mean `{cls.__name__}({repr(parts)})`?"
+            )
+        return cls(*parts, site=site)
 
     def __repr__(self):
         return f"{type(self).__name__}{super().__repr__()}"
