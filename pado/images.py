@@ -74,6 +74,7 @@ class ImageId(tuple):
 
     # --- namedtuple style property access ----------------------------
 
+    # note PyCharm doesn't recognize these: https://youtrack.jetbrains.com/issue/PY-47192
     site: Optional[str] = property(itemgetter(0), doc="return site of the image id")
     parts: Tuple[str, ...] = property(itemgetter(slice(1, None)), doc="return the parts of the image id")
     last: str = property(itemgetter(-1), doc="return the last part of the image id")
