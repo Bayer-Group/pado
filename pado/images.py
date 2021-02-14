@@ -169,15 +169,24 @@ class ImageId(tuple):
 
     # --- path methods ------------------------------------------------
 
-    _site_mapper = {
+    site_mapper: Mapping[Optional[str]:ImageResourcesProvider] = {
         None: lambda x: x,
     }
+
+    # noinspection PyPropertyAccess
+    @property
+    def id_field_names(self):
+        try:
+            id_field_names = self.site_mapper[self.site].id_field_names
+        except KeyError:
+            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+        return tuple([self.site, *id_field_names])
 
     # noinspection PyPropertyAccess
     def __fspath__(self) -> str:
         """return the ImageId as a relative path"""
         try:
-            fs_parts = self._site_mapper[self.site](self.parts)
+            fs_parts = self.site_mapper[self.site].fs_parts(self.parts)
         except KeyError:
             raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
         return op.join(*fs_parts)
@@ -186,7 +195,7 @@ class ImageId(tuple):
     def to_path(self) -> PurePath:
         """return the ImageId as a relative path"""
         try:
-            fs_parts = self._site_mapper[self.site](self.parts)
+            fs_parts = self.site_mapper[self.site].fs_parts(self.parts)
         except KeyError:
             raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
         return PurePath(*fs_parts)
