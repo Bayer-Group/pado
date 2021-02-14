@@ -9,6 +9,9 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from ast import literal_eval
+from orjson import loads as orjson_loads
+from orjson import dumps as orjson_dumps
+from orjson import JSONDecodeError, OPT_SORT_KEYS
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Callable, Mapping, NamedTuple, Optional, Union, Iterable, TYPE_CHECKING
 from urllib.parse import unquote, urlparse
@@ -97,6 +100,24 @@ class ImageId(tuple):
             raise ValueError(f"not a ImageId(): '{image_id}'")
 
         return image_id
+
+    def to_json(self):
+        d = {'image_id': tuple(self[1:])}
+        if self[0] is not None:
+            d['site'] = self[0]
+        return orjson_dumps(d, option=OPT_SORT_KEYS).decode()
+
+    @classmethod
+    def from_json(cls, image_id):
+        try:
+            data = orjson_loads(image_id)
+        except (ValueError, TypeError, JSONDecodeError):
+            if not isinstance(image_id, str):
+                raise TypeError(f"image_id must be of type 'str', got: '{type(image_id)}'")
+            else:
+                raise ValueError(f"provided image_id is unparsable: '{image_id}'")
+
+        return cls(*data['image_id'], site=data.get('site'))
 
     def __fspath__(self) -> str:
         """return the ImageId as a relative path"""
