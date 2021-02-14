@@ -17,6 +17,8 @@ from urllib.request import urlopen
 import pandas as pd
 from tqdm import tqdm
 
+from pado.fileutils import hash_str
+
 
 class ImageId(tuple):
     """ImageId for images in pado datasets"""
@@ -79,11 +81,13 @@ class ImageId(tuple):
         """return the ImageId as a relative path"""
         return PurePath(*self)
 
-    def __eq__(self, other):
-        return super().__eq__(other)
+    # note:
+    # __hash__ is tuple.__hash__
+    # __eq__ is tuple.__eq__
 
-    def __hash__(self):
-        return super().__hash__()
+    def to_url_hash(self) -> str:
+        """return a one way hash of the image_id"""
+        return hash_str(self.to_str())
 
 
 class _SerializedImageResource(NamedTuple):
