@@ -37,7 +37,7 @@ class ImageId(tuple):
             raise ValueError(f"can not create an empty {cls.__name__}()")
 
         if any(not isinstance(x, str) for x in parts):
-            if not more_parts:
+            if not more_parts and isinstance(part, Iterable):
                 raise ValueError(f"all parts must be of type str. Did you mean `{cls.__name__}.make({part!r})`?")
             else:
                 item_types = [type(x).__name__ for x in parts]
@@ -45,6 +45,8 @@ class ImageId(tuple):
 
         if part.startswith(cls._prefix) and part.endswith(cls._suffix):
             raise ValueError(f"use {cls.__name__}.from_str() to convert a serialized object")
+        elif part[0] == "{" and part[-1] == "}" and '"image_id":' in part:
+            raise ValueError(f"use {cls.__name__}.from_json() to convert a serialized json object")
 
         return super().__new__(cls, [site, *parts])
 
@@ -79,6 +81,13 @@ class ImageId(tuple):
         >>> ImageId.from_str("ImageId('abc', '123.svs')")
         ImageId('abc', '123.svs')
 
+        >>> ImageId.from_str('ImageId("123.svs", site="somewhere")')
+        ImageId('123.svs', site='somewhere')
+
+        >>> img_id = ImageId('123.svs', site="somewhere")
+        >>> img_id == ImageId.from_str(img_id.to_str())
+        True
+
         """
         if not isinstance(image_id_str, str):
             raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_str)}'")
@@ -90,6 +99,7 @@ class ImageId(tuple):
         try:
             # ... i know it's bad, but it's the easiest way right now to support
             #   kwargs in the calling interface
+            # fixme: revisit in case we consider this a security problem
             image_id = eval(image_id_str, {cls.__name__: cls})
         except (ValueError, SyntaxError):
             raise ValueError(f"provided image_id is unparsable: '{image_id_str}'")
@@ -102,22 +112,40 @@ class ImageId(tuple):
         return image_id
 
     def to_json(self):
+        """Serialize the ImageId instance to a json object"""
         d = {'image_id': tuple(self[1:])}
         if self[0] is not None:
             d['site'] = self[0]
         return orjson_dumps(d, option=OPT_SORT_KEYS).decode()
 
     @classmethod
-    def from_json(cls, image_id):
-        try:
-            data = orjson_loads(image_id)
-        except (ValueError, TypeError, JSONDecodeError):
-            if not isinstance(image_id, str):
-                raise TypeError(f"image_id must be of type 'str', got: '{type(image_id)}'")
-            else:
-                raise ValueError(f"provided image_id is unparsable: '{image_id}'")
+    def from_json(cls, image_id_json: str):
+        """create a new ImageId instance from an image id json string
 
-        return cls(*data['image_id'], site=data.get('site'))
+        >>> ImageId.from_json('{"image_id":["abc","123.svs"]}')
+        ImageId('abc', '123.svs')
+
+        >>> ImageId.from_json('{"image_id":["abc","123.svs"],"site":"somewhere"}')
+        ImageId('123.svs', site='somewhere')
+
+        >>> img_id = ImageId('123.svs', site="somewhere")
+        >>> img_id == ImageId.from_json(img_id.to_json())
+        True
+
+        """
+        try:
+            data = orjson_loads(image_id_json)
+        except (ValueError, TypeError, JSONDecodeError):
+            if not isinstance(image_id_json, str):
+                raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_json)}'")
+            else:
+                raise ValueError(f"provided image_id is unparsable: '{image_id_json}'")
+
+        image_id_list = data['image_id']
+        if isinstance(image_id_list, str):
+            raise ValueError("Incorrectly formatted json: `image_id` not a List[str]")
+
+        return cls(*image_id_list, site=data.get('site'))
 
     def __fspath__(self) -> str:
         """return the ImageId as a relative path"""
