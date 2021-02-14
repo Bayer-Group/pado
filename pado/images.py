@@ -72,9 +72,13 @@ class ImageId(tuple):
             args.append(f"site={site!r}")
         return f"{type(self).__name__}({', '.join(args)})"
 
+    # --- namedtuple style property access ----------------------------
+
     site: Optional[str] = property(itemgetter(0), doc="return site of the image id")
     parts: Tuple[str, ...] = property(itemgetter(slice(1, None)), doc="return the parts of the image id")
     last: str = property(itemgetter(-1), doc="return the last part of the image id")
+
+    # --- string serialization methods --------------------------------
 
     to_str = __str__ = __repr__
     to_str.__doc__ = """serialize the ImageId instance to str"""
@@ -107,7 +111,7 @@ class ImageId(tuple):
             # fixme: revisit in case we consider this a security problem
             image_id = eval(image_id_str, {cls.__name__: cls})
         except (ValueError, SyntaxError):
-            raise ValueError(f"provided image_id is unparsable: '{image_id_str}'")
+            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
 
         if type(image_id) != cls:
             # note: the above is correct. We want to guarantee that it's the same class
@@ -115,6 +119,8 @@ class ImageId(tuple):
             raise ValueError(f"not a ImageId(): '{image_id}'")
 
         return image_id
+
+    # --- json serialization methods ----------------------------------
 
     def to_json(self):
         """Serialize the ImageId instance to a json object"""
@@ -144,7 +150,7 @@ class ImageId(tuple):
             if not isinstance(image_id_json, str):
                 raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_json)}'")
             else:
-                raise ValueError(f"provided image_id is unparsable: '{image_id_json}'")
+                raise ValueError(f"provided image_id is not parsable: '{image_id_json}'")
 
         image_id_list = data['image_id']
         if isinstance(image_id_list, str):
