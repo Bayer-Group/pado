@@ -8,12 +8,13 @@ import platform
 import re
 import warnings
 from abc import ABC, abstractmethod
-from ast import literal_eval
+from operator import itemgetter
+
 from orjson import loads as orjson_loads
 from orjson import dumps as orjson_dumps
 from orjson import JSONDecodeError, OPT_SORT_KEYS
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
-from typing import Callable, Mapping, NamedTuple, Optional, Union, Iterable, TYPE_CHECKING
+from typing import Callable, Iterable, Mapping, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
@@ -70,6 +71,10 @@ class ImageId(tuple):
         if site is not None:
             args.append(f"site={site!r}")
         return f"{type(self).__name__}({', '.join(args)})"
+
+    site: Optional[str] = property(itemgetter(0), doc="return site of the image id")
+    parts: Tuple[str, ...] = property(itemgetter(slice(1, None)), doc="return the parts of the image id")
+    last: str = property(itemgetter(-1), doc="return the last part of the image id")
 
     to_str = __str__ = __repr__
     to_str.__doc__ = """serialize the ImageId instance to str"""
