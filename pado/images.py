@@ -75,11 +75,9 @@ class ImageId(tuple):
         """return the ImageId as a relative path"""
         return op.join(*self)
 
-    def to_path(self):
+    def to_path(self) -> PurePath:
         """return the ImageId as a relative path"""
-        image_path = PurePath(*self)
-        assert not image_path.is_absolute()
-        return image_path
+        return PurePath(*self)
 
     def __eq__(self, other):
         return super().__eq__(other)
