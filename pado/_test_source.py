@@ -24,7 +24,7 @@ except ImportError:
 try:
     from tifffile import imsave
 except ImportError:  # pragma: no cover
-    raise ImportError("pado.ext.testsource requires the `pado[testsource]` extra")
+    raise ImportError("pado._test_source requires the `pado[testsource]` extra")
 
 __all__ = ["TestDataSource"]
 

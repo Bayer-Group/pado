@@ -7,9 +7,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
-from pado.ext.testsource import TestDataSource
 from pado.images import ImageId, SerializableImageResourcesProvider
 from pado.metadata import PadoColumn
 

@@ -1,7 +1,7 @@
 import pytest
 
+from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset
-from pado.ext.testsource import TestDataSource
 
 
 @pytest.fixture(scope="function")
