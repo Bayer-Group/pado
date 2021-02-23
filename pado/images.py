@@ -172,12 +172,39 @@ class ImageId(tuple):
         return cls(*image_id_list, site=data.get('site'))
 
     # --- hashing and comparison methods ------------------------------
-    # __hash__ is tuple.__hash__
-    # __eq__ is tuple.__eq__
 
-    def to_url_hash(self) -> str:
+    def __hash__(self):
+        """carefully handle hashing!
+
+        hashing is just based on the filename as a fallback!
+
+        BUT: __eq__ is actually based on the full id in case both
+             ids specify a site (which will be the default, but is
+             not really while we are still refactoring...)
+        """
+        return tuple.__hash__(self[-1:])  # (self.last,)
+
+    def __eq__(self, other):
+        """carefully handle equality!
+
+        equality is based on filename only in case site is not
+        specified. Otherwise it's tuple.__eq__
+
+        """
+        if not isinstance(other, ImageId):
+            return False  # we don't coerce tuples
+
+        if self[0] is None or other[0] is None:  # self.site
+            return self.last == other.last
+        else:
+            return tuple.__eq__(self, other)
+
+    def to_url_hash(self, *, full: bool = False) -> str:
         """return a one way hash of the image_id"""
-        return hash_str(self.to_str())
+        if not full:
+            return hash_str(self.last)
+        else:
+            return hash_str(self.to_str())
 
     # --- path methods ------------------------------------------------
 
