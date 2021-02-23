@@ -134,8 +134,11 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
     def __missing__(self, key: ImageId) -> AnnotationResources:
         fn = self._files[key]
-        with fn.open("rb") as fp:
-            resources = self._load(fp)
+        try:
+            with open(fn, "rb") as fp:
+                resources = self._load(fp)
+        except FileNotFoundError:
+            raise KeyError(key)
         super().__setitem__(key, resources)
         return resources
 
@@ -150,7 +153,10 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
         if self._dump:  # file deletion only allowed when dump provided
             if key in self._files:
                 fn = self._files.pop(key)
-                fn.unlink(missing_ok=True)
+                try:
+                    os.unlink(fn)
+                except FileNotFoundError:
+                    pass
         super().__delitem__(key)
 
     def __repr__(self):
