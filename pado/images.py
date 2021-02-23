@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import glob
 import hashlib
+import os
 import os.path as op
 import platform
 import re
@@ -44,6 +45,9 @@ class ImageId(tuple):
             part, *more_parts = parts
         except ValueError:
             raise ValueError(f"can not create an empty {cls.__name__}()")
+
+        if isinstance(part, ImageId):
+            return super().__new__(cls, [part.site, *part.parts])
 
         if any(not isinstance(x, str) for x in parts):
             if not more_parts and isinstance(part, Iterable):
@@ -228,6 +232,8 @@ class ImageResource(ABC):
         # NOTE: only subclasses of ImageResource can be instantiated directly
         if isinstance(image_id, str):
             image_id = ImageId.from_str(image_id)
+        if isinstance(image_id, ImageId):
+            pass  # required to check this before
         elif isinstance(image_id, (tuple, list, pd.Series)):
             image_id = ImageId(*image_id)
         else:
@@ -380,7 +386,7 @@ class InternalImageResource(ImageResource):
 
     def __init__(self, image_id, resource, checksum=None):
         super().__init__(image_id, resource, checksum)
-        if isinstance(resource, Path):
+        if isinstance(resource, PurePath):
             # Paths can directly pass through
             ident, p = None, Path(resource)
 
@@ -602,7 +608,7 @@ class ImageResourceCopier:
                 # vvv tqdm responsiveness
                 miniters = 1 if isinstance(image, RemoteImageResource) else None
                 # create folder structure
-                internal_path = Path(*image.id)
+                internal_path = image.id.to_path()
                 new_path = self.base_path / self.identifier / internal_path
                 new_path.parent.mkdir(parents=True, exist_ok=True)
 
