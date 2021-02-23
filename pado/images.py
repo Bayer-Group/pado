@@ -6,6 +6,7 @@ import hashlib
 import os.path as op
 import platform
 import re
+import sys
 import warnings
 from abc import ABC, abstractmethod
 from operator import itemgetter
@@ -14,7 +15,7 @@ from orjson import loads as orjson_loads
 from orjson import dumps as orjson_dumps
 from orjson import JSONDecodeError, OPT_SORT_KEYS
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
-from typing import Callable, Iterable, Mapping, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
@@ -24,8 +25,15 @@ from tqdm import tqdm
 from pado.fileutils import hash_str
 
 
+class FilenamePartsMapper:
+    """a plain mapper for ImageId instances based on filename only"""
+    # Used as a fallback when site is None and we only know the filename
+    id_field_names = ('filename',)
+    def fs_parts(self, parts: Tuple[str, ...]): return parts
+
+
 class ImageId(tuple):
-    """ImageId for images in pado datasets"""
+    """Unique identifier for images in pado datasets"""
 
     # string matching rather than regex for speedup `ImageId('1', '2')`
     _prefix, _suffix = f"{__qualname__}(", ")"
@@ -170,7 +178,7 @@ class ImageId(tuple):
     # --- path methods ------------------------------------------------
 
     site_mapper: Mapping[Optional[str]:ImageResourcesProvider] = {
-        None: lambda x: x,
+        None: FilenamePartsMapper(),
     }
 
     # noinspection PyPropertyAccess
