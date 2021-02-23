@@ -1,5 +1,6 @@
 import json
 import lzma
+import os
 import warnings
 from collections import UserDict
 from pathlib import Path
@@ -95,25 +96,27 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
         self._suffix = suffix
         self._load = load
         self._dump = dump
-        self._files: Dict[ImageId, Path] = {}
-        for p in path.iterdir():
-            fn = p.name
+        self._files: Dict[ImageId, str] = {}
 
-            if not fn.endswith(suffix):
-                continue  # skip if not an annotation file
+        legacy_recovered = 0
+        for current, dirs, files in os.walk(os.fspath(path.absolute())):
+            for fn in files:
+                if not fn.endswith(suffix):
+                    continue  # skip if not an annotation file
 
-            fn = fn[: -len(suffix)]
-
-            try:
-                image_id = ImageId.from_str(fn)
-            except ValueError:
-                if legacy_support:
-                    warnings.warn(f"legacy: convert '{p.name}' to newer annotation storage fmt")
+                fn = fn[: -len(suffix)]
+                try:
+                    image_id = ImageId.from_str(fn)
+                except ValueError:
+                    if not legacy_support:
+                        continue
                     image_id = ImageId(*fn.split(self.LEGACY_SUPPORT_SEPARATOR))
-                else:
-                    continue
+                    legacy_recovered += 1
 
-            self._files[image_id] = p
+                self._files[image_id] = os.path.join(current, fn)
+
+        if legacy_recovered > 0:
+            warnings.warn(f"legacy: converted {legacy_recovered} annotations to newer annotation storage fmt")
 
     def _file(self, key: ImageId) -> Path:
         assert isinstance(key, ImageId)
