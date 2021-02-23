@@ -129,6 +129,9 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
     def __iter__(self) -> Iterator[ImageId]:
         return iter(set().union(super().__iter__(), self._files))
 
+    def __contains__(self, key: ImageId) -> bool:
+        return key in self.data or key in self._files
+
     def __missing__(self, key: ImageId) -> AnnotationResources:
         fn = self._files[key]
         with fn.open("rb") as fp:
