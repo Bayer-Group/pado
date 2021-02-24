@@ -195,7 +195,7 @@ class ImageId(tuple):
             return False  # we don't coerce tuples
 
         if self[0] is None or other[0] is None:  # self.site
-            return self.last == other.last
+            return self[1:] == other[1:]
         else:
             return tuple.__eq__(self, other)
 
