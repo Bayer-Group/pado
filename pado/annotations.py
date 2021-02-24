@@ -113,7 +113,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
                     image_id = ImageId(*fn.split(self.LEGACY_SUPPORT_SEPARATOR))
                     legacy_recovered += 1
 
-                self._files[image_id] = os.path.join(current, fn)
+                self._files[image_id] = os.path.join(current, fn + self._suffix)
 
         if legacy_recovered > 0:
             warnings.warn(f"legacy: converted {legacy_recovered} annotations to newer annotation storage fmt")
