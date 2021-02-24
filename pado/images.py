@@ -533,6 +533,12 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
     def __iter__(self):
         yield from (ImageId.from_str(x) for x in self._df["image_id"])
 
+    def values(self):
+        yield from (ImageResource.deserialize(row) for _, row in self._df.iterrows())
+
+    def items(self):
+        yield from zip(iter(self), self.values())
+
     def save(self):
         self._df_filename.parent.mkdir(parents=True, exist_ok=True)
         df = self._df.reset_index(drop=True)
