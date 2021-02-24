@@ -497,13 +497,22 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         if 'md5' in df.columns:
             df = df.rename(columns={'md5': 'checksum'})
             df['image_id'] = df['image_id'].apply(lambda x: f'ImageId{tuple(x.split("__"))!r}')
-        self._df = df.set_index(df["image_id"])
+
+        self._loc = df["image_id"].apply(ImageId.from_str)
+        self._df = df
 
     def __getitem__(self, item: ImageId) -> ImageResource:
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
-        row = self._df.loc[item.to_str()]
-        resource = ImageResource.deserialize(row)
+        try:
+            row = self._df.loc[self._loc == item]
+        except pd.core.indexing.IndexingError:
+            self._loc = self._df["image_id"].apply(ImageId.from_str)
+            return self.__getitem__(item)
+        if len(row) == 0:
+            raise KeyError(item)
+        assert len(row) == 1, "there should only be one row per image in the image provider"
+        resource = ImageResource.deserialize(row.squeeze())
         if isinstance(resource, InternalImageResource):
             resource.attach(self._identifier, self._base_path)
         return resource

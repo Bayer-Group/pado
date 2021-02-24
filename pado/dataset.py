@@ -196,6 +196,9 @@ class PadoDataset(DataSource):
         # keep query string
         self._metadata_query_str = query
 
+        # image_id column cache
+        self._metadata_df_image_id_col = None
+
     @property
     def path(self):
         """root folder of pado dataset"""
@@ -287,11 +290,19 @@ class PadoDataset(DataSource):
                 "you're requesting data from a dataset that contains remote image resources"
             )  # pragma: no cover
         _df = self.metadata
-        metadata = _df[_df[PadoColumn.IMAGE] == item.to_str()]
+
+        if self._metadata_df_image_id_col is None:
+            def _convert_to_image_id(x):
+                try:
+                    return ImageId.from_str(x)
+                except ValueError:
+                    return ImageId(*x.split("__"))  # legacy support
+
+            self._metadata_df_image_id_col = _df[PadoColumn.IMAGE].apply(_convert_to_image_id)
+
+        metadata = _df[self._metadata_df_image_id_col == item]
         if metadata.size == 0:
-            # workaround...
-            warnings.warn("needs revisiting after refactor")
-            metadata = _df[_df[PadoColumn.IMAGE] == "__".join(item)]
+            warnings.warn(f"no metadata for {item!r}")
 
         try:
             annotation_dict = self.annotations[item].copy()
@@ -348,6 +359,7 @@ class PadoDataset(DataSource):
             copier(ip)
         # clear cache
         self._image_provider = None
+        self._metadata_df_image_id_col = None
 
     def _store_annotation_provider(self, source: DataSource):
         """store the annotation provider to the dataset"""
