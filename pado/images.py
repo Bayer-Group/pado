@@ -84,6 +84,11 @@ class ImageId(tuple):
             args.append(f"site={site!r}")
         return f"{type(self).__name__}({', '.join(args)})"
 
+    # --- pickling ----------------------------------------------------
+
+    def __getnewargs_ex__(self):
+        return self[1:], {"site": self[0]}
+
     # --- namedtuple style property access ----------------------------
 
     # note PyCharm doesn't recognize these: https://youtrack.jetbrains.com/issue/PY-47192
