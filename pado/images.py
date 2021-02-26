@@ -130,11 +130,10 @@ class ImageId(tuple):
             image_id = eval(image_id_str, {cls.__name__: cls})
         except (ValueError, SyntaxError):
             raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
-
-        if type(image_id) != cls:
-            # note: the above is correct. We want to guarantee that it's the same class
-            #   an instance of a subclass would be considered incorrect
-            raise ValueError(f"not a ImageId(): '{image_id}'")
+        except NameError:
+            # note: We want to guarantee that it's the same class. This could
+            #   happen if a subclass of ImageId tries to deserialize a ImageId str
+            raise ValueError(f"not a {cls.__name__}(): {image_id_str!r}")
 
         return image_id
 
