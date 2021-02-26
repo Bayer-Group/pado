@@ -27,6 +27,7 @@ dependencies:
 
   # pado requirements
   - appdirs
+  - orjson
   - toml
   - tqdm
   - pyarrow
