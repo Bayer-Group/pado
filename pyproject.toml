@@ -18,6 +18,7 @@ addopts = [
   # (only needed by windows) disable faulthandler plugin to suppress non-fatal error msgs
   "-p", "no:faulthandler",
 ]
+norecursedirs = "scripts"
 
 
 [tool.coverage.run]
