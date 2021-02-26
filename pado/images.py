@@ -227,7 +227,7 @@ class ImageId(tuple):
             id_field_names = self.site_mapper[self.site].id_field_names
         except KeyError:
             raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
-        return tuple([self.site, *id_field_names])
+        return tuple(["site", *id_field_names])
 
     # noinspection PyPropertyAccess
     def __fspath__(self) -> str:
