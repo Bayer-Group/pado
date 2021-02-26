@@ -203,6 +203,10 @@ class ImageId(tuple):
         else:
             return tuple.__eq__(self, other)
 
+    def __ne__(self, other):
+        """need to overwrite tuple.__ne__"""
+        return not self.__eq__(other)
+
     def to_url_hash(self, *, full: bool = False) -> str:
         """return a one way hash of the image_id"""
         if not full:
