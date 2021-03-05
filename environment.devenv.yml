@@ -15,7 +15,6 @@ name: pado
 
 channels:
   - conda-forge
-  - defaults
 
 dependencies:
   # python relevant things
