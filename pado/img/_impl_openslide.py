@@ -92,8 +92,10 @@ class OpenSlideImageBackend(ImageBackend):
 
     @property
     def level_mpp_map(self):
-        mpp_x = self._slide.properties[openslide.PROPERTY_NAME_MPP_X]
-        mpp_y = self._slide.properties[openslide.PROPERTY_NAME_MPP_Y]
+        mpp_x, mpp_y = mpp(
+            self._slide.properties[openslide.PROPERTY_NAME_MPP_X],
+            self._slide.properties[openslide.PROPERTY_NAME_MPP_Y],
+        )
         return {
             lvl: mpp(mpp_x * ds, mpp_y * ds)
             for lvl, ds in enumerate(self._slide.level_downsamples)
@@ -107,8 +109,12 @@ class OpenSlideImageBackend(ImageBackend):
         location_xy: Tuple[int, int],
         region_wh: Tuple[int, int],
         level: int = 0,
+        *,
+        downsize_to: Optional[Tuple[int, int]] = None
     ) -> np.array:
         img = self._slide.read_region(location_xy, level, region_wh)
         # this is always a RGBA image...
         # let's throw away the alpha layer immediately in our abstraction
+        if downsize_to:
+            img.thumbnail(downsize_to)
         return np.array(img)[:, :, :3]

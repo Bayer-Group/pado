@@ -64,10 +64,13 @@ class TiffFileImageBackend(ImageBackend):
                 page, = self._slide_levels[lvl_idx], = lvl.pages  # unpack single page into dict
                 # noinspection PyUnresolvedReferences
                 assert (
-                        page.compression == TIFF.COMPRESSION.JPEG
+                        page.compression in {
+                            TIFF.COMPRESSION.JPEG,
+                            TIFF.COMPRESSION.APERIO_JP2000_YCBC
+                        }
                         and page.is_tiled
                         and page.planarconfig == TIFF.PLANARCONFIG.CONTIG
-                )
+                ), f"{page.compression}?, {page.is_tiled}, {page.planarconfig} == {TIFF.PLANARCONFIG.CONTIG}"
 
         except Exception:
             # cleanup if we error while initializing
@@ -178,6 +181,4 @@ class TiffFileImageBackend(ImageBackend):
             level: int = 0,
     ) -> np.array:
         page = self._slide_levels[level]
-
-
-
+        raise NotImplementedError("TODO")
