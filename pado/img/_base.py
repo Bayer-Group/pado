@@ -18,6 +18,8 @@ import numpy as np
 from shapely.geometry import Polygon
 
 from pado.fileutils import hash_file
+from pado.img.utils import scale_xy
+from pado.img.utils import tuple_round
 from pado.utils import cached_property
 
 
@@ -122,6 +124,8 @@ class ImageBackend(ABC):
         location_xy: Tuple[int, int],
         region_wh: Tuple[int, int],
         level: int = 0,
+        *,
+        downsize_to: Optional[Tuple[int, int]] = None
     ) -> np.array:
         raise NotImplementedError
 
@@ -137,7 +141,7 @@ class Image:
     """pado.img.Image is a wrapper around whole slide image data"""
 
     def __init__(self, path, *, metadata: Optional[Dict[str, Any]] = None):
-        self._path = Path(path)
+        self.path = Path(path)
         self._metadata = metadata
 
         # file handling
@@ -146,7 +150,7 @@ class Image:
 
     def __enter__(self):
         self._image_cm = ExitStack()
-        return self
+        return self.open()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._image_cm:
@@ -157,9 +161,9 @@ class Image:
     def open(self):
         if not self._image_backend:
             for image_backend in get_image_backend():
-                inst = image_backend(self._path)
+                inst = image_backend(self.path)
                 try:
-                    inst.open()
+                    inst = self._image_cm.enter_context(inst)
                 except (UnsupportedImageFormat, RuntimeError):
                     continue
                 else:
@@ -184,7 +188,6 @@ class Image:
         assert set(md).isdisjoint(fs), "no overlap between fs and md data"
 
         ib = {'pado_image_backend': self._image_backend.__class__.__qualname__}
-        print(self._path, ib['pado_image_backend'])
 
         # combine them
         self._metadata = dict(**fs, **md, **ib)
@@ -206,18 +209,26 @@ class Image:
     def __iter__(self):
         return TileIterator(self)
 
+    @property
+    def mpp(self):
+        return self._image_backend.level0_mpp
+
+    @property
+    def levels(self):
+        return tuple(self._image_backend.level_mpp_map)
+
     def get_size(self, mpp_xy: Optional[Tuple[float, float]] = None, level: Optional[int] = None) -> Tuple[int, int]:
         if mpp_xy is not None and level is not None:
             raise ValueError("can only specify one of: 'mpp_xy' and 'level'")
         elif mpp_xy is None:
             level = level or 0  # set 0 if none
-            return self._slide.level_dimensions[level]
+            return self._image_backend.get_size(level)
         else:
-            return tuple_round(
-                scale_xy(self._slide.dimensions, current=self.level0_mpp, target=mpp_xy)
-            )
+            size_xy = self._image_backend.get_size(0)
+            lvl0_mpp = float(self.metadata[S_MPP_X]), float(self.metadata[S_MPP_Y])
+            return tuple_round(scale_xy(size_xy, current=lvl0_mpp, target=mpp_xy))
 
-    def get_region(self, location_xy: Tuple[int, int], region_wh: Tuple[int, int],
+    def get_region(self, location_xy: Tuple[int, int], region_wh: Tuple[int, int], *,
                    mpp_xy: Optional[Tuple[float, float]] = None, level: Optional[int] = None) -> np.array:
         # location_xy is not in level 0 coordinates
         if mpp_xy is level is None:
@@ -225,34 +236,43 @@ class Image:
 
         if mpp_xy is None and level is not None:
             if level == 0:
-                img = self._slide.read_region(location_xy, level, region_wh)
+                img = self._image_backend.get_region(location_xy, region_wh, level=level)
             else:
-                ds = self._slide.level_downsamples[level]
-                lvl0_xy = scale_xy(location_xy, current=(ds, ds), target=(1, 1))
-                img = self._slide.read_region(lvl0_xy, level, region_wh)
+                lvl_mpp = self._image_backend.level_mpp_map[level]
+                lvl0_mpp = self._image_backend.level0_mpp
+                lvl0_xy = tuple_round(scale_xy(location_xy, current=lvl0_mpp, target=lvl_mpp))
+                img = self._image_backend.get_region(lvl0_xy, region_wh, level=level)
 
         elif level is None and mpp_xy is not None:
             # mpp_xy is set
-            lvl0_mpp = self.level0_mpp
+            assert self.metadata[S_MPP_X] == self.metadata[S_MPP_Y]
+            lvl0_mpp = self._image_backend.level0_mpp
             lvl0_xy = tuple_round(
                 scale_xy(location_xy, current=mpp_xy, target=lvl0_mpp)
             )
-            ds_target = mpp_xy[0] / lvl0_mpp[0]
-            assert ds_target == mpp_xy[1] / lvl0_mpp[1], "sanity check: downsamples need to be symmetric"
-            lvl_best = self._slide.get_best_level_for_downsample(ds_target)
-            ds_best = self._slide.level_downsamples[lvl_best]
-            region_wh_best = tuple_round(
-                scale_xy(region_wh, current=ds_target, target=ds_best)
-            )
-            img = self._slide.read_region(lvl0_xy, lvl_best, region_wh_best)
-            img.thumbnail(region_wh)
+
+            mpp_map = self._image_backend.level_mpp_map
+            for lvl_best, mpp_best in mpp_map.items():
+                if mpp_xy[0] >= mpp_best[0]:
+                    break
+            else:
+                raise NotImplementedError(f"requesting a smaller mpp than provided in the image {mpp_xy!r}")
+
+            if mpp_xy == mpp_best:
+                img = self._image_backend.get_region(lvl0_xy, region_wh, level=lvl_best)
+
+            else:
+                assert mpp_best[0] < mpp_xy[0]
+                region_wh_best = tuple_round(
+                    scale_xy(region_wh, current=mpp_xy[0], target=mpp_best[0])
+                )
+                assert region_wh_best[0] > region_wh[0]
+                img = self._image_backend.get_region(lvl0_xy, region_wh_best, level=lvl_best, downsize_to=region_wh)
 
         else:
             raise ValueError("cannot specify both level and mpp_xy")
 
         return np.array(img)
-
-
 
 
 class TileIterator:
@@ -322,6 +342,7 @@ class Tile:
         parent: Optional[Image] = None,
         mask: Optional[np.ndarray] = None,
         labels: Optional[np.ndarray] = None,
+        tissue: Optional[np.ndarray] = None,
     ):
         self.mpp_xy = mpp_xy
         self.bounds = bounds
@@ -330,6 +351,7 @@ class Tile:
         self.parent = parent
         self.mask = mask
         self.labels = labels
+        self.tissue = tissue
 
     @cached_property
     def shape(self) -> Polygon:
