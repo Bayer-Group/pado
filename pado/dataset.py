@@ -145,9 +145,9 @@ class PadoDataset(DataSource):
         self._path = self._config.parent
 
         if mode in {"r", "r+"} and not _exists:
-            raise FileNotFoundError(p)
+            raise FileNotFoundError(f'File {p} must exist in "r(+)" mode.')
         elif mode in {"x", "x+"} and _exists:
-            raise FileExistsError(p)
+            raise FileExistsError(f'File {p} must not exist in "x(+)" mode.')
         elif mode in {"w", "w+"} and _exists:
             # todo: truncate
             # shutil.rmtree(self._path, ignore_errors=True)
@@ -320,7 +320,7 @@ class PadoDataset(DataSource):
 
     def add_source(self, source: DataSource, copy_images: bool = True):
         if self._readonly:
-            raise RuntimeError("can't add sources to readonly dataset")
+            raise RuntimeError("Can't add sources to readonly dataset")
 
         # store metadata and images
         with source:
