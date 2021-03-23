@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 import glob
 import os
@@ -198,6 +199,13 @@ class PadoDataset(DataSource):
 
         # image_id column cache
         self._metadata_df_image_id_col = None
+
+    def query(self, query_str: str) -> PadoDataset:
+        """ Simplest implementation of querying from an existing PadoDataset"""
+        # TODO: improve this such that operations like .query().query() make sense
+        return PadoDataset(path=self._path,
+                           mode=self._mode,
+                           query=query_str)
 
     @property
     def path(self):
