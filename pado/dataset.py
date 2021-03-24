@@ -226,7 +226,17 @@ class PadoDataset(DataSource):
             ])
 
             if self._metadata_query_str is not None:
-                unique_image_ids = sorted(self.metadata[PadoColumn.IMAGE].unique())
+                # Marco's fix: unique_image_ids are strings, while valid_keys need to be ImageId
+                # unique_image_ids = sorted(self.metadata[PadoColumn.IMAGE].unique())
+
+                # This function is already used twice in the class. Shall we define it outside?
+                def _convert_to_image_id(x):
+                    try:
+                        return ImageId.from_str(x)
+                    except ValueError:
+                        return ImageId(*x.split("__"))
+
+                unique_image_ids = sorted(self.metadata[PadoColumn.IMAGE].apply(_convert_to_image_id).unique())
                 self._image_provider = FilteredMapping(self._image_provider, valid_keys=unique_image_ids)
 
         return self._image_provider
