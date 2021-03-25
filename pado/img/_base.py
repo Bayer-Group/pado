@@ -149,17 +149,15 @@ class Image:
         self._image_cm: Optional[ExitStack] = None
 
     def __enter__(self):
-        self._image_cm = ExitStack()
         return self.open()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._image_cm:
-            self._image_cm.close()
-            self._image_cm = None
+        self.close()
         return False
 
     def open(self):
         if not self._image_backend:
+            self._image_cm = ExitStack()
             for image_backend in get_image_backend():
                 inst = image_backend(self.path)
                 try:
@@ -174,8 +172,9 @@ class Image:
         return self
 
     def close(self):
-        if self._image_backend:
-            self._image_backend.close()
+        if self._image_cm:
+            self._image_cm.close()
+            self._image_cm = None
             self._image_backend = None
 
     def _read_metadata_from_image(self, checksum=False):
