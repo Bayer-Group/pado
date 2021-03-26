@@ -530,7 +530,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
         if item in self._iids:
-            self._df.loc[self._df['image_id'] == item] = resource.serialize()
+            self._df.loc[self._df['image_id'] == item, :] = resource.serialize()
         else:
             self._df.loc[len(self._iids)] = resource.serialize()
             self._iids.add(resource.id)
