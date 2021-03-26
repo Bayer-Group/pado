@@ -274,7 +274,7 @@ class ImageResource(ABC):
         else:
             raise TypeError(f"can not convert to ImageId, got {type(image_id)}")
         self._image_id = image_id
-        self._str_image_id = str(image_id)
+        self._str_image_id = image_id.to_str()
         self._resource = resource
         self._checksum = checksum
 
@@ -506,17 +506,18 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
             df = df.rename(columns={'md5': 'checksum'})
             df['image_id'] = df['image_id'].apply(lambda x: f'ImageId{tuple(x.split("__"))!r}')
 
-        self._loc = df["image_id"].apply(ImageId.from_str)
+        # reserialize image_ids (be sure in case implementations changed)
+        df["image_id"] = df["image_id"].apply(
+            lambda x: ImageId.from_str(x).to_str()
+        )
+
+        self._iids = set(df["image_id"].apply(ImageId.from_str))
         self._df = df
 
     def __getitem__(self, item: ImageId) -> ImageResource:
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
-        try:
-            row = self._df.loc[self._loc == item]
-        except pd.core.indexing.IndexingError:
-            self._loc = self._df["image_id"].apply(ImageId.from_str)
-            return self.__getitem__(item)
+        row = self._df.loc[self._df['image_id'] == item]
         if len(row) == 0:
             raise KeyError(item)
         assert len(row) == 1, "there should only be one row per image in the image provider"
@@ -528,7 +529,11 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
     def __setitem__(self, item: ImageId, resource: ImageResource) -> None:
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
-        self._df.loc[item.to_str()] = resource.serialize()
+        if item in self._iids:
+            self._df.loc[self._df['image_id'] == item] = resource.serialize()
+        else:
+            self._df.loc[len(self._iids)] = resource.serialize()
+            self._iids.add(resource.id)
 
     def __len__(self) -> int:
         return len(self._df)
@@ -573,7 +578,9 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
 
         _local_path_name = self._df.apply(_fn, axis=1)
 
-        for p in glob.glob(f"{search_path}/{search_pattern}", recursive=True):
+        idx = 0
+        total = len(_local_path_name)
+        for p in glob.iglob(f"{search_path}/{search_pattern}", recursive=True):
             p = Path(p)
             select = _local_path_name == p.name
             num_select = select.sum()
@@ -581,7 +588,8 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
                 if num_select > 1:
                     warnings.warn(f"can't reassociate {p.name} due to multiple matches")
                 continue
-            print(self._identifier, "reassociating", p.name)
+            idx += 1
+            print(self._identifier, idx, total, "reassociating", p.name)
             row = self._df.loc[select].iloc[0]
             resource = ImageResource.deserialize(row)
             p = p.expanduser().absolute().resolve()
