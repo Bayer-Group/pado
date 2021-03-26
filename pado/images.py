@@ -517,7 +517,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
     def __getitem__(self, item: ImageId) -> ImageResource:
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
-        row = self._df.loc[self._df['image_id'] == item]
+        row = self._df.loc[self._df['image_id'] == item.to_str()]
         if len(row) == 0:
             raise KeyError(item)
         assert len(row) == 1, "there should only be one row per image in the image provider"
@@ -530,7 +530,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         if not isinstance(item, ImageId):
             raise TypeError(f"requires ImageId. got `{type(item)}`")
         if item in self._iids:
-            self._df.loc[self._df['image_id'] == item, :] = resource.serialize()
+            self._df.loc[self._df['image_id'] == item.to_str(), :] = resource.serialize()
         else:
             self._df.loc[len(self._iids)] = resource.serialize()
             self._iids.add(resource.id)
@@ -561,6 +561,7 @@ class SerializableImageResourcesProvider(ImageResourcesProvider):
         )
         df = df.set_index(df["image_id"])
         inst._df = df
+        inst._iids = set(df["image_id"].apply(ImageId.from_str))
         inst.save()
         return inst
 

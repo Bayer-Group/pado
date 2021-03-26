@@ -6,7 +6,8 @@ from pado.dataset import PadoDataset
 
 @pytest.fixture(scope="function")
 def datasource():
-    yield TestDataSource(num_images=1, num_findings=10)
+    source = TestDataSource(num_images=1, num_findings=10)
+    yield source
 
 
 @pytest.fixture(scope="function")
@@ -21,6 +22,7 @@ def dataset(datasource, tmp_path):
 def dataset_ro(datasource, tmp_path):
     dataset_path = tmp_path / "my_dataset"
     ds = PadoDataset(dataset_path, mode="x")
+    assert len(ds.images) == 0
     ds.add_source(datasource)
     del ds
     yield PadoDataset(dataset_path, mode="r")
