@@ -13,7 +13,8 @@ from shapely.geometry import Polygon
 from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
 from pado.fileutils import hash_file
-from pado.images import ImageId, ImageResource, ImageResourcesProvider, LocalImageResource
+from pado.images import FilenamePartsMapper
+from pado.images import ImageId, Image, ImageProvider, register_filename_mapper
 from pado.metadata import PadoColumn
 
 try:
@@ -33,7 +34,7 @@ __all__ = ["TestDataSource"]
 def make_temporary_tiff(name, size=(100, 100)):
     """create a temporary tif"""
     with TemporaryDirectory() as tmp_dir:
-        data = np.random.randint(0, 255, size=size).astype(np.float32)
+        data = np.random.randint(0, 255, size=size).astype(np.uint8)
         img_fn = Path(tmp_dir).expanduser().absolute() / f"{name}.tif"
         imsave(img_fn, data)
         yield img_fn
@@ -91,24 +92,13 @@ def _get_test_data(num_images=3, num_rows=10):
     return records
 
 
-class _TestImageResourcesProvider(ImageResourcesProvider):
-    def __init__(self, images):
-        self._image_map = {i[0]: i for i in images}
-
-    def __iter__(self):
-        return iter(self._image_map)
-
-    def __getitem__(self, item: str) -> ImageResource:
-        img_id, img_path, img_md5 = self._image_map[item]
-        return LocalImageResource(img_id, img_path, img_md5)
-
-    def __len__(self) -> int:
-        return len(self._image_map)
+class _TestImageProvider(dict):
+    pass
 
 
 class _TestAnnotationResourcesProvider(Mapping[ImageId, AnnotationResources]):
-    def __init__(self, images):
-        self._image_ids = set(img_id for img_id, *_ in images)
+    def __init__(self, image_ids):
+        self._image_ids = set(image_ids)
 
     def __getitem__(self, k: ImageId) -> AnnotationResources:
         return AnnotationResources(
@@ -126,14 +116,17 @@ class _TestAnnotationResourcesProvider(Mapping[ImageId, AnnotationResources]):
         return iter(self._image_ids)
 
 
+class _TestFilenamePartsMapper(FilenamePartsMapper):
+    pass
+
+
 class TestDataSource(DataSource):
-    identifier = "testsource"
+    identifier = "_testsource"
 
     def __init__(self, num_images=3, num_findings=10, identifier=None):
         self._num_images = num_images
         self._num_findings = num_findings
         self._stack = None
-        self._images = []
         if identifier is not None:
             self.identifier = identifier  # allow overriding identifier
         # cache
@@ -141,22 +134,25 @@ class TestDataSource(DataSource):
         self._im = None
         self._an = None
 
+        if self.identifier not in ImageId.site_mapper:
+            register_filename_mapper(self.identifier, _TestFilenamePartsMapper)
+
     def acquire(self, raise_if_missing: bool = True):
         """prepare the temporary test images"""
         _ = raise_if_missing  # ignored
         if self._stack:
             return
         self._stack = ExitStack()
+        self._im = _TestImageProvider()
         for idx in range(self._num_images):
-            img_id = ImageId(f"i{idx}.tif")
-            img = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
-            md5 = hash_file(img, hasher=hashlib.md5)
-            self._images.append((img_id, img, md5))
+            img_id = ImageId(f"i{idx}.tif", site=self.identifier)
+            img_fn = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
+            self._im[img_id] = Image(img_fn)
 
     def release(self):
         """release the temporary image resources"""
         if self._stack:
-            self._images.clear()
+            self._im = None
             self._stack.close()
             self._stack = None
 
@@ -171,12 +167,10 @@ class TestDataSource(DataSource):
         return self._md
 
     @property
-    def images(self) -> ImageResourcesProvider:
+    def images(self) -> ImageProvider:
         """iterate over the test images"""
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
-        if self._im is None:
-            self._im = _TestImageResourcesProvider(self._images)
         return self._im
 
     @property
@@ -185,7 +179,7 @@ class TestDataSource(DataSource):
         if self._stack is None:
             raise RuntimeError("need to access via contextmanager or acquire resource")
         if self._an is None:
-            self._an = _TestAnnotationResourcesProvider(self._images)
+            self._an = _TestAnnotationResourcesProvider(set(self._im))
         return self._an
 
 

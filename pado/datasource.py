@@ -4,7 +4,7 @@ from typing import Mapping
 import pandas as pd
 
 from pado.annotations import AnnotationResources
-from pado.images import ImageId, ImageResourcesProvider
+from pado.images import ImageId, ImageProvider
 
 
 class DataSource(ABC):
@@ -24,7 +24,7 @@ class DataSource(ABC):
 
     @property
     @abstractmethod
-    def images(self) -> ImageResourcesProvider:
+    def images(self) -> ImageProvider:
         raise NotImplementedError("implement in subclass")
 
     @property
