@@ -10,18 +10,17 @@ import pytest
 from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
-from pado.images import ImageId, SerializableImageResourcesProvider
+from pado.images import ImageId, ImageProvider
+from pado.img import Image
 from pado.metadata import PadoColumn
 
 
 def count_images(ds: PadoDataset):
     """helper to count images in a pado dataset"""
-
-    def is_image_file(p):
-        return os.path.isfile(p) and os.path.basename(p) != SerializableImageResourcesProvider.STORAGE_FILE
-
-    images = list(filter(is_image_file, glob.glob(os.fspath(ds.path / "images/**/*"), recursive=True)))
-    return len(images)
+    return len([
+        f for f in ds.filesystem.glob(f"{ds.path}/images/**")
+        if ds.filesystem.isfile(f) and not f.endswith(".parquet")
+    ])
 
 
 def test_pado_testsource_verification(datasource: DataSource):
@@ -33,9 +32,12 @@ def test_pado_testsource_verification(datasource: DataSource):
 def test_pado_test_datasource_usage(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
-        for image in datasource.images.values():
-            assert image.id is not None
-            assert image.size > 0
+        for image_id, image in datasource.images.items():
+            assert isinstance(image_id, ImageId)
+            assert isinstance(image, Image)
+            assert image_id is not None
+            with image:
+                assert image.get_size() > (0, 0)
         for image_id in datasource.annotations:
             assert isinstance(image_id, ImageId)
 
@@ -56,7 +58,7 @@ def test_pado_test_datasource_image_ids(datasource):
 
 
 def test_write_pado_dataset(datasource, tmp_path):
-    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
+    ds = PadoDataset(urlpath=tmp_path / "my_dataset", mode="x")
     ds.add_source(datasource)
     assert count_images(ds) == 1
     assert isinstance(ds.metadata, pd.DataFrame)
@@ -64,7 +66,7 @@ def test_write_pado_dataset(datasource, tmp_path):
 
 
 def test_add_multiple_datasets(tmp_path):
-    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
+    ds = PadoDataset(urlpath=tmp_path / "my_dataset", mode="x")
     ds.add_source(TestDataSource(num_images=2, num_findings=12, identifier="s0"))
     ds.add_source(TestDataSource(num_images=1, num_findings=7, identifier="s1"))
     assert isinstance(ds.metadata, pd.DataFrame)
