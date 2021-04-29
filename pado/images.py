@@ -1,29 +1,35 @@
 from __future__ import annotations
 
-import contextlib
-import glob
-import hashlib
 import os
 import os.path as op
-import platform
-import re
-import sys
-import warnings
-from abc import ABC, abstractmethod
+from abc import ABC
 from operator import itemgetter
+from pathlib import Path
+from pathlib import PurePath
+from typing import Any
+from typing import Iterable
+from typing import Iterator
+from typing import Mapping
+from typing import MutableMapping
+from typing import Optional
+from typing import TYPE_CHECKING
+from typing import Tuple
+from typing import TypeVar
+from typing import Union
+try:
+    from typing import TypeAlias
+except ImportError:
+    from typing_extensions import TypeAlias
 
-from orjson import loads as orjson_loads
-from orjson import dumps as orjson_dumps
-from orjson import JSONDecodeError, OPT_SORT_KEYS
-from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
-from typing import Any, Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
-from urllib.parse import unquote, urlparse
-from urllib.request import urlopen
-
+import fsspec
 import pandas as pd
-from tqdm import tqdm
+from orjson import JSONDecodeError
+from orjson import OPT_SORT_KEYS
+from orjson import dumps as orjson_dumps
+from orjson import loads as orjson_loads
 
 from pado.fileutils import hash_str
+from pado.img import Image
 
 
 class FilenamePartsMapper:
@@ -31,6 +37,15 @@ class FilenamePartsMapper:
     # Used as a fallback when site is None and we only know the filename
     id_field_names = ('filename',)
     def fs_parts(self, parts: Tuple[str, ...]): return parts
+
+
+def register_filename_mapper(site, mapper):
+    """used internally to register new mappers for ImageIds"""
+    assert isinstance(mapper.id_field_names, tuple) and len(mapper.id_field_names) >= 1
+    assert callable(mapper.fs_parts)
+    if site in ImageId.site_mapper:
+        raise RuntimeError(f"mapper: {site} -> {repr(mapper)} already registered")
+    ImageId.site_mapper[site] = mapper()
 
 
 class ImageId(tuple):
@@ -216,7 +231,9 @@ class ImageId(tuple):
 
     # --- path methods ------------------------------------------------
 
-    site_mapper: Mapping[Optional[str]:ImageResourcesProvider] = {
+    _SM = TypeVar("_SM", bound="FilenamePartsMapper")
+
+    site_mapper: Mapping[Optional[str]:_SM] = {
         None: FilenamePartsMapper(),
     }
 
@@ -248,453 +265,120 @@ class ImageId(tuple):
         return PurePath(*fs_parts)
 
 
-class _SerializedImageResource(NamedTuple):
-    type: str
-    image_id: str
-    uri: str
-    checksum: Optional[str]
+def _ensure_image_id(image_id: Any) -> ImageId:
+    if not isinstance(image_id, ImageId):
+        raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+    return image_id
 
 
-class ImageResource(ABC):
-    _registry = {}
-    resource_type = None
+def _ensure_image(image: Any) -> Image:
+    if not isinstance(image, Image):
+        raise TypeError(f"values must be Image instances, got {type(image).__name__!r}")
+    return image
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls._registry[cls.resource_type] = cls
 
-    def __init__(self, image_id, resource, checksum=None):
-        # NOTE: only subclasses of ImageResource can be instantiated directly
-        if isinstance(image_id, str):
-            image_id = ImageId.from_str(image_id)
-        if isinstance(image_id, ImageId):
-            pass  # required to check this before
-        elif isinstance(image_id, (tuple, list, pd.Series)):
-            image_id = ImageId(*image_id)
+class BaseImageProvider(MutableMapping[ImageId, Image], ABC):
+    pass
+
+BaseImageProvider.register(dict)
+
+
+def _identifier_from_path(parquet_path: str) -> str:
+    """Basically pathlib.Path().stem for the fsspec path"""
+    _, _, [path] = fsspec.get_fs_token_paths(parquet_path)
+    return op.basename(path).partition(".")[0]
+
+
+class ImageProvider(BaseImageProvider):
+
+    def __init__(self, provider: BaseImageProvider):
+        self.path = None
+        if isinstance(provider, ImageProvider):
+            self.df = provider.df.copy()
+            self.identifier = provider.identifier
         else:
-            raise TypeError(f"can not convert to ImageId, got {type(image_id)}")
-        self._image_id = image_id
-        self._str_image_id = image_id.to_str()
-        self._resource = resource
-        self._checksum = checksum
-
-    @property
-    def id(self) -> ImageId:
-        return self._image_id
-
-    @property
-    def id_str(self) -> str:
-        return self._str_image_id
-
-    @property
-    def checksum(self) -> str:
-        """return the checksum of the resource"""
-        return self._checksum
-
-    @property
-    @abstractmethod
-    def uri(self) -> str:
-        """return an uri for the resource"""
-        ...
-
-    @property
-    @abstractmethod
-    def local_path(self) -> Optional[Path]:
-        """if possible return a local path"""
-        ...
-
-    @abstractmethod
-    def open(self):
-        """return a file like object"""
-        ...
-
-    @property
-    @abstractmethod
-    def size(self) -> int:
-        """return the size of the file"""
-        ...
-
-    def serialize(self):
-        """serialize the object"""
-        return _SerializedImageResource(
-            self.resource_type, self.id_str, self.uri, self.checksum,
-        )
-
-    @classmethod
-    def deserialize(cls, data: Union[_SerializedImageResource, pd.Series]):
-        impl = cls._registry[data.type]
-        return impl(data.image_id, data.uri, data.checksum)
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(image_id={self.id})"
-
-
-class LocalImageResource(ImageResource):
-    supported_schemes = {"file"}
-    resource_type = "local"
-
-    def __init__(self, image_id, resource, checksum=None):
-        super().__init__(image_id, resource, checksum)
-        if isinstance(resource, Path):
-            p = resource
-
-        elif isinstance(resource, str):
-            # URIs need to be parsed
-            _parsed = urlparse(resource)
-            if _parsed.scheme not in self.supported_schemes:
-                raise ValueError(f"'{_parsed.scheme}' scheme unsupported")
-            path_str = unquote(_parsed.path)
-            # check if we encode a windows path
-            if re.match(r"/[A-Z]:/[^/]", path_str):
-                p = PureWindowsPath(path_str[1:])
-            elif re.match(r"//(?P<share>[^/]+)/(?P<directory>[^/]+)/", path_str):
-                p = PureWindowsPath(path_str)
-            else:
-                p = PurePosixPath(path_str)
-
-        else:
-            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
-
-        self._path = Path(p)
-        if not self._path.is_absolute():
-            raise ValueError(
-                f"LocalImageResource requires absolute path, got '{resource}'"
+            self.df = pd.DataFrame.from_records(
+                index=list(map(ImageId.to_str, provider.keys())),
+                data=list(map(lambda x: x.to_dict(), provider.values()))
             )
+            self.identifier = None
 
-    def open(self):
-        return self._path.open("rb")
+    def __getitem__(self, image_id: ImageId) -> Image:
+        image_id = _ensure_image_id(image_id)
+        row = self.df.loc[image_id.to_str()]
+        return Image.from_dict(row)
 
-    @property
-    def size(self):
-        return self._path.stat().st_size
+    def __setitem__(self, image_id: ImageId, image: Image) -> None:
+        image_id = _ensure_image_id(image_id)
+        image = _ensure_image(image)
+        self.df.loc[image_id.to_str()] = image.to_dict()
 
-    @property
-    def uri(self) -> str:
-        return self._path.as_uri()
-
-    @property
-    def local_path(self) -> Optional[Path]:
-        return self._path
-
-
-class RemoteImageResource(ImageResource):
-    supported_schemes = {"http", "https", "ftp"}
-    resource_type = "remote"
-
-    def __init__(self, image_id, resource, checksum=None):
-        super().__init__(image_id, resource, checksum)
-        if not isinstance(resource, str):
-            raise TypeError(f"url not str, got {type(resource)}")
-        if urlparse(resource).scheme not in self.supported_schemes:
-            warnings.warn(f"untested scheme for url: '{resource}'")
-        self._url = resource
-        self._fp = None
-
-    @contextlib.contextmanager
-    def open(self):
-        try:
-            self._fp = urlopen(self._url)
-            yield self._fp
-        finally:
-            self._fp.close()
-            self._fp = None
-
-    @property
-    def size(self):
-        try:
-            return int(self._fp.info()["Content-length"])
-        except (AttributeError, KeyError):
-            return -1
-
-    @property
-    def uri(self) -> str:
-        return self._url
-
-    @property
-    def local_path(self) -> Optional[Path]:
-        return None
-
-
-class InternalImageResource(ImageResource):
-    supported_schemes = {"pado+internal"}
-    resource_type = "internal"
-
-    def __init__(self, image_id, resource, checksum=None):
-        super().__init__(image_id, resource, checksum)
-        if isinstance(resource, PurePath):
-            # Paths can directly pass through
-            ident, p = None, Path(resource)
-
-        elif isinstance(resource, str):
-            # URIs need to be parsed
-            _parsed = urlparse(resource)
-            if _parsed.scheme not in InternalImageResource.supported_schemes:
-                raise ValueError(f"'{_parsed.scheme}' scheme unsupported")
-            ident = _parsed.netloc
-            p = Path(unquote(_parsed.path)).relative_to("/")
-
-        else:
-            raise TypeError(f"resource not str or pathlib.Path, got {type(resource)}")
-
-        self._path = p
-        if self._path.is_absolute():
-            raise ValueError(
-                f"{self.__class__.__name__} requires relative path, got '{resource}'"
-            )
-        self._base_path = None
-        self._identifier = ident
-
-    def open(self):
-        try:
-            path = self._base_path / self._identifier / self._path
-        except TypeError:
-            raise RuntimeError(
-                "InternalImageResource has to be attached to dataset for usage"
-            )
-        return path.open("rb")
-
-    @property
-    def size(self) -> int:
-        try:
-            path = self._base_path / self._identifier / self._path
-        except TypeError:
-            raise RuntimeError(
-                "InternalImageResource has to be attached to dataset for usage"
-            )
-        return path.stat().st_size
-
-    @property
-    def uri(self) -> str:
-        if self._identifier is None:
-            raise RuntimeError(
-                "InternalImageResource has to be attached to dataset for usage"
-            )
-        return f"pado+internal://{self._identifier}/{self._path}"
-
-    @property
-    def local_path(self) -> Optional[Path]:
-        try:
-            path = self._base_path / self._identifier / self._path
-        except TypeError:
-            raise RuntimeError(
-                "InternalImageResource has to be attached to dataset for usage"
-            )
-        return path
-
-    def attach(self, identifier: str, base_path: Path):
-        self._identifier = identifier
-        self._base_path = base_path
-        return self
-
-
-ImageResourcesProvider = Mapping[ImageId, ImageResource]
-
-
-class SerializableImageResourcesProvider(ImageResourcesProvider):
-    STORAGE_FILE = "image_provider.parquet.gzip"
-
-    def __init__(self, identifier, base_path):
-        self._identifier = identifier
-        self._base_path = base_path
-        self._df_filename = self._base_path / self._identifier / self.STORAGE_FILE
-        if self._df_filename.is_file():
-            df = pd.read_parquet(self._df_filename)
-        else:
-            df = pd.DataFrame(columns=_SerializedImageResource._fields)
-        # support older format
-        if 'md5' in df.columns:
-            df = df.rename(columns={'md5': 'checksum'})
-            df['image_id'] = df['image_id'].apply(lambda x: f'ImageId{tuple(x.split("__"))!r}')
-
-        # reserialize image_ids (be sure in case implementations changed)
-        df["image_id"] = df["image_id"].apply(
-            lambda x: ImageId.from_str(x).to_str()
-        )
-
-        self._iids = set(df["image_id"].apply(ImageId.from_str))
-        self._df = df
-
-    def __getitem__(self, item: ImageId) -> ImageResource:
-        if not isinstance(item, ImageId):
-            raise TypeError(f"requires ImageId. got `{type(item)}`")
-        row = self._df.loc[self._df['image_id'] == item.to_str()]
-        if len(row) == 0:
-            raise KeyError(item)
-        assert len(row) == 1, "there should only be one row per image in the image provider"
-        resource = ImageResource.deserialize(row.squeeze())
-        if isinstance(resource, InternalImageResource):
-            resource.attach(self._identifier, self._base_path)
-        return resource
-
-    def __setitem__(self, item: ImageId, resource: ImageResource) -> None:
-        if not isinstance(item, ImageId):
-            raise TypeError(f"requires ImageId. got `{type(item)}`")
-        if item in self._iids:
-            self._df.loc[self._df['image_id'] == item.to_str(), :] = resource.serialize()
-        else:
-            self._df.loc[len(self._iids)] = resource.serialize()
-            self._iids.add(resource.id)
+    def __delitem__(self, image_id: ImageId) -> None:
+        image_id = _ensure_image_id(image_id)
+        self.df.drop(image_id.to_str(), inplace=True)
 
     def __len__(self) -> int:
-        return len(self._df)
+        return len(self.df)
 
-    def __iter__(self):
-        yield from (ImageId.from_str(x) for x in self._df["image_id"])
+    def __iter__(self) -> Iterator[ImageId]:
+        # todo: revisit. pandas df index doesn't keep the tuple subclass intact
+        return map(ImageId.from_str, self.df.index)
 
-    def values(self):
-        yield from (ImageResource.deserialize(row) for _, row in self._df.iterrows())
-
-    def items(self):
-        yield from zip(iter(self), self.values())
-
-    def save(self):
-        self._df_filename.parent.mkdir(parents=True, exist_ok=True)
-        df = self._df.reset_index(drop=True)
-        df.to_parquet(self._df_filename, compression="gzip")
-
-    @classmethod
-    def from_provider(cls, identifier, base_path, provider):
-        inst = cls(identifier, base_path)
-        df = pd.DataFrame(
-            [resource.serialize() for resource in provider.values()],
-            columns=_SerializedImageResource._fields,
-        )
-        df = df.set_index(df["image_id"])
-        inst._df = df
-        inst._iids = set(df["image_id"].apply(ImageId.from_str))
-        inst.save()
-        return inst
+    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+        for row in self.df.itertuples(index=True, name='ImageAsRow'):
+            # noinspection PyProtectedMember
+            x = row._asdict()
+            i = x.pop("Index")
+            yield ImageId.from_str(i), Image.from_dict(x)
 
     def __repr__(self):
-        return f'{type(self).__name__}(identifier={self._identifier!r}, base_path={self._base_path!r})'
+        return f'{type(self).__name__}({self.path!r})'
 
-    def reassociate_resources(self, search_path, search_pattern="**/*.svs"):
-        """search a path and re-associate resources by filename"""
+    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
+        if fspath is None:
+            fspath = self.path
+        fs, _, [path] = fsspec.get_fs_token_paths(fspath)
+        with fs.transaction:
+            with fs.open(path, mode='wb') as f:
+                self.df.to_parquet(f, compression="gzip")
+        self.path = fspath
 
-        def _fn(x):
-            pth = ImageResource.deserialize(x).local_path
-            if pth is None:
-                return None
-            return pth.name
-
-        _local_path_name = self._df.apply(_fn, axis=1)
-
-        idx = 0
-        total = len(_local_path_name)
-        for p in glob.iglob(f"{search_path}/{search_pattern}", recursive=True):
-            p = Path(p)
-            select = _local_path_name == p.name
-            num_select = select.sum()
-            if num_select.sum() != 1:
-                if num_select > 1:
-                    warnings.warn(f"can't reassociate {p.name} due to multiple matches")
-                continue
-            idx += 1
-            print(self._identifier, idx, total, "reassociating", p.name)
-            row = self._df.loc[select].iloc[0]
-            resource = ImageResource.deserialize(row)
-            p = p.expanduser().absolute().resolve()
-            new_resource = LocalImageResource(resource.id, p, resource.checksum)
-            self[new_resource.id] = new_resource
+    @classmethod
+    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
+        inst = cls.__new__(cls)
+        inst.path = os.fspath(fspath)
+        inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
+        inst.df = pd.read_parquet(inst.path)  # this already supports fsspec
+        return inst
 
 
-_BLOCK_SIZE = {
-    LocalImageResource.__name__: 1024 * 1024 if platform.system() == "Windows" else 1024 * 64,
-    RemoteImageResource.__name__: 1024 * 8,
-}
+def reassociate_images(provider: BaseImageProvider, search_path, search_pattern="**/*.svs"):
+    """search a path and re-associate resources by filename"""
+    '''
+    def _fn(x):
+        pth = ImageResource.deserialize(x).local_path
+        if pth is None:
+            return None
+        return pth.name
 
+    _local_path_name = self._df.apply(_fn, axis=1)
 
-def copy_resource(
-    resource: ImageResource,
-    path: Path,
-    progress_hook: Optional[Callable[[int, int], None]],
-):
-    """copy an image resource to a local path"""
-    md5hash = None
-    # in case we provide an md5 build the hash incrementally
-    if resource.checksum:
-        md5hash = hashlib.md5()
-
-    with resource.open() as src, path.open("wb") as dst:
-        src_size = resource.size
-        bs = _BLOCK_SIZE[resource.__class__.__name__]
-        src_read = src.read
-        dst_write = dst.write
-        read = 0
-
-        if progress_hook:
-            progress_hook(read, src_size)
-
-        while True:
-            buf = src_read(bs)
-            if not buf:
-                break
-            read += len(buf)
-            dst_write(buf)
-            if md5hash:
-                md5hash.update(buf)
-            if progress_hook:
-                progress_hook(read, src_size)
-
-    if src_size >= 0 and read < src_size:
-        raise RuntimeError(f"{resource.id}: could only copy {read} of {src_size} bytes")
-
-    if md5hash and md5hash.hexdigest() != resource.checksum:
-        raise ValueError(f"{resource.id}: md5sum does not match provided md5")
-
-
-class _ProgressCB(tqdm):
-    """Provides `update_to(n)` which uses `tqdm.update(delta_n)`."""
-
-    def update_to(self, size, total):
-        if total >= 0:
-            self.total = total
-        self.update(size - self.n)
-
-
-class ImageResourceCopier:
-    def __init__(self, identifier: str, base_path: Path):
-        self.identifier = identifier
-        self.base_path = Path(base_path)
-
-    def __call__(self, images: SerializableImageResourcesProvider):
-        try:
-            for idx, (image_id, image) in tqdm(enumerate(images.items())):
-                if isinstance(image, InternalImageResource):
-                    continue  # image already available
-
-                # copy image to dataset
-                # vvv tqdm responsiveness
-                miniters = 1 if isinstance(image, RemoteImageResource) else None
-                # create folder structure
-                internal_path = image.id.to_path()
-                new_path = self.base_path / self.identifier / internal_path
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with _ProgressCB(miniters=miniters) as t:
-                    try:
-                        copy_resource(image, new_path, t.update_to)
-                    except Exception:
-                        # todo: remove file?
-                        raise
-                    else:
-                        images[image_id] = InternalImageResource(
-                            image.id, internal_path, image.checksum
-                        ).attach(self.identifier, self.base_path)
-        finally:
-            images.save()
-
-
-def get_common_local_paths(image_provider: ImageResourcesProvider):
-    """return common base paths in an image provider"""
-    bases = set()
-    for resource in image_provider.values():
-        if isinstance(resource, RemoteImageResource):
+    idx = 0
+    total = len(_local_path_name)
+    for p in glob.iglob(f"{search_path}/{search_pattern}", recursive=True):
+        p = Path(p)
+        select = _local_path_name == p.name
+        num_select = select.sum()
+        if num_select.sum() != 1:
+            if num_select > 1:
+                warnings.warn(f"can't reassociate {p.name} due to multiple matches")
             continue
-        id_parts = resource.id
-        parts = resource.local_path.parts
-        assert len(parts) > len(id_parts), f"parts={parts!r}, id_parts={id_parts!r}"
-        base, fn_parts = parts[:-len(id_parts)], parts[-len(id_parts):]
-        assert id_parts == fn_parts, f"{id_parts!r} != {fn_parts!r}"
-        bases.add(Path().joinpath(*base))  # resource.local_paths are guaranteed to be absolute
-    return bases
+        idx += 1
+        print(self._identifier, idx, total, "reassociating", p.name)
+        row = self._df.loc[select].iloc[0]
+        resource = ImageResource.deserialize(row)
+        p = p.expanduser().absolute().resolve()
+        new_resource = LocalImageResource(resource.id, p, resource.checksum)
+        self[new_resource.id] = new_resource
+    '''
+    raise NotImplementedError("todo")

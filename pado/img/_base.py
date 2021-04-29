@@ -1,23 +1,21 @@
 """pado image abstraction to hide image loading implementation"""
-import hashlib
-import importlib
+import os
 from abc import ABC
 from abc import abstractmethod
 from contextlib import ExitStack
 from contextlib import suppress
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from typing import Dict
 from typing import Mapping
 from typing import Optional
 from typing import Tuple
-from typing import Type
 
+import fsspec
 import numpy as np
+import pandas as pd
 from shapely.geometry import Polygon
 
-from pado.fileutils import hash_file
 from pado.img.utils import scale_xy
 from pado.img.utils import tuple_round
 from pado.utils import cached_property
@@ -43,7 +41,7 @@ S_BOUNDS_HEIGHT       = 'bounds_height'
 # file_info
 F_SIZE_BYTES          = 'size_bytes'
 F_MD5_COMPUTED        = 'md5_computed'
-F_TIME_LAST_ACCESS    = 'atime'
+# F_TIME_LAST_ACCESS  = 'atime'  # not provided in every fsspec implementation
 F_TIME_LAST_MODIFIED  = 'mtime'
 F_TIME_STATUS_CHANGED = 'ctime'
 # fmt: on
@@ -62,8 +60,9 @@ class ImageBackend(ABC):
     # and also exactly the reason, why this is mapping almost exactly to
     # openslide for now.
 
-    def __init__(self, path):
-        self._path = path
+    def __init__(self, fspath):
+        self._fspath = fspath
+        self._fs: fsspec.AbstractFileSystem = fsspec.core.get_fs_token_paths(fspath)[0]
 
     def __enter__(self):
         self.open()
@@ -72,11 +71,6 @@ class ImageBackend(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
         return False
-
-    @property
-    @abstractmethod
-    def path(self):
-        raise
 
     @abstractmethod
     def open(self):
@@ -91,17 +85,17 @@ class ImageBackend(ABC):
         raise NotImplementedError
 
     def file_stats(self, *, checksum: bool = True):
-        md5_computed = None
+        _checksum = None
         if checksum:
-            md5_computed = hash_file(self._path, hasher=hashlib.md5)
+            _checksum = self._fs.checksum(self._fspath)
 
-        stat = self._path.stat()
+        stat = self._fs.info(self._fspath)
         return {
-            F_SIZE_BYTES: stat.st_size,
-            F_TIME_LAST_ACCESS: stat.st_atime,
-            F_TIME_LAST_MODIFIED: stat.st_mtime,
-            F_TIME_STATUS_CHANGED: stat.st_ctime,
-            F_MD5_COMPUTED: md5_computed
+            F_SIZE_BYTES: stat.get('size'),
+            # F_TIME_LAST_ACCESS: stat.st_atime,
+            F_TIME_LAST_MODIFIED: stat.get('mtime'),
+            F_TIME_STATUS_CHANGED: stat.get('created'),
+            F_MD5_COMPUTED: _checksum
         }
 
     @property
@@ -132,21 +126,61 @@ class ImageBackend(ABC):
 
 def get_image_backend():
     """iterate the ImageBackends in order"""
-    with suppress(ImportError):
+    def _openslide():
         from pado.img._impl_openslide import OpenSlideImageBackend
-        yield OpenSlideImageBackend
+        return OpenSlideImageBackend
+
+    def _imageslide():
+        from pado.img._impl_openslide import ImageSlideImageBackend
+        return ImageSlideImageBackend
+
+    def _tifffile():
+        from pado.img._impl_tifffile import TiffFileImageBackend
+        return TiffFileImageBackend
+
+    with suppress(ImportError):
+        yield _openslide()
+    with suppress(ImportError):
+        yield _imageslide()
+    with suppress(ImportError):
+        yield _tifffile()
 
 
 class Image:
     """pado.img.Image is a wrapper around whole slide image data"""
 
-    def __init__(self, path, *, metadata: Optional[Dict[str, Any]] = None):
-        self.path = Path(path)
+    def __init__(self, fspath, *, metadata: Optional[Dict[str, Any]] = None):
+        self.fspath = os.fspath(fspath)
         self._metadata = metadata
 
         # file handling
         self._image_backend: Optional[ImageBackend] = None
         self._image_cm: Optional[ExitStack] = None
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.fspath!r})"
+
+    @classmethod
+    def from_dict(cls, dct) -> 'Image':
+        if isinstance(dct, dict):
+            pass
+        elif isinstance(dct, pd.Series):
+            dct = dct.to_dict()
+        elif isinstance(dct, tuple) and hasattr(dct, '_fields'):
+            # noinspection PyProtectedMember
+            dct = dict(zip(dct._fields, dct))
+        else:
+            dct = dict(dct)
+        path = dct.pop('fspath')
+        return cls(path, metadata=dct)
+
+    def to_dict(self) -> dict:
+        if self._metadata is None:
+            with self:
+                self._read_metadata_from_image()
+        dct = self.metadata.copy()
+        dct['fspath'] = self.fspath
+        return dct
 
     def __enter__(self):
         return self.open()
@@ -159,8 +193,9 @@ class Image:
         if not self._image_backend:
             self._image_cm = ExitStack()
             for image_backend in get_image_backend():
-                inst = image_backend(self.path)
+                inst = image_backend(self.fspath)
                 try:
+                    # noinspection PyTypeChecker
                     inst = self._image_cm.enter_context(inst)
                 except (UnsupportedImageFormat, RuntimeError):
                     continue
@@ -206,7 +241,8 @@ class Image:
         return self._read_metadata_from_image()
 
     def __iter__(self):
-        return TileIterator(self)
+        level0_tilesize = 512  # todo: ideally level0 size
+        return TileIterator(self, tile_size=level0_tilesize, mpp_xy=self.mpp)
 
     @property
     def mpp(self):

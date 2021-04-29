@@ -1,11 +1,10 @@
-import os
 from contextlib import ExitStack
-from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
 from typing import Tuple
 
+import fsspec
 import numpy as np
 import openslide
 from openslide import OpenSlide
@@ -15,33 +14,26 @@ from pado.img._base import ImageBackend
 from pado.img._base import UnsupportedImageFormat
 from pado.img._base import N
 from pado.img.utils import mpp
-from pado.img.utils import scale_xy
-from pado.img.utils import tuple_round
 
 
 class OpenSlideImageBackend(ImageBackend):
 
     _openslide_cls = OpenSlide
 
-    def __init__(self, path):
-        if self._openslide_cls is None:
-            raise RuntimeError("openslide could not be imported")
-        super().__init__(path)
+    def __init__(self, fspath):
+        super().__init__(fspath)
         self._slide: Optional[OpenSlide] = None
         self._stack = None
-
-    @property
-    def path(self) -> Path:
-        return self._path
 
     def open(self):
         if self._slide is not None:
             return
         self._stack = ExitStack()
+        pth = fsspec.open_local(self._fspath)
         try:
-            self._slide = self._stack.enter_context(self._openslide_cls(os.fspath(self._path)))
+            self._slide = self._stack.enter_context(self._openslide_cls(pth))
         except OpenSlideUnsupportedFormatError as err:
-            raise UnsupportedImageFormat(f"{self._path}: {err}")
+            raise UnsupportedImageFormat(f"{self._fspath}: {err}")
 
     def close(self):
         if self._stack is None:
@@ -118,3 +110,7 @@ class OpenSlideImageBackend(ImageBackend):
         if downsize_to:
             img.thumbnail(downsize_to)
         return np.array(img)[:, :, :3]
+
+
+class ImageSlideImageBackend(OpenSlideImageBackend):
+    _openslide_cls = openslide.ImageSlide
