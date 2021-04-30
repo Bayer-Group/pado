@@ -138,27 +138,25 @@ def test_pado_dataset_open_with_different_identifier(dataset: PadoDataset):
 
 def test_datasource_image_serializing(datasource, tmp_path):
     with datasource:
-        ip = SerializableImageResourcesProvider.from_provider(
-            "placeholder", tmp_path, datasource.images
-        )
+        ip = ImageProvider(datasource.images)
 
     for _ in ip.values():
         pass
 
-    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+    assert len(set(ip)) == len(list(ip.values())) == len(ip.df)
 
 
-def test_serializable_image_resources_provider(datasource, tmp_path):
+def test_image_provider_serializing(datasource, tmp_path):
     with datasource:
-        ip_old = SerializableImageResourcesProvider.from_provider(
-            "placeholder", tmp_path, datasource.images
-        )
+        ip_old = ImageProvider(datasource.images)
+        ip_old.to_parquet(tmp_path / "old.parquet")
 
-    ip = SerializableImageResourcesProvider("placeholder", tmp_path)
+    ip = ImageProvider.from_parquet(tmp_path / "old.parquet")
     for _ in ip.values():
         pass
 
-    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+    assert len(set(ip_old)) == len(list(ip.values())) == len(ip.df)
+    assert set(ip_old) == set(ip)
 
 
 @pytest.mark.parametrize(
@@ -178,8 +176,10 @@ def test_reload_dataset(datasource, tmp_path, copy_images):
     assert len(ds.images) == 1
     assert isinstance(ds.images, Mapping)
 
-    for image_id, image_resource in ds.images.items():
-        assert image_id == image_resource.id
+    with datasource:
+        image_ids = set(datasource.images)
+    for image_id, image in ds.images.items():
+        assert image_id in image_ids
 
 
 def test_dataset_ro_image_access(dataset_ro):
@@ -206,12 +206,13 @@ def test_datasource_df(datasource):
     with datasource:
         assert len(datasource.images) > 0
         for img_id, img in datasource.images.items():
-            assert img_id == img.id
+            assert isinstance(img_id, ImageId)
+            assert isinstance(img, Image)
 
 
 def test_dataset_ro_df_len(dataset_ro):
     assert len(dataset_ro.images) > 0
-    if isinstance(dataset_ro, SerializableImageResourcesProvider):
+    if isinstance(dataset_ro, ImageProvider):
         assert len(dataset_ro.images._df) == len(dataset_ro.images)
 
 

@@ -209,5 +209,4 @@ def test_image_id_file_mapper_to_path():
 def test_image_id_in_dataset(dataset_ro):
     key = next(iter(dataset_ro))
     assert isinstance(key, ImageId)
-    data = dataset_ro[key]
-    assert data["image"].id == ImageId("i0.tif") == key
+    assert ImageId("i0.tif") in set(dataset_ro.images)
