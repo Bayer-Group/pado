@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import os.path as op
 from abc import ABC
+from functools import cached_property
 from operator import itemgetter
 from pathlib import Path
 from pathlib import PurePath
@@ -12,6 +13,7 @@ from typing import Iterator
 from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
+from typing import Set
 from typing import TYPE_CHECKING
 from typing import Tuple
 from typing import TypeVar
@@ -293,15 +295,18 @@ class ImageProvider(BaseImageProvider):
 
     def __init__(self, provider: BaseImageProvider):
         self.path = None
+        self.identifier = None
         if isinstance(provider, ImageProvider):
             self.df = provider.df.copy()
             self.identifier = provider.identifier
-        else:
-            self.df = pd.DataFrame.from_records(
-                index=list(map(ImageId.to_str, provider.keys())),
-                data=list(map(lambda x: x.to_dict(), provider.values()))
-            )
-            self.identifier = None
+        elif provider is not None:
+            if not provider:
+                self.df = pd.DataFrame(columns=Image._fields)
+            else:
+                self.df = pd.DataFrame.from_records(
+                    index=list(map(ImageId.to_str, provider.keys())),
+                    data=list(map(lambda x: x.to_dict(), provider.values()))
+                )
 
     def __getitem__(self, image_id: ImageId) -> Image:
         image_id = _ensure_image_id(image_id)
@@ -311,7 +316,8 @@ class ImageProvider(BaseImageProvider):
     def __setitem__(self, image_id: ImageId, image: Image) -> None:
         image_id = _ensure_image_id(image_id)
         image = _ensure_image(image)
-        self.df.loc[image_id.to_str()] = image.to_dict()
+        dct = image.to_dict()
+        self.df.loc[image_id.to_str()] = pd.Series(dct)
 
     def __delitem__(self, image_id: ImageId) -> None:
         image_id = _ensure_image_id(image_id)
@@ -321,8 +327,7 @@ class ImageProvider(BaseImageProvider):
         return len(self.df)
 
     def __iter__(self) -> Iterator[ImageId]:
-        # todo: revisit. pandas df index doesn't keep the tuple subclass intact
-        return map(ImageId.from_str, self.df.index)
+        return iter(map(ImageId.from_str, self.df.index))
 
     def items(self) -> Iterator[Tuple[ImageId, Image]]:
         for row in self.df.itertuples(index=True, name='ImageAsRow'):
@@ -350,6 +355,109 @@ class ImageProvider(BaseImageProvider):
         inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
         inst.df = pd.read_parquet(inst.path)  # this already supports fsspec
         return inst
+
+
+class GroupedImageProvider(ImageProvider):
+
+    def __init__(self, *providers: ImageProvider):
+        # noinspection PyTypeChecker
+        super().__init__(None)
+        self.providers = []
+        for p in providers:
+            if not isinstance(p, ImageProvider):
+                p = ImageProvider(p)
+            self.providers.append(p)
+
+    @cached_property
+    def df(self):
+        return pd.concat([p.df for p in self.providers])
+
+    def __getitem__(self, image_id: ImageId) -> Image:
+        for ip in self.providers:
+            try:
+                return ip[image_id]
+            except KeyError:
+                pass
+        raise KeyError(image_id)
+
+    def __setitem__(self, image_id: ImageId, image: Image) -> None:
+        for ip in self.providers:
+            if image_id in ip:
+                ip[image_id] = image
+                break
+        raise RuntimeError("can't add new item to GroupedImageProvider")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise RuntimeError("can't delete from GroupedImageProvider")
+
+    def __len__(self) -> int:
+        return len(set().union(*self.providers))
+
+    def __iter__(self) -> Iterator[ImageId]:
+        d = {}
+        for provider in reversed(self.providers):
+            d.update(dict.fromkeys(provider))
+        return iter(d)
+
+    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+        return super().items()
+
+    def __repr__(self):
+        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
+
+    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
+        super().to_parquet(fspath)
+
+    @classmethod
+    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
+        raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
+
+
+class FilteredImageProvider(ImageProvider):
+
+    def __init__(self, provider: BaseImageProvider, *, valid_keys: Optional[Iterable[ImageId]] = None):
+        # noinspection PyTypeChecker
+        super().__init__(None)
+        self._provider = ImageProvider(provider)
+        self._vk = set(self._provider) if valid_keys is None else set(valid_keys)
+
+    @cached_property
+    def df(self):
+        return self._provider.df.filter(items=self._vk, axis='index')
+
+    @property
+    def valid_keys(self) -> Set[ImageId]:
+        return self._vk
+
+    def __getitem__(self, image_id: ImageId) -> Image:
+        if image_id not in self._vk:
+            raise KeyError(image_id)
+        return self._provider[image_id]
+
+    def __setitem__(self, image_id: ImageId, image: Image) -> None:
+        raise NotImplementedError("can't add to FilteredImageProvider")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise NotImplementedError("can't delete from FilteredImageProvider")
+
+    def __len__(self) -> int:
+        return len(self.valid_keys.intersection(self._provider))
+
+    def __iter__(self) -> Iterator[ImageId]:
+        return iter()
+
+    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+        return super().items()
+
+    def __repr__(self):
+        return f'{type(self).__name__}({self._provider!r})'
+
+    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
+        super().to_parquet(fspath)
+
+    @classmethod
+    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
+        raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
 
 
 def reassociate_images(provider: BaseImageProvider, search_path, search_pattern="**/*.svs"):
