@@ -148,6 +148,27 @@ def get_image_backend():
 
 class Image:
     """pado.img.Image is a wrapper around whole slide image data"""
+    _fields = (  # minimum required fields
+        'size_bytes',
+        'mtime',
+        'ctime',
+        'md5_computed',
+        'width',
+        'height',
+        'objective_power',
+        'mpp_x',
+        'mpp_y',
+        'downsamples',
+        'vendor',
+        'background_color',
+        'quickhash1',
+        'slide_comment',
+        'bounds_x',
+        'bounds_y',
+        'bounds_width',
+        'bounds_height',
+        'pado_image_backend',
+    )
 
     def __init__(self, fspath, *, metadata: Optional[Dict[str, Any]] = None):
         self.fspath = os.fspath(fspath)
