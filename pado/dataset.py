@@ -257,11 +257,13 @@ class PadoDataset(DataSource):
     def images(self) -> ImageProvider:
         """mapping image_ids to images in the dataset"""
         if self._image_provider is None:
-            providers = [
-                ImageProvider.from_parquet(p)
-                for p in self._fs.glob(self._fspath(self._path_images, "*.parquet"))
-                if self._fs.isfile(p)
-            ]
+            providers = []
+            for p in self._fs.glob(self._fspath(self._path_images, "*.parquet")):
+                if self._fs.isfile(p):
+                    with self._fs.open(p, mode='rb') as f:
+                        providers.append(
+                            ImageProvider.from_parquet(f)
+                        )
             if len(providers) == 0:
                 image_provider = ImageProvider({})
             elif len(providers) == 1:

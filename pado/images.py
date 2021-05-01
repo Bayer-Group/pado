@@ -344,7 +344,14 @@ class ImageProvider(BaseImageProvider):
     @classmethod
     def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
         inst = cls.__new__(cls)
-        inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
+        if isinstance(fspath, (Path, str)):
+            inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
+        else:
+            try:
+                inst.identifier = os.path.basename(fspath.name)
+            except AttributeError:
+                inst.identifier = os.path.basename(fspath.path)
+
         inst.df = pd.read_parquet(fspath)  # this already supports fsspec
         return inst
 
