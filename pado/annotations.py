@@ -75,7 +75,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
     LEGACY_SUPPORT_SEPARATOR = "__"
 
-    def __init__(self, fspath, suffix, load, dump=None, legacy_support=True):
+    def __init__(self, fs, fspath, suffix, load, dump=None, legacy_support=True):
         """create a new AnnotationResourcesProvider
 
         Parameters
@@ -91,16 +91,10 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
         """
         super().__init__()
-        try:
-            fs: fsspec.AbstractFileSystem = fspath.fs
-        except AttributeError:
-            fs, _, [path] = fsspec.get_fs_token_paths(fspath)
-        else:
-            path = fspath.path
 
-        fs.mkdirs(path, exist_ok=True)
+        fs.mkdirs(fspath, exist_ok=True)
 
-        self._path = path
+        self._path = fspath
         self._fs = fs
         self._suffix = suffix
         self._load = load
@@ -108,7 +102,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
         self._files: Dict[ImageId, str] = {}
 
         legacy_recovered = 0
-        for current, dirs, files in fs.walk(path, maxdepth=1):
+        for current, dirs, files in fs.walk(fspath, maxdepth=1):
             for fn in files:
                 if not fn.endswith(suffix):
                     continue  # skip if not an annotation file
@@ -172,20 +166,20 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
         return f"{type(self).__name__}({set(self)})"
 
 
-def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
+def get_provider(fs, path, fmt="geojson") -> AnnotationResourcesProvider:
     """create an AnnotationResourcesProvider for path and format"""
     # todo: determine format from path
     if fmt == "geojson":
         return AnnotationResourcesProvider(
-            path, ".geojson.xz", load_geojson, dump_geojson
+            fs, path, ".geojson.xz", load_geojson, dump_geojson
         )
     else:
         raise ValueError(f"unknown AnnotationResourcesProvider format '{fmt}'")
 
 
-def store_provider(path, provider, fmt="geojson") -> None:
+def store_provider(fs, path, provider, fmt="geojson") -> None:
     """store an AnnotationResourcesProvider at path using the format"""
-    get_provider(path, fmt).update(provider)
+    get_provider(fs, path, fmt).update(provider)
 
 
 # --- Annotation serialization ------------------------------------------------
