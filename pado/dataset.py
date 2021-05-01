@@ -332,10 +332,13 @@ class PadoDataset(DataSource):
     def annotations(self) -> Mapping[ImageId, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
-            self._annotations_provider = make_chain([
-                get_annotation_provider(p)
-                for p in glob.glob(os.fspath(self._path_annotations / "*")) if os.path.isdir(p)
-            ])
+            providers = []
+            for p in self._fs.glob(self._fspath(self._path_annotations, "*")):
+                if self._fs.isdir(p):
+                    providers.append(
+                        get_annotation_provider(self._fs, p)
+                    )
+            self._annotations_provider = make_chain(providers)
         return self._annotations_provider
 
     def __iter__(self):
@@ -437,7 +440,7 @@ class PadoDataset(DataSource):
     def _store_annotation_provider(self, source: DataSource):
         """store the annotation provider to the dataset"""
         path = self._path_annotations / source.identifier
-        store_annotation_provider(path, source.annotations)
+        store_annotation_provider(self._fs, os.fspath(path), source.annotations)
         # clear cache
         self._annotations_provider = None
 
