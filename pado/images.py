@@ -294,7 +294,6 @@ def _identifier_from_path(parquet_path: str) -> str:
 class ImageProvider(BaseImageProvider):
 
     def __init__(self, provider: BaseImageProvider):
-        self.path = None
         self.identifier = None
         if isinstance(provider, ImageProvider):
             self.df = provider.df.copy()
@@ -337,23 +336,16 @@ class ImageProvider(BaseImageProvider):
             yield ImageId.from_str(i), Image.from_dict(x)
 
     def __repr__(self):
-        return f'{type(self).__name__}({self.path!r})'
+        return f'{type(self).__name__}({self.identifier!r})'
 
-    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
-        if fspath is None:
-            fspath = self.path
-        fs, _, [path] = fsspec.get_fs_token_paths(fspath)
-        with fs.transaction:
-            with fs.open(path, mode='wb') as f:
-                self.df.to_parquet(f, compression="gzip")
-        self.path = fspath
+    def to_parquet(self, fspath: Union[Path, str]) -> None:
+        self.df.to_parquet(fspath, compression="gzip")
 
     @classmethod
     def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
         inst = cls.__new__(cls)
-        inst.path = os.fspath(fspath)
         inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
-        inst.df = pd.read_parquet(inst.path)  # this already supports fsspec
+        inst.df = pd.read_parquet(fspath)  # this already supports fsspec
         return inst
 
 
@@ -452,7 +444,7 @@ class FilteredImageProvider(ImageProvider):
     def __repr__(self):
         return f'{type(self).__name__}({self._provider!r})'
 
-    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
+    def to_parquet(self, fspath: Union[Path, str]) -> None:
         super().to_parquet(fspath)
 
     @classmethod
