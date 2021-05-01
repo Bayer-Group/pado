@@ -6,6 +6,7 @@ from collections import UserDict
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional
 
+import fsspec
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
 
@@ -74,12 +75,12 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
     LEGACY_SUPPORT_SEPARATOR = "__"
 
-    def __init__(self, path, suffix, load, dump=None, legacy_support=True):
+    def __init__(self, fspath, suffix, load, dump=None, legacy_support=True):
         """create a new AnnotationResourcesProvider
 
         Parameters
         ----------
-        path :
+        fspath :
             the base directory for the serialized annotations per image_id
         suffix :
             the file suffix for each serialized annotation resource
@@ -90,16 +91,24 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
         """
         super().__init__()
-        path = Path(path)
-        path.mkdir(exist_ok=True)
+        try:
+            fs: fsspec.AbstractFileSystem = fspath.fs
+        except AttributeError:
+            fs, _, [path] = fsspec.get_fs_token_paths(fspath)
+        else:
+            path = fspath.path
+
+        fs.mkdirs(path, exist_ok=True)
+
         self._path = path
+        self._fs = fs
         self._suffix = suffix
         self._load = load
         self._dump = dump
         self._files: Dict[ImageId, str] = {}
 
         legacy_recovered = 0
-        for current, dirs, files in os.walk(os.fspath(path.absolute())):
+        for current, dirs, files in fs.walk(path, maxdepth=1):
             for fn in files:
                 if not fn.endswith(suffix):
                     continue  # skip if not an annotation file
@@ -118,10 +127,10 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
         if legacy_recovered > 0:
             warnings.warn(f"legacy: converted {legacy_recovered} annotations to newer annotation storage fmt")
 
-    def _file(self, key: ImageId) -> Path:
+    def _file(self, key: ImageId) -> str:
         assert isinstance(key, ImageId)
-        p = self._path.joinpath(key.to_str())
-        return p.with_name(p.name + self._suffix)
+        p = os.path.join(self._path, f"{key.to_str()}{self._suffix}")
+        return p
 
     def __len__(self):
         return len(set().union(super().__iter__(), self._files))
@@ -135,7 +144,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
     def __missing__(self, key: ImageId) -> AnnotationResources:
         fn = self._files[key]
         try:
-            with open(fn, "rb") as fp:
+            with self._fs.open(fn, mode="rb") as fp:
                 resources = self._load(fp)
         except FileNotFoundError:
             raise KeyError(key)
@@ -144,7 +153,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
 
     def __setitem__(self, key: ImageId, value: AnnotationResources):
         if self._dump:
-            with self._file(key).open("wb") as fp:
+            with self._fs.open(self._file(key), mode="wb") as fp:
                 self._dump(value, fp)
         super().__setitem__(key, value)
 
@@ -154,7 +163,7 @@ class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources
             if key in self._files:
                 fn = self._files.pop(key)
                 try:
-                    os.unlink(fn)
+                    self._fs.rm(fn)
                 except FileNotFoundError:
                     pass
         super().__delitem__(key)
