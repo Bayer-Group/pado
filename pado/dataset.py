@@ -416,10 +416,11 @@ class PadoDataset(DataSource):
             # ingest images
             for image_id, image in ip.items():
                 old_pth = os.fspath(image.fspath)
-                # noinspection PyPropertyAccess
-                new_pth = self._fspath(self._path_images, image_id.site, image_id.to_path())
-                self._fs.mkdirs(os.path.dirname(new_pth), exist_ok=True)
-                self._fs.copy(old_pth, new_pth)
+                with fsspec.open(old_pth, mode='rb') as f:
+                    # noinspection PyPropertyAccess
+                    new_pth = self._fspath(self._path_images, image_id.site, image_id.to_path())
+                    self._fs.mkdirs(os.path.dirname(new_pth), exist_ok=True)
+                    self._fs.put_file(f.path, new_pth)
                 # need to update fspath to point to the new image
                 image.fspath = new_pth
                 ip[image_id] = image
