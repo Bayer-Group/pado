@@ -27,6 +27,7 @@ dependencies:
   # pado requirements
   - appdirs
   - orjson
+  - fsspec
   - toml
   - tqdm
   - pyarrow
@@ -36,9 +37,6 @@ dependencies:
 
   # support for pado.ext.testsource
   - tifffile
-
-
-  - JPype1>=1
 
   # testing relevant things
   - pytest>=6
