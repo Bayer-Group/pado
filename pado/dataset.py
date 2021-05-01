@@ -179,10 +179,8 @@ class PadoDataset(DataSource):
         elif mode in {"x", "x+"} and _exists:
             raise FileExistsError(f'File {p} must not exist in "x(+)" mode.')
         elif mode in {"w", "w+"} and _exists:
-            # todo: truncate
-            # shutil.rmtree(self._path, ignore_errors=True)
-            # _exists = False
-            raise NotImplementedError("not tested yet...")
+            fs.rm(path, recursive=True)
+            _exists = False
 
         # internal paths
         self._path_images = self._path.joinpath("images")
