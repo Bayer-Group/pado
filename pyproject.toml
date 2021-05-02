@@ -19,6 +19,9 @@ addopts = [
   "-p", "no:faulthandler",
 ]
 norecursedirs = "scripts"
+filterwarnings = [
+    "ignore:invalid Aperio image description",
+]
 
 
 [tool.coverage.run]

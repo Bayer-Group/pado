@@ -1,5 +1,4 @@
 """test datasource for pado"""
-import hashlib
 import random
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -12,7 +11,6 @@ from shapely.geometry import Polygon
 
 from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
-from pado.fileutils import hash_file
 from pado.images import FilenamePartsMapper
 from pado.images import ImageId, Image, ImageProvider, register_filename_mapper
 from pado.metadata import PadoColumn
@@ -34,6 +32,7 @@ __all__ = ["TestDataSource"]
 def make_temporary_tiff(name, size=(100, 100)):
     """create a temporary tif"""
     with TemporaryDirectory() as tmp_dir:
+        size = (size[0], size[1], 3)
         data = np.random.randint(0, 255, size=size).astype(np.uint8)
         img_fn = Path(tmp_dir).expanduser().absolute() / f"{name}.tif"
         imsave(img_fn, data)
