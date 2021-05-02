@@ -10,6 +10,7 @@
 #
 
 {% set PADO_DEVEL = os.environ.get('PADO_DEVEL', False) %}
+{% set PADO_DEVEL_CI = os.environ.get('PADO_DEVEL_CI', False) %}
 
 name: pado
 
@@ -43,5 +44,6 @@ dependencies:
   - pytest-cov
 
   # pip installs
-  - pip:      # [ PADO_DEVEL ]
+  - pip:      # [ PADO_DEVEL or PADO_DEVEL_CI ]
+    - "git+https://github.com/Bayer-Group/tiffslide.git#egg=tiffslide"  # [ PADO_DEVEL_CI ]
     - "-e ."  # [ PADO_DEVEL ]
