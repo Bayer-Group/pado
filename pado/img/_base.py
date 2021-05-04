@@ -7,9 +7,11 @@ from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import Mapping
 from typing import Optional
 from typing import Tuple
+from typing import Type
 
 import fsspec
 import numpy as np
@@ -120,30 +122,59 @@ class ImageBackend(ABC):
         level: int = 0,
         *,
         downsize_to: Optional[Tuple[int, int]] = None
-    ) -> np.array:
+    ) -> np.ndarray:
         raise NotImplementedError
 
 
-def get_image_backend():
+# === image backend loading ===========================================
+
+def _openslide():
+    from pado.img._impl_openslide import OpenSlideImageBackend
+    return OpenSlideImageBackend
+
+def _imageslide():
+    from pado.img._impl_openslide import ImageSlideImageBackend
+    return ImageSlideImageBackend
+
+def _tiffslide():
+    from pado.img._impl_tifffile import TiffFileImageBackend
+    return TiffFileImageBackend
+
+def _initialize_image_backend_preference(backends = None):
+    global _IMAGE_BACKENDS
+    if backends is None:
+        return list(_IMAGE_BACKENDS)
+    if isinstance(backends, str):
+        backends = backends.split(",")
+    backends = [b.lower() for b in backends]
+    assert backends
+    assert set(backends).issubset(_IMAGE_BACKENDS)
+    return backends
+
+_IMAGE_BACKENDS = {
+    'openslide': _openslide,
+    'tiffslide': _tiffslide,
+    'imageslide': _imageslide,
+}
+_IMAGE_BACKEND_ORDER = _initialize_image_backend_preference(
+    os.environ.get("PADO_IMAGE_BACKEND")
+)
+
+
+def set_image_backend_preference(backends):
+    """set one or more preferred image backends"""
+    global _IMAGE_BACKEND_ORDER
+    bs = _initialize_image_backend_preference(backends)
+    _IMAGE_BACKEND_ORDER[:] = bs
+
+
+def get_image_backend() -> Iterable[Type[ImageBackend]]:
     """iterate the ImageBackends in order"""
-    def _openslide():
-        from pado.img._impl_openslide import OpenSlideImageBackend
-        return OpenSlideImageBackend
-
-    def _imageslide():
-        from pado.img._impl_openslide import ImageSlideImageBackend
-        return ImageSlideImageBackend
-
-    def _tifffile():
-        from pado.img._impl_tifffile import TiffFileImageBackend
-        return TiffFileImageBackend
-
-    with suppress(ImportError):
-        yield _openslide()
-    with suppress(ImportError):
-        yield _imageslide()
-    with suppress(ImportError):
-        yield _tifffile()
+    global _IMAGE_BACKEND_ORDER
+    global _IMAGE_BACKENDS
+    for backend in _IMAGE_BACKEND_ORDER:
+        with suppress(ImportError):
+            yield _IMAGE_BACKENDS[backend]
 
 
 class Image:
