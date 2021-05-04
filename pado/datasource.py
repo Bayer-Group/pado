@@ -47,6 +47,28 @@ class DataSource(ABC):
         self.release()
 
 
+class SimpleDataSource(DataSource):
+
+    metadata: pd.DataFrame = None
+    images: ImageProvider = {}
+    annotations: Mapping[str, AnnotationResources] = {}
+
+    def __init__(self, identifier, metadata, images, annotations):
+        if not isinstance(identifier, str):
+            raise TypeError('identifier')
+        if not isinstance(metadata, pd.DataFrame):
+            raise TypeError('metadata')
+        if not isinstance(images, ImageProvider):
+            raise TypeError('images')
+        if not isinstance(annotations, dict):
+            raise TypeError('annotations')
+
+        self.identifier = identifier
+        self.metadata = metadata
+        self.images = images
+        self.annotations = annotations
+
+
 def verify_datasource(ds: DataSource, acquire=False):
     from pado.metadata import (
         PadoColumn,
