@@ -174,7 +174,7 @@ def get_image_backend() -> Iterable[Type[ImageBackend]]:
     global _IMAGE_BACKENDS
     for backend in _IMAGE_BACKEND_ORDER:
         with suppress(ImportError):
-            yield _IMAGE_BACKENDS[backend]
+            yield _IMAGE_BACKENDS[backend]()
 
 
 class Image:
