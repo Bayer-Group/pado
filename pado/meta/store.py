@@ -1,6 +1,7 @@
 import json
 from typing import Any
 from typing import Dict
+from typing import MutableMapping
 from typing import Optional
 from typing import Tuple
 
@@ -27,17 +28,16 @@ METADATA_KEY_USER_METADATA = 'user_metadata'
 METADATA_PREFIX = 'pado.metadata.parquet'
 
 
-def _val_set(dct, key, value):
+def _val_set(dct: MutableMapping[bytes, bytes], key: str, value: Any) -> None:
     k = f'{METADATA_PREFIX}.{key}'.encode()  # parquet requires bytes keys
     dct[k] = json.dumps(value).encode()      # string encode value
 
 
-def _val_get(dct, key, default):             # require providing a default
+def _val_get(dct: MutableMapping[bytes, bytes], key: str, default: Any) -> Any:  # require providing a default
     k = f'{METADATA_PREFIX}.{key}'.encode()
-    v = dct.get(k)
-    if v is None:
+    if k not in dct:
         return default
-    return json.loads(v)
+    return json.loads(dct[k])
 
 
 # --- serialization ---------------------------------------------------
@@ -55,7 +55,7 @@ class _MetadataStore:
         raise NotImplementedError('implement in subclass')
 
     @classmethod
-    def from_urlpath(cls, urlpath: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    def from_urlpath(cls, urlpath: str) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
         raise NotImplementedError('implement in subclass')
 
 
@@ -99,7 +99,7 @@ class MetadataStore(_MetadataStore):
         table = pyarrow.Table.from_pandas(df, schema=None, preserve_index=None)
 
         # prepare new schema
-        dct = {}
+        dct: Dict[bytes, bytes] = {}
         _val_set(dct, METADATA_KEY_IDENTIFIER, identifier)
         _val_set(dct, METADATA_KEY_PADO_VERSION, _pado_version)
         _val_set(dct, METADATA_KEY_DATASET_VERSION, self.version)
@@ -180,7 +180,7 @@ def check_dataset_version(urlpath: str) -> int:
     table = pyarrow.parquet.read_table(_path, use_pandas_metadata=True, filesystem=_fs)
 
     _md = table.schema.metadata
-    dataset_version = _val_get(_md, METADATA_KEY_DATASET_VERSION, 0)
+    dataset_version = int(_val_get(_md, METADATA_KEY_DATASET_VERSION, 0))
     return dataset_version
 
 
