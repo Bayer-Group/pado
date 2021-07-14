@@ -1,3 +1,7 @@
+"""pado.meta.store
+
+provides a single file parquet store for pd.DataFrames with per store metadata
+"""
 import json
 from typing import Any
 from typing import Dict
@@ -11,8 +15,13 @@ import pyarrow
 from pandas.io.common import is_fsspec_url
 from pandas.io.parquet import BaseImpl
 
-# noinspection PyProtectedMember,PyPep8Naming
 from pado._version import version as _pado_version
+
+__all__ = [
+    "check_dataset_version",
+    "get_store_instance",
+    "update_dataset",
+]
 
 # --- extra metadata stored in pado metadata files --------------------
 
@@ -59,7 +68,7 @@ class _MetadataStore:
         raise NotImplementedError('implement in subclass')
 
 
-def get_store_instance(version: int = -1):
+def get_store_instance(version: int = -1) -> _MetadataStore:
     """get a specific version of the metadata serializer (default: latest)"""
     stores = [
         _MetadataStoreV0,  # initial version of the store
