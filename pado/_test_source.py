@@ -11,8 +11,11 @@ from shapely.geometry import Polygon
 
 from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
-from pado.images import FilenamePartsMapper
-from pado.images import ImageId, Image, ImageProvider, register_filename_mapper
+from pado.image import Image
+from pado.image import ImageId
+from pado.image import ImageProvider
+from pado.image.ids import FilenamePartsMapper
+from pado.image.ids import register_filename_mapper
 from pado.metadata import PadoColumn
 
 try:
@@ -146,7 +149,7 @@ class TestDataSource(DataSource):
         for idx in range(self._num_images):
             img_id = ImageId(f"i{idx}.tif", site=self.identifier)
             img_fn = self._stack.enter_context(make_temporary_tiff(f"img_{idx}"))
-            self._im[img_id] = Image(img_fn)
+            self._im[img_id] = Image(img_fn, load_metadata=True, load_file_info=True, checksum=True)
 
     def release(self):
         """release the temporary image resources"""

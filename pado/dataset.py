@@ -23,11 +23,12 @@ from pado.annotations import AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
-from pado.images import FilteredImageProvider
-from pado.images import GroupedImageProvider
-from pado.images import Image
-from pado.images import ImageId
-from pado.images import ImageProvider
+from pado.image import FilteredImageProvider
+from pado.image import GroupedImageProvider
+from pado.image import Image
+from pado.image import ImageId
+from pado.image import ImageProvider
+from pado.image.images import urlpathlike_to_fsspec
 from pado.metadata import PadoColumn
 from pado.metadata import PadoInvalid
 from pado.metadata import PadoReserved
@@ -260,10 +261,9 @@ class PadoDataset(DataSource):
             providers = []
             for p in self._fs.glob(self._fspath(self._path_images, "*.parquet")):
                 if self._fs.isfile(p):
-                    with self._fs.open(p, mode='rb') as f:
-                        providers.append(
-                            ImageProvider.from_parquet(f)
-                        )
+                    providers.append(
+                        ImageProvider.from_parquet(self._fs.open(p, mode='rb'))
+                    )
             if len(providers) == 0:
                 image_provider = ImageProvider({})
             elif len(providers) == 1:
@@ -420,18 +420,18 @@ class PadoDataset(DataSource):
         if copy_images:
             # ingest images
             for image_id, image in ip.items():
-                old_pth = os.fspath(image.fspath)
-                with fsspec.open(old_pth, mode='rb') as f:
+                open_file = urlpathlike_to_fsspec(image.urlpath)
+                with open_file as f:
                     # noinspection PyPropertyAccess
                     new_pth = self._fspath(self._path_images, image_id.site, image_id.to_path())
                     self._fs.mkdirs(os.path.dirname(new_pth), exist_ok=True)
                     self._fs.put_file(f.path, new_pth)
                 # need to update fspath to point to the new image
-                image.fspath = new_pth
+                image.urlpath = new_pth
                 ip[image_id] = image
 
         ip.to_parquet(
-            fspath=self._fsopen((self._path_images, f"{identifier}.parquet"), mode="wb")
+            urlpath=self._fsopen((self._path_images, f"{identifier}.parquet"), mode="wb")
         )
         # clear cache
         self._image_provider = None

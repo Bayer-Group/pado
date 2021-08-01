@@ -1,5 +1,6 @@
 import enum
 import json
+import os
 from abc import ABC
 from typing import Any
 from typing import Callable
@@ -11,10 +12,10 @@ from typing import Tuple
 import fsspec
 import pandas as pd
 import pyarrow
-from pandas.io.common import is_fsspec_url
 from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
+from pado.types import UrlpathLike
 
 
 class StoreType(str, enum.Enum):
@@ -58,8 +59,7 @@ class Store(ABC):
 
     def to_urlpath(self, df: pd.DataFrame, urlpath: str, *, identifier: Optional[str] = None, **user_metadata):
         """store a pandas dataframe with an identifier and user metadata"""
-        if not is_fsspec_url(urlpath):
-            raise TypeError(f"requires a fsspec url, got: {urlpath!r}")
+        open_file = urlpathlike_to_fsspec(urlpath, mode="wb")
 
         BaseImpl.validate_dataframe(df)
 
@@ -76,10 +76,13 @@ class Store(ABC):
             self._md_set(dct, self.METADATA_KEY_USER_METADATA, user_metadata)
         dct.update(table.schema.metadata)
 
+        # for subclasses
+        self.__metadata_set_hook__(dct, self._md_set)
+
         # rewrite table schema
         table = table.replace_schema_metadata(dct)
 
-        with fsspec.open(urlpath, mode="wb") as f:
+        with open_file as f:
             # write to single output file
             pyarrow.parquet.write_table(
                 table, f, compression=self.COMPRESSION,
@@ -87,8 +90,7 @@ class Store(ABC):
 
     def from_urlpath(self, urlpath: str) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
         """load dataframe and info from urlpath"""
-        if not is_fsspec_url(urlpath):
-            raise TypeError(f"requires a fsspec urlpath, got: {urlpath!r}")
+        open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
 
         to_pandas_kwargs = {}
         if self.USE_NULLABLE_DTYPES:
@@ -106,35 +108,84 @@ class Store(ABC):
             }
             to_pandas_kwargs["types_mapper"] = mapping.get
 
-        _fs, _path = fsspec.core.url_to_fs(urlpath)
-        table = pyarrow.parquet.read_table(_path, use_pandas_metadata=True, filesystem=_fs)
+        table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
 
         # retrieve the additional metadata stored in the parquet
         _md = table.schema.metadata
         identifier = self._md_get(_md, self.METADATA_KEY_IDENTIFIER, None)
         store_version = self._md_get(_md, self.METADATA_KEY_STORE_VERSION, 0)
         store_type = self._md_get(_md, self.METADATA_KEY_STORE_TYPE, None)
-        dataset_pado_version = self._md_get(_md, self.METADATA_KEY_PADO_VERSION, '0.0.0')
+        pado_version = self._md_get(_md, self.METADATA_KEY_PADO_VERSION, '0.0.0')
         user_metadata = self._md_get(_md, self.METADATA_KEY_USER_METADATA, {})
+
+        # for subclasses
+        get_hook_data = self.__metadata_get_hook__(_md, self._md_get)
 
         if store_version < self.version:
             raise RuntimeError(
                 f"{urlpath} uses Store version={self.version} "
-                f"(created with pado=={dataset_pado_version}): "
+                f"(created with pado=={pado_version}): "
                 "please migrate the PadoDataset to a newer version"
             )
         elif store_version > self.version:
             raise RuntimeError(
                 f"{urlpath} uses Store version={self.version} "
-                f"(created with pado=={dataset_pado_version}): "
+                f"(created with pado=={pado_version}): "
                 "please update pado"
             )
 
         df = table.to_pandas(**to_pandas_kwargs)
         version_info = {
-            self.METADATA_KEY_PADO_VERSION: dataset_pado_version,
+            self.METADATA_KEY_PADO_VERSION: pado_version,
             self.METADATA_KEY_STORE_VERSION: self.version,
             self.METADATA_KEY_STORE_TYPE: StoreType(store_type),
         }
         user_metadata.update(version_info)
+        user_metadata.update(get_hook_data)
         return df, identifier, user_metadata
+
+
+def is_fsspec_open_file_like(obj: Any) -> bool:
+    """test if an object is like a fsspec.core.OpenFile instance"""
+    # if isinstance(obj, fsspec.core.OpenFile) doesn't cut it...
+    return (
+        all(hasattr(obj, x) for x in {'fs', 'path', '__enter__', '__exit__'})
+        and isinstance(getattr(obj, 'fs'), fsspec.AbstractFileSystem)
+    )
+
+
+def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
+    """convert an urlpath-like object and stringify it"""
+    if is_fsspec_open_file_like(urlpath):
+        fs: fsspec.AbstractFileSystem = urlpath.fs
+        path: str = urlpath.path
+        return json.dumps({
+            "fs": fs.to_json(),
+            "path": path
+        })
+    elif isinstance(urlpath, os.PathLike):
+        return os.fspath(urlpath)
+    elif isinstance(urlpath, str):
+        return urlpath
+    else:
+        raise TypeError(f"can't stringify: {urlpath!r} of type {type(urlpath)!r}")
+
+
+def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> fsspec.core.OpenFile:
+    """use an urlpath-like object and return an fsspec.core.OpenFile"""
+    if is_fsspec_open_file_like(obj):
+        return obj  # type: ignore
+
+    try:
+        json_obj = json.loads(obj)
+    except (json.JSONDecodeError, TypeError):
+        if isinstance(obj, os.PathLike):
+            obj = os.fspath(obj)
+        if not isinstance(obj, str):
+            raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+        return fsspec.open(obj, mode=mode)
+    else:
+        if not isinstance(json_obj, dict):
+            raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
+        fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        return fs.open(json_obj["path"], mode=mode)

@@ -10,8 +10,9 @@ import pytest
 from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
-from pado.images import ImageId, ImageProvider
-from pado.img import Image
+from pado.image import ImageId
+from pado.image import ImageProvider
+from pado.image import Image
 from pado.metadata import PadoColumn
 
 
@@ -37,7 +38,8 @@ def test_pado_test_datasource_usage(datasource):
             assert isinstance(image, Image)
             assert image_id is not None
             with image:
-                assert image.get_size() > (0, 0)
+                assert image.dimensions.x > 0
+                assert image.dimensions.y > 0
         for image_id in datasource.annotations:
             assert isinstance(image_id, ImageId)
 

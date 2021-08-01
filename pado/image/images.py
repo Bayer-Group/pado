@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from contextlib import ExitStack
 from datetime import datetime
 from typing import Dict
@@ -11,9 +12,9 @@ from typing import TYPE_CHECKING
 from typing import Tuple
 
 import fsspec
+import fsspec.core
 import fsspec.utils
 import numpy as np
-from pandas.io.common import is_fsspec_url
 from pydantic import BaseModel
 from pydantic import ByteSize
 from pydantic import Extra
@@ -27,6 +28,8 @@ from pado.image.utils import IntPoint
 from pado.image.utils import IntSize
 from pado.image.utils import MPP
 from pado.types import UrlpathLike
+from pado.util.store import urlpathlike_to_fsspec
+from pado.util.store import urlpathlike_to_string
 from pado.utils import cached_property
 from tiffslide import TiffSlide
 from tiffslide import __version__ as _tiffslide_version
@@ -80,12 +83,11 @@ class SerializedImage(ImageMetadata, FileInfo, PadoInfo):
         extra = Extra.forbid
 
 
-def urlpath_to_string(urlpath: UrlpathLike) -> str:
-    raise NotImplementedError("todo")
-
-
 class Image:
     """pado.img.Image is a wrapper around whole slide image data"""
+    __slots__ = (
+        'urlpath', '_metadata', '_file_info', '_ctx', '_slide'
+    )  # prevent attribute errors during refactor
 
     def __init__(
         self,
@@ -128,9 +130,9 @@ class Image:
         # pado_info ...
         return inst
 
-    def to_record(self) -> SerializedImage:
+    def to_record(self) -> dict:
         pado_info = PadoInfo(
-            urlpath=urlpath_to_string(self.urlpath),
+            urlpath=urlpathlike_to_string(self.urlpath),
             pado_image_backend=TiffSlide.__class__.__qualname__,
             pado_image_backend_version=_tiffslide_version,
         )
@@ -138,7 +140,7 @@ class Image:
             **pado_info.dict(),
             **self.metadata.dict(),
             **self.file_info.dict(),
-        })
+        }).dict()
 
     def __enter__(self) -> Image:
         return self.open()
@@ -151,12 +153,10 @@ class Image:
         """open an image instance"""
         if not self._ctx:
             self._ctx = ctx = ExitStack()
-            if is_fsspec_url(self.urlpath):
-                urlpath_or_file = ctx.enter_context(fsspec.open(self.urlpath))
-            else:
-                urlpath_or_file = self.urlpath
+            open_file = urlpathlike_to_fsspec(self.urlpath)
+            file_obj = ctx.enter_context(open_file)
             # noinspection PyTypeChecker
-            self._slide = ctx.enter_context(TiffSlide(urlpath_or_file))
+            self._slide = ctx.enter_context(TiffSlide(file_obj))
         return self
 
     def close(self):
@@ -210,12 +210,14 @@ class Image:
                 raise RuntimeError("must be called on opened image")
 
             if isinstance(self.urlpath, str):
-                fs, _, path = fsspec.get_fs_token_paths(self.urlpath)
+                fs, _, [path] = fsspec.get_fs_token_paths(self.urlpath)
             elif isinstance(self.urlpath, fsspec.core.OpenFile):
                 fs = self.urlpath.fs
                 path = self.urlpath.path
+            elif isinstance(self.urlpath, os.PathLike):
+                fs, _, [path] = fsspec.get_fs_token_paths(os.fspath(self.urlpath))
             else:
-                raise NotImplementedError("todo")
+                raise NotImplementedError(f"todo: {self.urlpath!r} of type {type(self.urlpath)!r}")
 
             if checksum:
                 _checksum = fs.checksum(path)

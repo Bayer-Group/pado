@@ -23,7 +23,7 @@ def dataset_ro(datasource, tmp_path):
     dataset_path = tmp_path / "my_dataset"
     ds = PadoDataset(dataset_path, mode="x")
     assert len(ds.images) == 0
-    ds.add_source(datasource)
+    ds.add_source(datasource, copy_images=True)
     del ds
     yield PadoDataset(dataset_path, mode="r")
 

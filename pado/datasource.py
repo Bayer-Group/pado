@@ -4,7 +4,8 @@ from typing import Mapping
 import pandas as pd
 
 from pado.annotations import AnnotationResources
-from pado.images import ImageId, ImageProvider
+from pado.image import ImageId
+from pado.image import ImageProvider
 
 
 class DataSource(ABC):

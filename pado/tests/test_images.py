@@ -3,7 +3,7 @@ import pickle
 
 import pytest
 
-from pado.images import ImageId
+from pado.image import ImageId
 
 
 # --- test constructors -----------------------------------------------

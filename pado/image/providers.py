@@ -69,7 +69,7 @@ class ImageProvider(BaseImageProvider):
             else:
                 self.df = pd.DataFrame.from_records(
                     index=list(map(ImageId.to_str, provider.keys())),
-                    data=list(map(lambda x: x.to_dict(), provider.values())),
+                    data=list(map(lambda x: x.to_record(), provider.values())),
                     columns=SerializedImage.__fields__,
                 )
             self.identifier = str(uuid.uuid4())
@@ -113,13 +113,18 @@ class ImageProvider(BaseImageProvider):
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         store = ImageProviderStore()
-        store.to_urlpath(self.df, self.identifier)
+        store.to_urlpath(self.df, urlpath, identifier=self.identifier)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike):
         store = ImageProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
-        assert not user_metadata, f"currently unused {user_metadata!r}"
+        assert {
+            store.METADATA_KEY_STORE_TYPE,
+            store.METADATA_KEY_STORE_VERSION,
+            store.METADATA_KEY_PADO_VERSION,
+            store.METADATA_KEY_PROVIDER_VERSION,
+        } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls.__new__(cls)
         inst.df = df
         inst.identifier = identifier
