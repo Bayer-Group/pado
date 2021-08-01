@@ -20,6 +20,7 @@ from pydantic import ByteSize
 from pydantic import Extra
 from pydantic import PositiveFloat
 from pydantic import PositiveInt
+from pydantic import validator
 from pydantic.color import Color
 from shapely.geometry import Polygon
 
@@ -60,6 +61,11 @@ class ImageMetadata(BaseModel):
     bounds_height: Optional[PositiveInt] = None
     # extra
     extra_json: Optional[str] = None
+
+    @validator('downsamples', pre=True)
+    def downsamples_as_list(cls, v):
+        # this is stored as array in parquet
+        return list(v)
 
 
 class FileInfo(BaseModel):
