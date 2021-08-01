@@ -1,39 +1,24 @@
 from __future__ import annotations
 
-import os
 import os.path as op
-from abc import ABC
-from functools import cached_property
 from operator import itemgetter
-from pathlib import Path
 from pathlib import PurePath
-from typing import Any
 from typing import Iterable
-from typing import Iterator
 from typing import Mapping
-from typing import MutableMapping
 from typing import Optional
-from typing import Set
 from typing import TYPE_CHECKING
 from typing import Tuple
 from typing import TypeVar
-from typing import Union
-try:
-    from typing import TypeAlias
-except ImportError:
-    from typing_extensions import TypeAlias
 
-import fsspec
-import pandas as pd
 from orjson import JSONDecodeError
 from orjson import OPT_SORT_KEYS
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
 
 from pado.fileutils import hash_str
-from pado.img import Image
 
 
+# noinspection PyMethodMayBeStatic
 class FilenamePartsMapper:
     """a plain mapper for ImageId instances based on filename only"""
     # Used as a fallback when site is None and we only know the filename
@@ -64,6 +49,7 @@ class ImageId(tuple):
             raise ValueError(f"can not create an empty {cls.__name__}()")
 
         if isinstance(part, ImageId):
+            # noinspection PyPropertyAccess
             return super().__new__(cls, [part.site, *part.parts])
 
         if any(not isinstance(x, str) for x in parts):
@@ -227,6 +213,7 @@ class ImageId(tuple):
     def to_url_hash(self, *, full: bool = False) -> str:
         """return a one way hash of the image_id"""
         if not full:
+            # noinspection PyPropertyAccess
             return hash_str(self.last)
         else:
             return hash_str(self.to_str())
@@ -265,227 +252,3 @@ class ImageId(tuple):
         except KeyError:
             raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
         return PurePath(*fs_parts)
-
-
-def _ensure_image_id(image_id: Any) -> ImageId:
-    if not isinstance(image_id, ImageId):
-        raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
-    return image_id
-
-
-def _ensure_image(image: Any) -> Image:
-    if not isinstance(image, Image):
-        raise TypeError(f"values must be Image instances, got {type(image).__name__!r}")
-    return image
-
-
-class BaseImageProvider(MutableMapping[ImageId, Image], ABC):
-    pass
-
-BaseImageProvider.register(dict)
-
-
-def _identifier_from_path(parquet_path: str) -> str:
-    """Basically pathlib.Path().stem for the fsspec path"""
-    _, _, [path] = fsspec.get_fs_token_paths(parquet_path)
-    return op.basename(path).partition(".")[0]
-
-
-class ImageProvider(BaseImageProvider):
-
-    def __init__(self, provider: BaseImageProvider):
-        self.identifier = None
-        if isinstance(provider, ImageProvider):
-            self.df = provider.df.copy()
-            self.identifier = provider.identifier
-        elif provider is not None:
-            if not provider:
-                self.df = pd.DataFrame(columns=Image._fields)
-            else:
-                self.df = pd.DataFrame.from_records(
-                    index=list(map(ImageId.to_str, provider.keys())),
-                    data=list(map(lambda x: x.to_dict(), provider.values()))
-                )
-
-    def __getitem__(self, image_id: ImageId) -> Image:
-        image_id = _ensure_image_id(image_id)
-        row = self.df.loc[image_id.to_str()]
-        return Image.from_dict(row)
-
-    def __setitem__(self, image_id: ImageId, image: Image) -> None:
-        image_id = _ensure_image_id(image_id)
-        image = _ensure_image(image)
-        dct = image.to_dict()
-        self.df.loc[image_id.to_str()] = pd.Series(dct)
-
-    def __delitem__(self, image_id: ImageId) -> None:
-        image_id = _ensure_image_id(image_id)
-        self.df.drop(image_id.to_str(), inplace=True)
-
-    def __len__(self) -> int:
-        return len(self.df)
-
-    def __iter__(self) -> Iterator[ImageId]:
-        return iter(map(ImageId.from_str, self.df.index))
-
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        for row in self.df.itertuples(index=True, name='ImageAsRow'):
-            # noinspection PyProtectedMember
-            x = row._asdict()
-            i = x.pop("Index")
-            yield ImageId.from_str(i), Image.from_dict(x)
-
-    def __repr__(self):
-        return f'{type(self).__name__}({self.identifier!r})'
-
-    def to_parquet(self, fspath: Union[Path, str]) -> None:
-        self.df.to_parquet(fspath, compression="gzip")
-
-    @classmethod
-    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
-        inst = cls.__new__(cls)
-        if isinstance(fspath, (Path, str)):
-            inst.identifier = _identifier_from_path(fspath) if identifier is None else str(identifier)
-        else:
-            try:
-                inst.identifier = os.path.basename(fspath.name)
-            except AttributeError:
-                inst.identifier = os.path.basename(fspath.path)
-
-        inst.df = pd.read_parquet(fspath)  # this already supports fsspec
-        return inst
-
-
-class GroupedImageProvider(ImageProvider):
-
-    def __init__(self, *providers: ImageProvider):
-        # noinspection PyTypeChecker
-        super().__init__(None)
-        self.providers = []
-        for p in providers:
-            if not isinstance(p, ImageProvider):
-                p = ImageProvider(p)
-            self.providers.append(p)
-
-    @cached_property
-    def df(self):
-        return pd.concat([p.df for p in self.providers])
-
-    def __getitem__(self, image_id: ImageId) -> Image:
-        for ip in self.providers:
-            try:
-                return ip[image_id]
-            except KeyError:
-                pass
-        raise KeyError(image_id)
-
-    def __setitem__(self, image_id: ImageId, image: Image) -> None:
-        for ip in self.providers:
-            if image_id in ip:
-                ip[image_id] = image
-                break
-        raise RuntimeError("can't add new item to GroupedImageProvider")
-
-    def __delitem__(self, image_id: ImageId) -> None:
-        raise RuntimeError("can't delete from GroupedImageProvider")
-
-    def __len__(self) -> int:
-        return len(set().union(*self.providers))
-
-    def __iter__(self) -> Iterator[ImageId]:
-        d = {}
-        for provider in reversed(self.providers):
-            d.update(dict.fromkeys(provider))
-        return iter(d)
-
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        return super().items()
-
-    def __repr__(self):
-        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
-
-    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
-        super().to_parquet(fspath)
-
-    @classmethod
-    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
-        raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
-
-
-class FilteredImageProvider(ImageProvider):
-
-    def __init__(self, provider: BaseImageProvider, *, valid_keys: Optional[Iterable[ImageId]] = None):
-        # noinspection PyTypeChecker
-        super().__init__(None)
-        self._provider = ImageProvider(provider)
-        self._vk = set(self._provider) if valid_keys is None else set(valid_keys)
-
-    @cached_property
-    def df(self):
-        return self._provider.df.filter(items=self._vk, axis='index')
-
-    @property
-    def valid_keys(self) -> Set[ImageId]:
-        return self._vk
-
-    def __getitem__(self, image_id: ImageId) -> Image:
-        if image_id not in self._vk:
-            raise KeyError(image_id)
-        return self._provider[image_id]
-
-    def __setitem__(self, image_id: ImageId, image: Image) -> None:
-        raise NotImplementedError("can't add to FilteredImageProvider")
-
-    def __delitem__(self, image_id: ImageId) -> None:
-        raise NotImplementedError("can't delete from FilteredImageProvider")
-
-    def __len__(self) -> int:
-        return len(self.valid_keys.intersection(self._provider))
-
-    def __iter__(self) -> Iterator[ImageId]:
-        return iter()
-
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        return super().items()
-
-    def __repr__(self):
-        return f'{type(self).__name__}({self._provider!r})'
-
-    def to_parquet(self, fspath: Union[Path, str]) -> None:
-        super().to_parquet(fspath)
-
-    @classmethod
-    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
-        raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
-
-
-def reassociate_images(provider: BaseImageProvider, search_path, search_pattern="**/*.svs"):
-    """search a path and re-associate resources by filename"""
-    '''
-    def _fn(x):
-        pth = ImageResource.deserialize(x).local_path
-        if pth is None:
-            return None
-        return pth.name
-
-    _local_path_name = self._df.apply(_fn, axis=1)
-
-    idx = 0
-    total = len(_local_path_name)
-    for p in glob.iglob(f"{search_path}/{search_pattern}", recursive=True):
-        p = Path(p)
-        select = _local_path_name == p.name
-        num_select = select.sum()
-        if num_select.sum() != 1:
-            if num_select > 1:
-                warnings.warn(f"can't reassociate {p.name} due to multiple matches")
-            continue
-        idx += 1
-        print(self._identifier, idx, total, "reassociating", p.name)
-        row = self._df.loc[select].iloc[0]
-        resource = ImageResource.deserialize(row)
-        p = p.expanduser().absolute().resolve()
-        new_resource = LocalImageResource(resource.id, p, resource.checksum)
-        self[new_resource.id] = new_resource
-    '''
-    raise NotImplementedError("todo")
