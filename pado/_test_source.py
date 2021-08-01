@@ -24,7 +24,7 @@ except ImportError:
     __version__ = "not-installed"
 
 try:
-    from tifffile import imsave
+    from tifffile import imwrite
 except ImportError:  # pragma: no cover
     raise ImportError("pado._test_source requires the `pado[testsource]` extra")
 
@@ -37,8 +37,13 @@ def make_temporary_tiff(name, size=(100, 100)):
     with TemporaryDirectory() as tmp_dir:
         size = (size[0], size[1], 3)
         data = np.random.randint(0, 255, size=size).astype(np.uint8)
-        img_fn = Path(tmp_dir).expanduser().absolute() / f"{name}.tif"
-        imsave(img_fn, data)
+        img_fn = Path(tmp_dir).expanduser().absolute() / f"{name}.svs"
+        svs_desc = (
+            "Aperio Image Library pado-testsource \r\n"
+            "pretending to be an aperio svs... "
+            "|AppMag = 40|MPP = 0.25"
+        )
+        imwrite(img_fn, data, description=svs_desc)
         yield img_fn
 
 
