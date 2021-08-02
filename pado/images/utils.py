@@ -29,17 +29,6 @@ __all__ = [
 #  Anyways, this is just a reminder in case we run into problems in the future.
 
 
-def _scale(size: Union[Size, IntSize], *, target: MPP, current: Optional[MPP] = None) -> Size:
-    """scale a size to a new mpp"""
-    if current is None:
-        current = size.current
-    return Size(
-        x=size.x * current.x / target.x,
-        y=size.y * current.y / target.y,
-        mpp=target.mpp,
-    )
-
-
 @dataclass(frozen=True)
 class MPP:
     """micrometer per pixel scaling common in pathological images"""
@@ -72,6 +61,17 @@ class Point:
 
     def round(self, method: Callable[[float], int] = round) -> IntPoint:
         return IntPoint(method(self.x), method(self.y), self.mpp)
+
+    def scale(self, mpp: MPP) -> Point:
+        """scale a point to a new mpp"""
+        current = self.mpp
+        if current is None:
+            raise ValueError(f"Can't scale: {self!r} has no mpp")
+        return Point(
+            x=self.x * current.x / mpp.x,
+            y=self.y * current.y / mpp.y,
+            mpp=mpp,
+        )
 
     @classmethod
     def from_tuple(cls: Type[_P], xy: Tuple[float, float], *, mpp: MPP) -> _P:
@@ -107,9 +107,15 @@ class Size:
         return IntSize(round(self.x), round(self.y), self.mpp)
 
     def scale(self, mpp: MPP) -> Size:
-        if self.mpp is None:
+        """scale a size to a new mpp"""
+        current = self.mpp
+        if current is None:
             raise ValueError(f"Can't scale: {self!r} has no mpp")
-        return _scale(self, target=mpp)
+        return Size(
+            x=self.x * current.x / mpp.x,
+            y=self.y * current.y / mpp.y,
+            mpp=mpp,
+        )
 
     @property
     def width(self):
