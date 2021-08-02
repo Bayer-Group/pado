@@ -15,7 +15,6 @@ from appdirs import user_config_dir
 import toml
 
 from pado._cli import argument, subcommand
-from pado._logging import get_logger
 
 # argument parsing objects
 parser = argparse.ArgumentParser(
@@ -39,7 +38,7 @@ parser.add_argument('--tunnel', metavar=('tunnel',), default=None, help="tunnel 
 parser.add_argument('--root', action='store_true', help="reference from '/' on remote")
 
 # logging objects
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # might need to refer to a specific ssh
 SSH_EXECUTABLE = "ssh"

@@ -1,14 +1,13 @@
 """file utility functions"""
 import hashlib
+import logging
 import os
 import shutil
 from collections import defaultdict
 from pathlib import Path
 from zipfile import ZipFile
 
-from pado._logging import get_logger
-
-_logger = get_logger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 def hash_file(path, hasher=hashlib.sha256) -> str:
