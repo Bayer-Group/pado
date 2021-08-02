@@ -299,55 +299,50 @@ class Image:
         self,
         location: IntPoint,
         region: IntSize,
+        level: int,
+        *,
+        runtime_type_checks: bool = True
     ) -> np.ndarray:
-        """return array"""
-        if not isinstance(location, IntPoint) or location.mpp is None:
-            raise ValueError(f"must provide location as IntPoint with mpp, got: {location!r}")
-        if not isinstance(region, IntSize) or region.mpp is None:
-            raise ValueError(f"must provide region as IntSize with mpp, got: {location!r}")
+        """return array from a defined level"""
+        if runtime_type_checks:
+            if self._slide is None:
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
 
-        '''
-        if mpp_xy is None and level is not None:
-            if level == 0:
-                img = self._image_backend.get_region(location_xy, region_wh, level=level)
-            else:
-                lvl_mpp = self._image_backend.level_mpp_map[level]
-                lvl0_mpp = self._image_backend.level0_mpp
-                lvl0_xy = tuple_round(scale_xy(location_xy, current=lvl0_mpp, target=lvl_mpp))
-                img = self._image_backend.get_region(lvl0_xy, region_wh, level=level)
-
-        elif level is None and mpp_xy is not None:
-            # mpp_xy is set
-            assert self.metadata[S_MPP_X] == self.metadata[S_MPP_Y]
-            lvl0_mpp = self._image_backend.level0_mpp
-            lvl0_xy = tuple_round(
-                scale_xy(location_xy, current=mpp_xy, target=lvl0_mpp)
-            )
-
-            mpp_map = self._image_backend.level_mpp_map
-            for lvl_best, mpp_best in mpp_map.items():
-                if mpp_xy[0] >= mpp_best[0]:
-                    break
-            else:
-                raise NotImplementedError(f"requesting a smaller mpp than provided in the image {mpp_xy!r}")
-
-            if mpp_xy == mpp_best:
-                img = self._image_backend.get_region(lvl0_xy, region_wh, level=lvl_best)
-
-            else:
-                assert mpp_best[0] < mpp_xy[0]
-                region_wh_best = tuple_round(
-                    scale_xy(region_wh, current=mpp_xy[0], target=mpp_best[0])
+            # location
+            if not isinstance(location, IntPoint):
+                raise TypeError(
+                    f"location requires IntPoint, got: {location!r} of {type(location).__name__}"
                 )
-                assert region_wh_best[0] > region_wh[0]
-                img = self._image_backend.get_region(lvl0_xy, region_wh_best, level=lvl_best, downsize_to=region_wh)
+            elif location.mpp is not None and location.mpp != self.mpp:
+                _guess = next(  # improve error for user
+                    (idx for idx, mpp in self.level_mpp.items() if mpp == location.mpp),
+                    'level-not-in-image'
+                )
+                raise ValueError(f"location not at level 0, got {location!r} at {_guess}")
 
-        else:
-            raise ValueError("cannot specify both level and mpp_xy")
+            # level (indirectly)
+            try:
+                level_mpp = self.level_mpp[level]
+            except KeyError:
+                raise ValueError(f"level error: 0 <= {level} <= {self.level_count}")
 
-        return np.array(img)
-        '''
-        raise NotImplementedError("todo")
+            # region
+            if not isinstance(region, IntSize):
+                raise TypeError(
+                    f"region requires IntSize, got: {region!r} of {type(region).__name__}"
+                )
+            elif region.mpp is not None and region.mpp != level_mpp:
+                _guess = next(  # improve error for user
+                    (idx for idx, mpp in self.level_mpp.items() if mpp == region.mpp),
+                    'level-not-in-image'
+                )
+                raise ValueError(f"region not at level {level}, got {region!r} at {_guess}")
+
+        # TODO:
+        #   this interface should be made public in tiffslide
+        # noinspection PyProtectedMember
+        arr = self._slide._read_region_as_array(location.as_tuple(), level, region.as_tuple())
+        return arr
 
 
 class TileIterator:
