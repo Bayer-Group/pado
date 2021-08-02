@@ -16,7 +16,6 @@ import pandas as pd
 
 from pado.images.ids import ImageId
 from pado.images.image import Image
-from pado.images.image import SerializedImage
 from pado.types import UrlpathLike
 from pado.utils import cached_property
 from pado.util.store import Store
@@ -65,12 +64,12 @@ class ImageProvider(BaseImageProvider):
             self.identifier = provider.identifier
         elif isinstance(provider, BaseImageProvider):
             if not provider:
-                self.df = pd.DataFrame(columns=SerializedImage.__fields__)
+                self.df = pd.DataFrame(columns=Image.__fields__)
             else:
                 self.df = pd.DataFrame.from_records(
                     index=list(map(ImageId.to_str, provider.keys())),
                     data=list(map(lambda x: x.to_record(), provider.values())),
-                    columns=SerializedImage.__fields__,
+                    columns=Image.__fields__,
                 )
             self.identifier = str(uuid.uuid4())
         else:

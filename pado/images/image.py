@@ -82,7 +82,7 @@ class PadoInfo(BaseModel):
     pado_image_backend_version: str
 
 
-class SerializedImage(ImageMetadata, FileInfo, PadoInfo):
+class _SerializedImage(ImageMetadata, FileInfo, PadoInfo):
     class Config:
         extra = Extra.forbid
 
@@ -92,6 +92,7 @@ class Image:
     __slots__ = (
         'urlpath', '_metadata', '_file_info', '_ctx', '_slide'
     )  # prevent attribute errors during refactor
+    __fields__ = _SerializedImage.__fields__
 
     def __init__(
         self,
@@ -114,14 +115,14 @@ class Image:
         if load_metadata or load_file_info or checksum:
             with self:
                 if load_metadata:
-                    self.load_metadata()
+                    self._load_metadata()
                 if load_file_info or checksum:
-                    self.load_file_info(checksum=checksum)
+                    self._load_file_info(checksum=checksum)
 
     @classmethod
     def from_obj(cls, obj) -> Image:
         """instantiate an image from an object, i.e. a pd.Series"""
-        md = SerializedImage.parse_obj(obj)
+        md = _SerializedImage.parse_obj(obj)
         # get metadata
         metadata = ImageMetadata.parse_obj(md)
         file_info = FileInfo.parse_obj(md)
@@ -135,12 +136,13 @@ class Image:
         return inst
 
     def to_record(self) -> dict:
+        """return a record for serializing """
         pado_info = PadoInfo(
             urlpath=urlpathlike_to_string(self.urlpath),
             pado_image_backend=TiffSlide.__class__.__qualname__,
             pado_image_backend_version=tiffslide.__version__,
         )
-        return SerializedImage.parse_obj({
+        return _SerializedImage.parse_obj({
             **pado_info.dict(),
             **self.metadata.dict(),
             **self.file_info.dict(),
@@ -173,7 +175,7 @@ class Image:
     def __repr__(self):
         return f"{type(self).__name__}({self.urlpath!r})"
 
-    def load_metadata(self, *, force: bool = False) -> None:
+    def _load_metadata(self, *, force: bool = False) -> None:
         """load the metadata from the file"""
         if self._metadata is None or force:
             if self._slide is None:
@@ -207,7 +209,7 @@ class Image:
                 })
             )
 
-    def load_file_info(self, *, force: bool = False, checksum: bool = False) -> None:
+    def _load_file_info(self, *, force: bool = False, checksum: bool = False) -> None:
         """load the file information from the file"""
         if self._file_info is None or force:
             if self._slide is None:
@@ -244,7 +246,7 @@ class Image:
             # we need to load the image metadata
             if self._slide is None:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
-            self.load_metadata()
+            self._load_metadata()
         return self._metadata
 
     @property
@@ -254,7 +256,7 @@ class Image:
             # we need to load the file_info data
             if self._slide is None:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
-            self.load_file_info(checksum=False)
+            self._load_file_info(checksum=False)
         return self._file_info
 
     @property
