@@ -179,7 +179,7 @@ class Image:
         """load the metadata from the file"""
         if self._metadata is None or force:
             if self._slide is None:
-                raise RuntimeError("must be called on opened image")
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
 
             slide = self._slide
             props = slide.properties
@@ -213,7 +213,7 @@ class Image:
         """load the file information from the file"""
         if self._file_info is None or force:
             if self._slide is None:
-                raise RuntimeError("must be called on opened image")
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
 
             if isinstance(self.urlpath, str):
                 fs, _, [path] = fsspec.get_fs_token_paths(self.urlpath)
@@ -245,7 +245,7 @@ class Image:
         if self._metadata is None:
             # we need to load the image metadata
             if self._slide is None:
-                raise RuntimeError(f"{self} not opened and not in context manager")
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
             self.load_metadata()
         return self._metadata
 
@@ -255,7 +255,7 @@ class Image:
         if self._file_info is None:
             # we need to load the file_info data
             if self._slide is None:
-                raise RuntimeError(f"{self} not opened and not in context manager")
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
             self.load_file_info(checksum=False)
         return self._file_info
 
