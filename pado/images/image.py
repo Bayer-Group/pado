@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from typing import Tuple
 
 import numpy as np
+import zarr.core
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
 from pydantic import BaseModel
@@ -35,6 +36,7 @@ from tiffslide import TiffSlide
 
 if TYPE_CHECKING:
     import PIL
+    from numpy.typing import ArrayLike
 
 
 # --- metadata and info models ---
@@ -343,6 +345,20 @@ class Image:
         # noinspection PyProtectedMember
         arr = self._slide._read_region_as_array(location.as_tuple(), level, region.as_tuple())
         return arr
+
+    def get_zarr(self, level: int) -> ArrayLike:
+        """return the entire level as zarr"""
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
+        zgrp = self._slide.ts_zarr_grp
+        if isinstance(zgrp, zarr.core.Array):
+            if level != 0:
+                raise IndexError(f"level {level} not available")
+            return zgrp
+        elif isinstance(zgrp, zarr.hierarchy.Group):
+            return zgrp[str(level)]
+        else:
+            raise NotImplementedError(f"unexpected instance {zgrp!r} of type {type(zgrp).__name__}")
 
 
 class TileIterator:
