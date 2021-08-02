@@ -11,10 +11,9 @@ from typing import Optional
 from typing import TYPE_CHECKING
 from typing import Tuple
 
-import fsspec
-import fsspec.core
-import fsspec.utils
 import numpy as np
+from fsspec import get_fs_token_paths
+from fsspec.core import OpenFile
 from pydantic import BaseModel
 from pydantic import ByteSize
 from pydantic import Extra
@@ -33,7 +32,6 @@ from pado.util.store import urlpathlike_to_fsspec
 from pado.util.store import urlpathlike_to_string
 from pado.utils import cached_property
 from tiffslide import TiffSlide
-from tiffslide import __version__ as _tiffslide_version
 
 if TYPE_CHECKING:
     import PIL
@@ -140,7 +138,7 @@ class Image:
         pado_info = PadoInfo(
             urlpath=urlpathlike_to_string(self.urlpath),
             pado_image_backend=TiffSlide.__class__.__qualname__,
-            pado_image_backend_version=_tiffslide_version,
+            pado_image_backend_version=tiffslide.__version__,
         )
         return SerializedImage.parse_obj({
             **pado_info.dict(),
@@ -216,12 +214,12 @@ class Image:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
 
             if isinstance(self.urlpath, str):
-                fs, _, [path] = fsspec.get_fs_token_paths(self.urlpath)
-            elif isinstance(self.urlpath, fsspec.core.OpenFile):
+                fs, _, [path] = get_fs_token_paths(self.urlpath)
+            elif isinstance(self.urlpath, OpenFile):
                 fs = self.urlpath.fs
                 path = self.urlpath.path
             elif isinstance(self.urlpath, os.PathLike):
-                fs, _, [path] = fsspec.get_fs_token_paths(os.fspath(self.urlpath))
+                fs, _, [path] = get_fs_token_paths(os.fspath(self.urlpath))
             else:
                 raise NotImplementedError(f"todo: {self.urlpath!r} of type {type(self.urlpath)!r}")
 
@@ -459,4 +457,3 @@ class Tile:
     @property
     def wh(self):
         return self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1]
-
