@@ -9,7 +9,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
-from typing import Tuple
 
 import numpy as np
 import zarr.core
@@ -22,7 +21,6 @@ from pydantic import PositiveFloat
 from pydantic import PositiveInt
 from pydantic import validator
 from pydantic.color import Color
-from shapely.geometry import Polygon
 
 import tiffslide
 from pado.images.utils import IntPoint
@@ -31,7 +29,6 @@ from pado.images.utils import MPP
 from pado.types import UrlpathLike
 from pado.util.store import urlpathlike_to_fsspec
 from pado.util.store import urlpathlike_to_string
-from pado.utils import cached_property
 from tiffslide import TiffSlide
 
 if TYPE_CHECKING:
@@ -359,119 +356,3 @@ class Image:
             return zgrp[str(level)]
         else:
             raise NotImplementedError(f"unexpected instance {zgrp!r} of type {type(zgrp).__name__}")
-
-
-class TileIterator:
-    def __init__(self, image, tile_size, mpp_xy):
-        self._image: Image = image
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        """
-        resample_factor_lvl_0 = self.target_mpp / slide_mpp
-
-        if resample_factor_lvl_0 < 1.0:
-            # fixme: ??? up-sample ???
-            raise ValueError("lvl0 resolution is lower than target_mpp requires")
-
-        lvl_b = self.slide.get_best_level_for_downsample(resample_factor_lvl_0)
-
-        resample_factor = resample_factor_lvl_0
-        if lvl_b > 0:
-            # resample according to image lvl we're using for extraction
-            resample_factor /= self.slide.level_downsamples[lvl_b]
-
-        tile = np.array(self.tile_size, dtype=int)
-        tile_0 = (tile * resample_factor_lvl_0).astype(int)  # floor
-        tile_b = (tile * resample_factor).astype(int)
-        s_dim = self.slide.dimensions
-
-        # read tiles from slide
-        r0, r1 = range(0, s_dim[0], tile_0[0]), range(0, s_dim[1], tile_0[1])
-        idx_iter = itertools.product(enumerate(r1), enumerate(r0))
-
-        for (idx_y, y), (idx_x, x) in tqdm(
-                idx_iter,
-                total=len(r0) * len(r1),
-                desc=f"tiles of {self._image_path.name}:",
-                leave=False,
-        ):
-            tile_image = self.slide.read_region((x, y), lvl_b, tuple(tile_b))
-            tile_image = tile_image.convert("RGB")
-            tile_image = tile_image.resize(self.tile_size, PIL.Image.BILINEAR)
-
-            yield {
-                "image": tile_image,
-                "metadata": {
-                    "size": self.tile_size,
-                    "name": self._image_path.stem,
-                    "idx_x": idx_x,
-                    "idx_y": idx_y,
-                    "slide_x": x,
-                    "slide_y": y,
-                },
-            }
-        """
-        ...
-
-
-class Tile:
-    """pado.img.Tile abstracts rectangular regions in whole slide image data"""
-    def __init__(
-        self,
-        mpp_xy: Tuple[float, float],
-        bounds: Tuple[int, int, int, int],
-        data_array: Optional[np.ndarray] = None,
-        data_bytes: Optional[bytes] = None,
-        parent: Optional[Image] = None,
-        mask: Optional[np.ndarray] = None,
-        labels: Optional[np.ndarray] = None,
-        tissue: Optional[np.ndarray] = None,
-    ):
-        self.mpp_xy = mpp_xy
-        self.bounds = bounds
-        self.data_array = data_array
-        self.data_bytes = data_bytes
-        self.parent = parent
-        self.mask = mask
-        self.labels = labels
-        self.tissue = tissue
-
-    @cached_property
-    def shape(self) -> Polygon:
-        return Polygon.from_bounds(*self.bounds)
-
-    @property
-    def size(self):
-        return self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1]
-
-    def bounds_at_mpp(self, mpp_xy: Tuple[float, float], *, as_int: bool = True):
-        """return the tile bounds at another mpp level"""
-        sx, sy = self.mpp_xy
-        ox, oy = mpp_xy
-        rx, ry = ox / sx, oy / sy
-        x0, y0, x1, y1 = self.bounds
-        if not as_int:
-            return x0 * rx, y0 * ry, x1 * rx, y1 * ry
-        else:
-            return int(x0 * rx), int(y0 * ry), int(x1 * rx), int(y1 * ry)
-
-    def shape_at_mpp(self, mpp_xy: Tuple[float, float], *, as_int: bool = True):
-        """return the tile shape at another mpp level"""
-        return Polygon.from_bounds(*self.bounds_at_mpp(mpp_xy, as_int=as_int))
-
-    def size_at_mpp(self, mpp_xy: Tuple[float, float], *, as_int: bool = True):
-        """return the tile size at another mpp level"""
-        x0, y0, x1, y1 = self.bounds_at_mpp(mpp_xy, as_int=as_int)
-        return x1 - x0, y1 - y0
-
-    @property
-    def x0y0(self):
-        return self.bounds[:2]
-    tl = x0y0
-
-    @property
-    def wh(self):
-        return self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1]

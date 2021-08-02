@@ -5,10 +5,8 @@ from typing import Optional
 from typing import Tuple
 from typing import Type
 from typing import TypeVar
-from typing import Union
 
 from pydantic import PositiveFloat
-from pydantic import StrictFloat
 from pydantic import StrictInt
 from pydantic import conint
 from pydantic.dataclasses import dataclass
@@ -32,8 +30,8 @@ __all__ = [
 @dataclass(frozen=True)
 class MPP:
     """micrometer per pixel scaling common in pathological images"""
-    x: float
-    y: float
+    x: PositiveFloat
+    y: PositiveFloat
 
     def scale(self, downsample: float) -> MPP:
         return MPP(x=self.x * downsample, y=self.y * downsample)
@@ -46,6 +44,9 @@ class MPP:
     def from_tuple(cls: Type[_S], xy: Tuple[float, float]) -> MPP:
         x, y = xy
         return MPP(x=x, y=y)
+
+    def as_tuple(self) -> Tuple[float, float]:
+        return self.x, self.y
 
 
 _P = TypeVar("_P", bound="Point")
