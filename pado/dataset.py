@@ -23,12 +23,12 @@ from pado.annotations import AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
-from pado.image import FilteredImageProvider
-from pado.image import GroupedImageProvider
-from pado.image import Image
-from pado.image import ImageId
-from pado.image import ImageProvider
-from pado.image.images import urlpathlike_to_fsspec
+from pado.images import FilteredImageProvider
+from pado.images import GroupedImageProvider
+from pado.images import Image
+from pado.images import ImageId
+from pado.images import ImageProvider
+from pado.images.image import urlpathlike_to_fsspec
 from pado.metadata import PadoColumn
 from pado.metadata import PadoInvalid
 from pado.metadata import PadoReserved

@@ -11,11 +11,11 @@ from shapely.geometry import Polygon
 
 from pado.annotations import Annotation, AnnotationResources
 from pado.datasource import DataSource
-from pado.image import Image
-from pado.image import ImageId
-from pado.image import ImageProvider
-from pado.image.ids import FilenamePartsMapper
-from pado.image.ids import register_filename_mapper
+from pado.images import Image
+from pado.images import ImageId
+from pado.images import ImageProvider
+from pado.images.ids import FilenamePartsMapper
+from pado.images.ids import register_filename_mapper
 from pado.metadata import PadoColumn
 
 try:

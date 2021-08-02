@@ -10,9 +10,9 @@ import pytest
 from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
-from pado.image import ImageId
-from pado.image import ImageProvider
-from pado.image import Image
+from pado.images import ImageId
+from pado.images import ImageProvider
+from pado.images import Image
 from pado.metadata import PadoColumn
 
 

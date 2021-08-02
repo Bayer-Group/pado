@@ -14,9 +14,9 @@ from typing import Union
 
 import pandas as pd
 
-from pado.image.ids import ImageId
-from pado.image.images import Image
-from pado.image.images import SerializedImage
+from pado.images.ids import ImageId
+from pado.images.image import Image
+from pado.images.image import SerializedImage
 from pado.types import UrlpathLike
 from pado.utils import cached_property
 from pado.util.store import Store

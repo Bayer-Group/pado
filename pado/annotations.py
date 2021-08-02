@@ -10,7 +10,7 @@ import fsspec
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
 
-from pado.image import ImageId
+from pado.images import ImageId
 
 try:
     from typing import TypedDict  # novermin

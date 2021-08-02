@@ -25,9 +25,9 @@ from pydantic.color import Color
 from shapely.geometry import Polygon
 
 import tiffslide
-from pado.image.utils import IntPoint
-from pado.image.utils import IntSize
-from pado.image.utils import MPP
+from pado.images.utils import IntPoint
+from pado.images.utils import IntSize
+from pado.images.utils import MPP
 from pado.types import UrlpathLike
 from pado.util.store import urlpathlike_to_fsspec
 from pado.util.store import urlpathlike_to_string

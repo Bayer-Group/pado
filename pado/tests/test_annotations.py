@@ -4,7 +4,7 @@ import fsspec
 import pytest
 
 from pado.annotations import get_provider
-from pado.image import ImageId
+from pado.images import ImageId
 
 
 @pytest.fixture(scope="function")
