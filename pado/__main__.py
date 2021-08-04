@@ -57,7 +57,7 @@ def info_(args, subparser):
 
 @subcommand(
     argument("search_paths", nargs="+", help="paths to search for files"),
-    argument("--ext", nargs=1, metavar=("file_extension",), help="paths to search for files", action="append"),
+    argument("--ext", nargs=1, metavar=("file_extension",), help="files extensions", action="append"),
 )
 def file_search(args, subparser):
     """search for files at locations"""

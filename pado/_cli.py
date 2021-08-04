@@ -9,7 +9,7 @@ from pathlib import Path
 
 # -- argparse improvements ---------------------------------------------
 
-def subcommand(*arguments, parent):  # type: ignore
+def subcommand(*arguments, parent):
     """decorator helper for commandline"""
     def decorator(func):
         fn = func.__name__.rstrip('_')
