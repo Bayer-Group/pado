@@ -15,7 +15,7 @@ from orjson import OPT_SORT_KEYS
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
 
-from pado.fileutils import hash_str
+from pado.util.files import hash_str
 
 
 # noinspection PyMethodMayBeStatic
