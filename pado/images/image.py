@@ -5,12 +5,14 @@ import json
 import os
 from contextlib import ExitStack
 from datetime import datetime
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
 
 import numpy as np
+import tiffslide
 import zarr.core
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
@@ -21,15 +23,14 @@ from pydantic import PositiveFloat
 from pydantic import PositiveInt
 from pydantic import validator
 from pydantic.color import Color
+from tiffslide import TiffSlide
 
-import tiffslide
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
 from pado.types import UrlpathLike
 from pado.util.store import urlpathlike_to_fsspec
 from pado.util.store import urlpathlike_to_string
-from tiffslide import TiffSlide
 
 if TYPE_CHECKING:
     import PIL
@@ -260,10 +261,14 @@ class Image:
 
     @property
     def level_count(self) -> int:
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return self._slide.level_count
 
     @property
     def level_dimensions(self) -> Dict[int, IntSize]:
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
         dims = self._slide.level_dimensions
         down = self._slide.level_downsamples
         mpp0 = self.mpp
@@ -274,6 +279,8 @@ class Image:
 
     @property
     def level_mpp(self) -> Dict[int, MPP]:
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return {
             lvl: self.mpp.scale(ds)
             for lvl, ds in enumerate(self._slide.level_downsamples)
@@ -292,6 +299,8 @@ class Image:
         )
 
     def get_thumbnail(self, size: IntSize) -> PIL.Image.Image:
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return self._slide.get_thumbnail(size=(size.width, size.height))
 
     def get_array(
@@ -339,9 +348,16 @@ class Image:
 
         # TODO:
         #   this interface should be made public in tiffslide
-        # noinspection PyProtectedMember
-        arr = self._slide._read_region_as_array(location.as_tuple(), level, region.as_tuple())
-        return arr
+
+        try:
+            # noinspection PyProtectedMember
+            return self._slide._read_region_as_array(  # type: ignore
+                location.as_tuple(), level, region.as_tuple()
+            )
+        except AttributeError:
+            if self._slide is None:
+                raise RuntimeError(f"{self!r} not opened and not in context manager")
+            raise
 
     def get_zarr(self, level: int) -> ArrayLike:
         """return the entire level as zarr"""
