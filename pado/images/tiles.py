@@ -30,7 +30,7 @@ class Tile:
     ):
         self._mpp = mpp
         self._bounds = bounds
-        self.data: Optional[np.array] = data
+        self.data: Optional[np.ndarray] = data
         self.parent: Optional[Image] = parent
 
     @cached_property

@@ -41,7 +41,7 @@ class MPP:
         return MPP(x=xy, y=xy)
 
     @classmethod
-    def from_tuple(cls: Type[_S], xy: Tuple[float, float]) -> MPP:
+    def from_tuple(cls, xy: Tuple[float, float]) -> MPP:
         x, y = xy
         return MPP(x=x, y=y)
 
@@ -139,8 +139,8 @@ class Size:
 @dataclass(frozen=True)
 class IntSize(Size):
     """an integer 2D size"""
-    x: conint(gt=0, strict=True)
-    y: conint(gt=0, strict=True)
+    x: conint(gt=0, strict=True)  # type: ignore
+    y: conint(gt=0, strict=True)  # type: ignore
 
     def round(self) -> IntSize:
         return self

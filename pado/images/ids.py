@@ -3,10 +3,10 @@ from __future__ import annotations
 import os.path as op
 from operator import itemgetter
 from pathlib import PurePath
+from typing import Dict
 from typing import Iterable
 from typing import Mapping
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing import Tuple
 from typing import TypeVar
 
@@ -35,11 +35,11 @@ def register_filename_mapper(site, mapper):
     ImageId.site_mapper[site] = mapper()
 
 
-class ImageId(tuple):
+class ImageId(Tuple[Optional[str], ...]):
     """Unique identifier for images in pado datasets"""
 
     # string matching rather than regex for speedup `ImageId('1', '2')`
-    _prefix, _suffix = f"{__qualname__}(", ")"
+    _prefix, _suffix = f"{__qualname__}(", ")"  # type: ignore
 
     def __new__(cls, *parts: str, site: Optional[str] = None):
         """Create a new ImageId instance"""
@@ -64,11 +64,7 @@ class ImageId(tuple):
         elif part[0] == "{" and part[-1] == "}" and '"image_id":' in part:
             raise ValueError(f"use {cls.__name__}.from_json() to convert a serialized json object")
 
-        return super().__new__(cls, [site, *parts])
-
-    if TYPE_CHECKING:
-        # Pycharm doesn't understand cls in classmethods otherwise...
-        __init__ = tuple.__init__
+        return super().__new__(cls, [site, *parts])  # type: ignore
 
     @classmethod
     def make(cls, parts: Iterable[str], site: Optional[str] = None):
@@ -220,9 +216,7 @@ class ImageId(tuple):
 
     # --- path methods ------------------------------------------------
 
-    _SM = TypeVar("_SM", bound="FilenamePartsMapper")
-
-    site_mapper: Mapping[Optional[str]:_SM] = {
+    site_mapper: Dict[Optional[str], FilenamePartsMapper] = {
         None: FilenamePartsMapper(),
     }
 
