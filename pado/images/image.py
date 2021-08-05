@@ -115,9 +115,9 @@ class Image:
         if load_metadata or load_file_info or checksum:
             with self:
                 if load_metadata:
-                    self._load_metadata()
+                    self._metadata = self._load_metadata()
                 if load_file_info or checksum:
-                    self._load_file_info(checksum=checksum)
+                    self._file_info = self._load_file_info(checksum=checksum)
 
     @classmethod
     def from_obj(cls, obj) -> Image:
@@ -151,9 +151,8 @@ class Image:
     def __enter__(self) -> Image:
         return self.open()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-        return False
 
     def open(self) -> Image:
         """open an image instance"""
@@ -175,7 +174,7 @@ class Image:
     def __repr__(self):
         return f"{type(self).__name__}({self.urlpath!r})"
 
-    def _load_metadata(self, *, force: bool = False) -> None:
+    def _load_metadata(self, *, force: bool = False) -> ImageMetadata:
         """load the metadata from the file"""
         if self._metadata is None or force:
             if self._slide is None:
@@ -185,10 +184,10 @@ class Image:
             props = slide.properties
             dimensions = slide.dimensions
 
-            _used_keys = {}
+            _used_keys: Dict[str, Any] = {}
             def pget(key): return _used_keys.setdefault(key, props.get(key))
 
-            self._metadata = ImageMetadata(
+            return ImageMetadata(
                 width=dimensions[0],
                 height=dimensions[1],
                 objective_power=pget(tiffslide.PROPERTY_NAME_OBJECTIVE_POWER),
@@ -208,8 +207,10 @@ class Image:
                     if key not in _used_keys
                 })
             )
+        else:
+            return self._metadata
 
-    def _load_file_info(self, *, force: bool = False, checksum: bool = False) -> None:
+    def _load_file_info(self, *, force: bool = False, checksum: bool = False) -> FileInfo:
         """load the file information from the file"""
         if self._file_info is None or force:
             if self._slide is None:
@@ -231,13 +232,15 @@ class Image:
                 _checksum = None
 
             info = fs.info(path)
-            self._file_info = FileInfo(
+            return FileInfo(
                 size_bytes=info['size'],
                 md5_computed=_checksum,
                 time_last_access=info.get('atime'),
                 time_last_modified=info.get('mtime'),
                 time_status_changed=info.get('created'),
             )
+        else:
+            return self._file_info
 
     @property
     def metadata(self) -> ImageMetadata:
@@ -246,7 +249,7 @@ class Image:
             # we need to load the image metadata
             if self._slide is None:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
-            self._load_metadata()
+            self._metadata = self._load_metadata()
         return self._metadata
 
     @property
@@ -256,7 +259,7 @@ class Image:
             # we need to load the file_info data
             if self._slide is None:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
-            self._load_file_info(checksum=False)
+            self._file_info = self._load_file_info(checksum=False)
         return self._file_info
 
     @property
@@ -359,7 +362,7 @@ class Image:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
             raise
 
-    def get_zarr(self, level: int) -> ArrayLike:
+    def get_zarr(self, level: int) -> zarr.core.Array:
         """return the entire level as zarr"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
