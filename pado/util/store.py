@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import enum
 import json
 import os
+import sys
 from abc import ABC
 from typing import Any
 from typing import Callable
@@ -9,12 +12,18 @@ from typing import MutableMapping
 from typing import Optional
 from typing import Tuple
 
+if sys.version_info[:2] >= (3, 10):
+    from typing import TypeGuard  # 3.10+
+else:
+    from typing_extensions import TypeGuard
+
 import fsspec
 import pandas as pd
 import pyarrow
 from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
+from pado.types import OpenFileLike
 from pado.types import UrlpathLike
 
 
@@ -57,7 +66,7 @@ class Store(ABC):
     def __metadata_get_hook__(self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]) -> Optional[dict]:
         """allows getting more metadata in subclass or validate versioning"""
 
-    def to_urlpath(self, df: pd.DataFrame, urlpath: str, *, identifier: Optional[str] = None, **user_metadata):
+    def to_urlpath(self, df: pd.DataFrame, urlpath: UrlpathLike, *, identifier: Optional[str] = None, **user_metadata):
         """store a pandas dataframe with an identifier and user metadata"""
         open_file = urlpathlike_to_fsspec(urlpath, mode="wb")
 
@@ -88,7 +97,7 @@ class Store(ABC):
                 table, f, compression=self.COMPRESSION,
             )
 
-    def from_urlpath(self, urlpath: str) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
+    def from_urlpath(self, urlpath: UrlpathLike) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
         """load dataframe and info from urlpath"""
         open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
 
@@ -145,12 +154,14 @@ class Store(ABC):
         return df, identifier, user_metadata
 
 
-def is_fsspec_open_file_like(obj: Any) -> bool:
+def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
     """test if an object is like a fsspec.core.OpenFile instance"""
     # if isinstance(obj, fsspec.core.OpenFile) doesn't cut it...
+    # ... fsspec filesystems just need to quack OpenFile.
     return (
-        all(hasattr(obj, x) for x in {'fs', 'path', '__enter__', '__exit__'})
-        and isinstance(getattr(obj, 'fs'), fsspec.AbstractFileSystem)
+        isinstance(obj, OpenFileLike)
+        and isinstance(obj.fs, fsspec.AbstractFileSystem)
+        and isinstance(obj.path, str)
     )
 
 
@@ -163,8 +174,12 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
             "fs": fs.to_json(),
             "path": path
         })
-    elif isinstance(urlpath, os.PathLike):
-        return os.fspath(urlpath)
+
+    if isinstance(urlpath, os.PathLike):
+        urlpath = os.fspath(urlpath)
+
+    if isinstance(urlpath, bytes):
+        return urlpath.decode()
     elif isinstance(urlpath, str):
         return urlpath
     else:
@@ -174,10 +189,10 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
 def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> fsspec.core.OpenFile:
     """use an urlpath-like object and return an fsspec.core.OpenFile"""
     if is_fsspec_open_file_like(obj):
-        return obj  # type: ignore
+        return obj
 
     try:
-        json_obj = json.loads(obj)
+        json_obj = json.loads(obj)  # type: ignore
     except (json.JSONDecodeError, TypeError):
         if isinstance(obj, os.PathLike):
             obj = os.fspath(obj)
