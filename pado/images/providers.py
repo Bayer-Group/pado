@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from abc import ABC
 from pathlib import Path
@@ -57,8 +59,13 @@ BaseImageProvider.register(dict)
 
 
 class ImageProvider(BaseImageProvider):
+    df: pd.DataFrame
+    identifier: str
 
-    def __init__(self, provider: BaseImageProvider):
+    def __init__(self, provider: Optional[BaseImageProvider] = None):
+        if provider is None:
+            provider = {}
+
         if isinstance(provider, ImageProvider):
             self.df = provider.df.copy()
             self.identifier = provider.identifier
@@ -73,7 +80,7 @@ class ImageProvider(BaseImageProvider):
                 )
             self.identifier = str(uuid.uuid4())
         else:
-            raise ValueError("must provide an image provider")
+            raise TypeError(f"expected `BaseImageProvider`, got: {type(provider).__name__!r}")
 
     def __getitem__(self, image_id: ImageId) -> Image:
         if not isinstance(image_id, ImageId):
@@ -115,7 +122,7 @@ class ImageProvider(BaseImageProvider):
         store.to_urlpath(self.df, urlpath, identifier=self.identifier)
 
     @classmethod
-    def from_parquet(cls, urlpath: UrlpathLike):
+    def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
         store = ImageProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
         assert {
@@ -132,9 +139,8 @@ class ImageProvider(BaseImageProvider):
 
 class GroupedImageProvider(ImageProvider):
 
-    def __init__(self, *providers: ImageProvider):
-        # noinspection PyTypeChecker
-        super().__init__(None)
+    def __init__(self, *providers: BaseImageProvider):
+        super().__init__()
         self.providers = []
         for p in providers:
             if not isinstance(p, ImageProvider):
@@ -178,19 +184,18 @@ class GroupedImageProvider(ImageProvider):
     def __repr__(self):
         return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
 
-    def to_parquet(self, fspath: Optional[Union[Path, str]] = None) -> None:
-        super().to_parquet(fspath)
+    def to_parquet(self, urlpath: UrlpathLike) -> None:
+        super().to_parquet(urlpath)
 
     @classmethod
-    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
+    def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
         raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
 
 
 class FilteredImageProvider(ImageProvider):
 
     def __init__(self, provider: BaseImageProvider, *, valid_keys: Optional[Iterable[ImageId]] = None):
-        # noinspection PyTypeChecker
-        super().__init__(None)
+        super().__init__()
         self._provider = ImageProvider(provider)
         self._vk = set(self._provider) if valid_keys is None else set(valid_keys)
 
@@ -217,7 +222,7 @@ class FilteredImageProvider(ImageProvider):
         return len(self.valid_keys.intersection(self._provider))
 
     def __iter__(self) -> Iterator[ImageId]:
-        return iter(map(ImageId.from_str, self.df.index))
+        return iter(map(ImageId.from_str, self.df.index))  # fixme
 
     def items(self) -> Iterator[Tuple[ImageId, Image]]:
         return super().items()
@@ -225,11 +230,11 @@ class FilteredImageProvider(ImageProvider):
     def __repr__(self):
         return f'{type(self).__name__}({self._provider!r})'
 
-    def to_parquet(self, fspath: Union[Path, str]) -> None:
-        super().to_parquet(fspath)
+    def to_parquet(self, urlpath: UrlpathLike) -> None:
+        super().to_parquet(urlpath)
 
     @classmethod
-    def from_parquet(cls, fspath: Union[Path, str], identifier: Optional[str] = None):
+    def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
         raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
 
 
