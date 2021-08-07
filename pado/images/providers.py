@@ -17,6 +17,7 @@ import pandas as pd
 from pado.images.ids import ImageId
 from pado.images.image import Image
 from pado.types import UrlpathLike
+from pado.util.files import find_files
 from pado.utils import cached_property
 from pado.util.store import Store
 from pado.util.store import StoreType
@@ -60,13 +61,13 @@ class ImageProvider(BaseImageProvider):
     df: pd.DataFrame
     identifier: str
 
-    def __init__(self, provider: Optional[BaseImageProvider] = None):
+    def __init__(self, provider: Optional[BaseImageProvider] = None, identifier: Optional[str] = None):
         if provider is None:
             provider = {}
 
         if isinstance(provider, ImageProvider):
             self.df = provider.df.copy()
-            self.identifier = provider.identifier
+            self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, BaseImageProvider):
             if not provider:
                 self.df = pd.DataFrame(columns=Image.__fields__)
@@ -76,7 +77,7 @@ class ImageProvider(BaseImageProvider):
                     data=list(map(lambda x: x.to_record(), provider.values())),
                     columns=Image.__fields__,
                 )
-            self.identifier = str(uuid.uuid4())
+            self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:
             raise TypeError(f"expected `BaseImageProvider`, got: {type(provider).__name__!r}")
 
@@ -234,6 +235,40 @@ class FilteredImageProvider(ImageProvider):
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
         raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
+
+
+# === manipulation ============================================================
+
+def create_image_provider(
+    search_urlpath: UrlpathLike,
+    search_glob: str,
+    *,
+    output_urlpath: Optional[UrlpathLike],
+    identifier: Optional[str] = None,
+    checksum: bool = True,
+    resume: bool = False,
+) -> ImageProvider:
+    """create an image provider from a directory containing images"""
+    files_and_parts = find_files(search_urlpath, glob=search_glob)
+
+    if resume:
+        ip = ImageProvider.from_parquet(urlpath=output_urlpath)
+    else:
+        ip = ImageProvider(identifier=identifier)
+
+    try:
+        for fp in files_and_parts:
+            image_id = ImageId(*fp.parts, site=ip.identifier)
+            if resume and image_id in ip:
+                continue
+            image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=checksum)
+            ip[image_id] = image
+
+    finally:
+        if output_urlpath is not None:
+            ip.to_parquet(output_urlpath)
+
+    return ip
 
 
 def reassociate_images(provider: BaseImageProvider, search_path, search_pattern="**/*.svs"):
