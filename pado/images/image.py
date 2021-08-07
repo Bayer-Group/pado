@@ -173,6 +173,17 @@ class Image:
     def __repr__(self):
         return f"{type(self).__name__}({self.urlpath!r})"
 
+    def __eq__(self, other: Any) -> bool:
+        """compare if two images are identical"""
+        if not isinstance(other, Image):
+            return False
+        # if checksum available for both
+        if self.file_info.md5_computed and other.file_info.md5_computed:
+            return self.file_info.md5_computed == other.file_info.md5_computed
+        if self.file_info.size_bytes != other.file_info.size_bytes:
+            return False
+        return self.metadata == other.metadata
+
     def _load_metadata(self, *, force: bool = False) -> ImageMetadata:
         """load the metadata from the file"""
         if self._metadata is None or force:
