@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import enum
 import json
-import os
-import sys
 from abc import ABC
 from typing import Any
 from typing import Callable
@@ -12,19 +10,13 @@ from typing import MutableMapping
 from typing import Optional
 from typing import Tuple
 
-if sys.version_info[:2] >= (3, 10):
-    from typing import TypeGuard  # 3.10+
-else:
-    from typing_extensions import TypeGuard
-
-import fsspec
 import pandas as pd
 import pyarrow
 from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
-from pado.types import OpenFileLike
 from pado.types import UrlpathLike
+from pado.util.files import urlpathlike_to_fsspec
 
 
 class StoreType(str, enum.Enum):
@@ -152,55 +144,3 @@ class Store(ABC):
         user_metadata.update(version_info)
         user_metadata.update(get_hook_data)
         return df, identifier, user_metadata
-
-
-def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
-    """test if an object is like a fsspec.core.OpenFile instance"""
-    # if isinstance(obj, fsspec.core.OpenFile) doesn't cut it...
-    # ... fsspec filesystems just need to quack OpenFile.
-    return (
-        isinstance(obj, OpenFileLike)
-        and isinstance(obj.fs, fsspec.AbstractFileSystem)
-        and isinstance(obj.path, str)
-    )
-
-
-def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
-    """convert an urlpath-like object and stringify it"""
-    if is_fsspec_open_file_like(urlpath):
-        fs: fsspec.AbstractFileSystem = urlpath.fs
-        path: str = urlpath.path
-        return json.dumps({
-            "fs": fs.to_json(),
-            "path": path
-        })
-
-    if isinstance(urlpath, os.PathLike):
-        urlpath = os.fspath(urlpath)
-
-    if isinstance(urlpath, bytes):
-        return urlpath.decode()
-    elif isinstance(urlpath, str):
-        return urlpath
-    else:
-        raise TypeError(f"can't stringify: {urlpath!r} of type {type(urlpath)!r}")
-
-
-def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> fsspec.core.OpenFile:
-    """use an urlpath-like object and return an fsspec.core.OpenFile"""
-    if is_fsspec_open_file_like(obj):
-        return obj
-
-    try:
-        json_obj = json.loads(obj)  # type: ignore
-    except (json.JSONDecodeError, TypeError):
-        if isinstance(obj, os.PathLike):
-            obj = os.fspath(obj)
-        if not isinstance(obj, str):
-            raise TypeError(f"got {obj!r} of type {type(obj)!r}")
-        return fsspec.open(obj, mode=mode)
-    else:
-        if not isinstance(json_obj, dict):
-            raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
-        fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
-        return fs.open(json_obj["path"], mode=mode)
