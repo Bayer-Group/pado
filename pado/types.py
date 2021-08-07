@@ -8,10 +8,10 @@ import sys
 from abc import ABC
 from abc import abstractmethod
 from typing import AnyStr
+from typing import ContextManager
 from typing import IO
 from typing import Mapping
 from typing import TYPE_CHECKING
-from typing import TypeVar
 from typing import Union
 
 import pandas as pd
@@ -26,6 +26,7 @@ else:
     from typing_extensions import runtime_checkable
 
 if TYPE_CHECKING:
+    # noinspection PyUnresolvedReferences
     import os
 
     from fsspec import AbstractFileSystem
@@ -37,15 +38,12 @@ if TYPE_CHECKING:
 
 # --- types ---
 
-T = TypeVar("T", str, bytes)
-
-
 @runtime_checkable
-class OpenFileLike(Protocol[T]):
+class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
     """minimal fsspec open file type"""
     fs: AbstractFileSystem
     path: str
-    def __enter__(self) -> IO[T]: ...
+    def __enter__(self) -> IO[AnyStr]: ...
     def __exit__(self, exc_type, exc_val, exc_tb): ...
 
 
