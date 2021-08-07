@@ -5,10 +5,8 @@ from operator import itemgetter
 from pathlib import PurePath
 from typing import Dict
 from typing import Iterable
-from typing import Mapping
 from typing import Optional
 from typing import Tuple
-from typing import TypeVar
 
 from orjson import JSONDecodeError
 from orjson import OPT_SORT_KEYS

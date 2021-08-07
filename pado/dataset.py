@@ -28,7 +28,6 @@ from pado.images import GroupedImageProvider
 from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
-from pado.images.image import urlpathlike_to_fsspec
 from pado.metadata import PadoColumn
 from pado.metadata import PadoInvalid
 from pado.metadata import PadoReserved
@@ -37,6 +36,7 @@ from pado.utils import FilteredMapping
 from pado.utils import cached_property
 from pado.utils import make_chain
 from pado.utils import make_priority_chain
+from pado.util.files import urlpathlike_to_fsspec
 
 try:
     from typing import Literal, TypedDict  # novermin

@@ -11,7 +11,6 @@ from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
 
-import numpy as np
 import tiffslide
 import zarr.core
 from fsspec import get_fs_token_paths
@@ -29,12 +28,12 @@ from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
 from pado.types import UrlpathLike
-from pado.util.store import urlpathlike_to_fsspec
-from pado.util.store import urlpathlike_to_string
+from pado.util.files import urlpathlike_to_fsspec
+from pado.util.files import urlpathlike_to_string
 
 if TYPE_CHECKING:
     import PIL
-    from numpy.typing import ArrayLike
+    import numpy as np
 
 
 # --- metadata and info models ---
