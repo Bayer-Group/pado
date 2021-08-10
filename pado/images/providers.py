@@ -144,7 +144,10 @@ class GroupedImageProvider(ImageProvider):
         for p in providers:
             if not isinstance(p, ImageProvider):
                 p = ImageProvider(p)
-            self.providers.append(p)
+            if isinstance(p, GroupedImageProvider):
+                self.providers.extend(p.providers)
+            else:
+                self.providers.append(p)
 
     @cached_property
     def df(self):
