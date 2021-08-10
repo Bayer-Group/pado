@@ -19,5 +19,3 @@ def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> Urlpath
         })
     else:
         return urlpath
-
-

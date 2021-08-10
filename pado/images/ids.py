@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os.path as op
 from operator import itemgetter
 from pathlib import PurePath
@@ -12,8 +13,6 @@ from orjson import JSONDecodeError
 from orjson import OPT_SORT_KEYS
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
-
-from pado.util.files import hash_str
 
 
 # noinspection PyMethodMayBeStatic
@@ -208,9 +207,9 @@ class ImageId(Tuple[Optional[str], ...]):
         """return a one way hash of the image_id"""
         if not full:
             # noinspection PyPropertyAccess
-            return hash_str(self.last)
+            return _hash_str(self.last)
         else:
-            return hash_str(self.to_str())
+            return _hash_str(self.to_str())
 
     # --- path methods ------------------------------------------------
 
@@ -244,3 +243,8 @@ class ImageId(Tuple[Optional[str], ...]):
         except KeyError:
             raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
         return PurePath(*fs_parts)
+
+
+def _hash_str(string: str, hasher=hashlib.sha256) -> str:
+    """calculate the hash of a string"""
+    return hasher(string.encode()).hexdigest()
