@@ -12,6 +12,7 @@ from typing import Tuple
 
 import pandas as pd
 import pyarrow
+import pyarrow.parquet
 from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
