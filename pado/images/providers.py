@@ -14,11 +14,11 @@ from typing import Tuple
 
 import pandas as pd
 
+from pado._compat import cached_property
 from pado.images.ids import ImageId
 from pado.images.image import Image
 from pado.types import UrlpathLike
 from pado.util.files import find_files
-from pado.utils import cached_property
 from pado.util.store import Store
 from pado.util.store import StoreType
 

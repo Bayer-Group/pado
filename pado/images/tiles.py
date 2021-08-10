@@ -9,9 +9,9 @@ from typing import Tuple
 import numpy as np
 from shapely.geometry import Polygon
 
+from pado._compat import cached_property
 from pado.images.utils import IntPoint
 from pado.images.utils import MPP
-from pado.utils import cached_property
 
 if TYPE_CHECKING:
     from pado.images.image import Image
