@@ -62,7 +62,7 @@ def info_(args, subparser):
 def file_search(args, subparser):
     """search for files at locations"""
     import itertools
-    from pado.util.files import file_finder
+    from pado.io.files import file_finder
 
     if not args.search_paths:
         print(subparser.format_help())

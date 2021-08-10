@@ -17,7 +17,7 @@ from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
 from pado.types import UrlpathLike
-from pado.util.files import urlpathlike_to_fsspec
+from pado.io.files import urlpathlike_to_fsspec
 
 
 class StoreType(str, enum.Enum):

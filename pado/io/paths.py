@@ -3,7 +3,7 @@ import fnmatch
 import json
 import os.path
 from pado.types import UrlpathLike
-from pado.util.files import urlpathlike_to_fsspec
+from pado.io.files import urlpathlike_to_fsspec
 
 
 def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> UrlpathLike:

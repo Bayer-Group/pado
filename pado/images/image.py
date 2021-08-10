@@ -28,8 +28,8 @@ from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
 from pado.types import UrlpathLike
-from pado.util.files import urlpathlike_to_fsspec
-from pado.util.files import urlpathlike_to_string
+from pado.io.files import urlpathlike_to_fsspec
+from pado.io.files import urlpathlike_to_string
 
 if TYPE_CHECKING:
     import PIL

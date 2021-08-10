@@ -18,9 +18,9 @@ from pado._compat import cached_property
 from pado.images.ids import ImageId
 from pado.images.image import Image
 from pado.types import UrlpathLike
-from pado.util.files import find_files
-from pado.util.store import Store
-from pado.util.store import StoreType
+from pado.io.files import find_files
+from pado.io.store import Store
+from pado.io.store import StoreType
 
 
 # === storage =================================================================

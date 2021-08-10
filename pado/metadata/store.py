@@ -7,8 +7,8 @@ from typing import Callable
 from typing import Dict
 from typing import Optional
 
-from pado.util.store import Store
-from pado.util.store import StoreType
+from pado.io.store import Store
+from pado.io.store import StoreType
 
 
 __all__ = [
