@@ -26,6 +26,7 @@ class StoreType(str, enum.Enum):
 
 
 class Store(ABC):
+    METADATA_PREFIX = "pado.store.parquet"
     METADATA_KEY_PADO_VERSION = 'pado_version'
     METADATA_KEY_STORE_VERSION = 'store_version'
     METADATA_KEY_STORE_TYPE = 'store_type'
@@ -39,16 +40,12 @@ class Store(ABC):
         self.version = int(version)
         self.type = store_type
 
-    @property
-    def prefix(self):
-        return f"pado.{self.type.value}.parquet"
-
     def _md_set(self, dct: MutableMapping[bytes, bytes], key: str, value: Any) -> None:
-        k = f'{self.prefix}.{key}'.encode()  # parquet requires bytes keys
+        k = f'{self.METADATA_PREFIX}.{key}'.encode()  # parquet requires bytes keys
         dct[k] = json.dumps(value).encode()  # string encode value
 
     def _md_get(self, dct: MutableMapping[bytes, bytes], key: str, default: Any) -> Any:  # require providing a default
-        k = f'{self.prefix}.{key}'.encode()
+        k = f'{self.METADATA_PREFIX}.{key}'.encode()
         if k not in dct:
             return default
         return json.loads(dct[k])
@@ -143,5 +140,18 @@ class Store(ABC):
             self.METADATA_KEY_STORE_TYPE: StoreType(store_type),
         }
         user_metadata.update(version_info)
-        user_metadata.update(get_hook_data)
+        if get_hook_data is not None:
+            user_metadata.update(get_hook_data)
         return df, identifier, user_metadata
+
+
+def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
+    """return the store type from an urlpath"""
+    open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
+    table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
+    key_store_type = f'{Store.METADATA_PREFIX}.{Store.METADATA_KEY_STORE_TYPE}'.encode()
+    try:
+        store_type = json.loads(table.schema.metadata[key_store_type])
+    except (KeyError, json.JSONDecodeError):
+        return None
+    return StoreType(store_type)
