@@ -141,6 +141,9 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
     if isinstance(urlpath, os.PathLike):
         urlpath = os.fspath(urlpath)
 
+    if '~' in urlpath:
+        urlpath = os.path.expanduser(urlpath)
+
     if isinstance(urlpath, bytes):
         return urlpath.decode()
     elif isinstance(urlpath, str):
