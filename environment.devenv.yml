@@ -10,12 +10,12 @@
 #
 
 {% set PADO_DEVEL = os.environ.get('PADO_DEVEL', False) %}
+{% set PADO_DEVEL_CI = os.environ.get('PADO_DEVEL_CI', False) %}
 
 name: pado
 
 channels:
   - conda-forge
-  - defaults
 
 dependencies:
   # python relevant things
@@ -26,6 +26,9 @@ dependencies:
   - setuptools_scm
 
   # pado requirements
+  - appdirs
+  - orjson
+  - fsspec
   - toml
   - tqdm
   - pyarrow
@@ -36,13 +39,11 @@ dependencies:
   # support for pado.ext.testsource
   - tifffile
 
-
-  - JPype1>=1
-
   # testing relevant things
   - pytest>=6
   - pytest-cov
 
   # pip installs
-  - pip:      # [ PADO_DEVEL ]
+  - pip:      # [ PADO_DEVEL or PADO_DEVEL_CI ]
+    - "git+https://github.com/Bayer-Group/tiffslide.git#egg=tiffslide"  # [ PADO_DEVEL_CI ]
     - "-e ."  # [ PADO_DEVEL ]

@@ -1,32 +1,41 @@
+from __future__ import annotations
+
 import datetime
+import glob
 import os
 import pathlib
 import re
 import warnings
 from collections.abc import Hashable
 from pathlib import Path
-from typing import Callable, List, Mapping, Optional, Union
+from typing import List
+from typing import Mapping
+from typing import Optional
+from typing import Tuple
+from typing import Union
 
+import fsspec
 import pandas as pd
 import toml
 
-from pado.annotations import Annotation, AnnotationResources
+from pado.annotations import Annotation
+from pado.annotations import AnnotationResources
 from pado.annotations import get_provider as get_annotation_provider
 from pado.annotations import store_provider as store_annotation_provider
 from pado.datasource import DataSource
-from pado.images import (
-    ImageResource,
-    ImageResourceCopier,
-    ImageResourcesProvider,
-    RemoteImageResource,
-    SerializableImageResourcesProvider,
-)
-from pado.metadata import (
-    PadoColumn,
-    PadoInvalid,
-    PadoReserved,
-)
-from pado.utils import cached_property, make_chain, make_priority_chain, FilteredMapping
+from pado.images import FilteredImageProvider
+from pado.images import GroupedImageProvider
+from pado.images import Image
+from pado.images import ImageId
+from pado.images import ImageProvider
+from pado.metadata import PadoColumn
+from pado.metadata import PadoInvalid
+from pado.metadata import PadoReserved
+from pado.utils import ChainMap
+from pado.utils import FilteredMapping
+from pado.utils import cached_property
+from pado.utils import make_chain
+from pado.utils import make_priority_chain
 
 try:
     from typing import Literal, TypedDict  # novermin
@@ -34,18 +43,16 @@ except ImportError:
     from typing_extensions import Literal, TypedDict
 
 
-PathOrStr = Union[str, os.PathLike]
-
-
-def is_pado_dataset(path: Path, load_data=False):
+def is_pado_dataset(urlpath: Union[str, Path], load_data=False):
     """check if the given path is a valid pado dataset"""
-    path = Path(path)
-    if path.is_dir():
-        path /= "pado.dataset.toml"
-    if path.name == "pado.dataset.toml" and path.is_file():
+    fs, urlpath, path = _get_fs_urlpath_path(urlpath)
+
+    if fs.isdir(path):
+        path = os.path.join(path, "pado.dataset.toml")
+    if os.path.basename(path) == "pado.dataset.toml" and fs.isfile(path):
         if not load_data:
             return True
-        with path.open("r") as p:
+        with fs.open(path, mode="r") as p:
             return toml.load(p)
     else:
         # we could check more, but let's file this under
@@ -53,50 +60,63 @@ def is_pado_dataset(path: Path, load_data=False):
         return {} if load_data else False
 
 
-def verify_pado_dataset_integrity(path: PathOrStr) -> bool:
+def verify_pado_dataset_integrity(urlpath: Union[str, Path]) -> bool:
     """verify file integrity of a pado dataset"""
-    path = Path(path)
-    data = is_pado_dataset(path, load_data=True)
-    if path.is_dir():
-        path /= "pado.dataset.toml"
+    fs, urlpath, path = _get_fs_urlpath_path(urlpath)
+    data = is_pado_dataset(urlpath, load_data=True)
     if not data:
         raise ValueError("provided Path is not a pado dataset")
+    if fs.isdir(path):
+        path = os.path.join(path, "pado.dataset.toml")
 
-    dataset_dir = path.parent
-    required_dirs = [dataset_dir / "images", dataset_dir / "metadata"]
+    dataset_dir = os.path.dirname(path)
+    required_dirs = [
+        os.path.join(dataset_dir, "images"),
+        os.path.join(dataset_dir, "metadata"),
+    ]
     for p in required_dirs:
-        if not p.is_dir():
+        if not fs.isdir(p):
             raise ValueError(f"missing {p} directory")
 
     identifiers = [ds["identifier"] for ds in data["sources"]]
     for identifier in identifiers:
-        if not list(dataset_dir.glob(f"metadata/{identifier}.*")):
+        if not fs.glob(os.path.join(dataset_dir, "metadata", f"{identifier}.*")):
             raise ValueError(f"identifier {identifier} is missing metadata")
 
     return True
 
 
-DatasetIOMode = Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"]
-
-
 class PadoDataItemDict(TypedDict):
-    image: ImageResource
+    image: Image
     metadata: pd.DataFrame
     annotations: List[Annotation]
 
 
-class PadoDataSourceDict(TypedDict):
+class _PadoDataSourceDict(TypedDict):
     identifier: str
     added: datetime.datetime
     num_images: int
 
 
-class PadoInfoDict(TypedDict):
+class _PadoInfoDict(TypedDict):
     identifier: str
     created: datetime.datetime
     updated: datetime.datetime
     version: int
-    sources: List[PadoDataSourceDict]
+    sources: List[_PadoDataSourceDict]
+
+
+def _get_fs_urlpath_path(
+        urlpath: Union[str, pathlib.Path]
+) -> Tuple[fsspec.AbstractFileSystem, str, str]:
+    """get a urlpath for fsspec"""
+    if isinstance(urlpath, pathlib.Path):
+        urlpath = re.sub(r"file:/(?!/)", "file:///", urlpath.as_uri())
+    else:
+        urlpath = os.fspath(urlpath)
+
+    fs, _token, _paths = fsspec.get_fs_token_paths(urlpath)
+    return fs, urlpath, _paths[0]
 
 
 class PadoDataset(DataSource):
@@ -104,8 +124,8 @@ class PadoDataset(DataSource):
 
     def __init__(
         self,
-        path: Union[str, pathlib.Path],
-        mode: DatasetIOMode = "r",
+        urlpath: Union[str, pathlib.Path],
+        mode: Literal["r", "r+", "w", "w+", "a", "a+", "x", "x+"] = "r",
         identifier: Optional[str] = None,
         query: Optional[str] = None,
     ):
@@ -113,8 +133,8 @@ class PadoDataset(DataSource):
 
         Parameters
         ----------
-        path:
-            path to `pado.dataset.toml` file, or its parent directory
+        urlpath:
+            fsspec urlpath to `pado.dataset.toml` file, or its parent directory
         mode:
             'r' --> readonly, error if not there
             'r+' --> read/write, error if not there
@@ -130,8 +150,14 @@ class PadoDataset(DataSource):
             (The query is used on `PadoDataset().metadata`)
 
         """
-        self._config = pathlib.Path(path)
-        self._mode = str(mode)
+        # parse the urlpath
+        fs, urlpath, path = _get_fs_urlpath_path(urlpath)
+
+        self._fs: fsspec.AbstractFileSystem = fs
+        self._urlpath: str = urlpath
+
+        self._config = pathlib.PurePath(path)
+        self._mode = mode
 
         # guarantee p points to `pado.dataset.toml` file (allow directory)
         if not self._config.suffix:
@@ -142,26 +168,24 @@ class PadoDataset(DataSource):
         if not re.match(r"^[rawx][+]?$", mode):
             raise ValueError(f"unsupported mode '{mode}'")
 
-        p = self._config.expanduser().absolute()
-        _exists = p.is_file()
+        p = self._config
+        _exists = self._fs.isfile(os.fspath(self._config))
 
         self._readonly = mode == "r"
-        self._path = self._config.parent
+        self._path: pathlib.PurePath = self._config.parent
 
         if mode in {"r", "r+"} and not _exists:
-            raise FileNotFoundError(p)
+            raise FileNotFoundError(f'File {p} must exist in "r(+)" mode.')
         elif mode in {"x", "x+"} and _exists:
-            raise FileExistsError(p)
+            raise FileExistsError(f'File {p} must not exist in "x(+)" mode.')
         elif mode in {"w", "w+"} and _exists:
-            # todo: truncate
-            # shutil.rmtree(self._path, ignore_errors=True)
-            # _exists = False
-            raise NotImplementedError("not tested yet...")
+            fs.rm(path, recursive=True)
+            _exists = False
 
         # internal paths
-        self._path_images = self._path / "images"
-        self._path_metadata = self._path / "metadata"
-        self._path_annotations = self._path / "annotations"
+        self._path_images = self._path.joinpath("images")
+        self._path_metadata = self._path.joinpath("metadata")
+        self._path_annotations = self._path.joinpath("annotations")
 
         # identifier
         if identifier is None:
@@ -179,15 +203,15 @@ class PadoDataset(DataSource):
                     self._store_dataset_toml()
 
             try:
-                verify_pado_dataset_integrity(path)
+                verify_pado_dataset_integrity(self._urlpath)
             except ValueError:
                 raise RuntimeError("dataset integrity degraded")
         else:
             # ensure folders exist
-            self._path.mkdir(exist_ok=True)
-            self._path_images.mkdir(exist_ok=True)
-            self._path_metadata.mkdir(exist_ok=True)
-            self._path_annotations.mkdir(exist_ok=True)
+            self._fs.mkdir(os.fspath(self._path))
+            self._fs.mkdir(os.fspath(self._path_images))
+            self._fs.mkdir(os.fspath(self._path_metadata))
+            self._fs.mkdir(os.fspath(self._path_annotations))
             # write initial dataset toml
             self._info = self._store_dataset_toml(_info={"identifier": identifier})
 
@@ -200,41 +224,91 @@ class PadoDataset(DataSource):
         # keep query string
         self._metadata_query_str = query
 
+        # image_id column cache
+        self._metadata_df_image_id_col = None
+
+    def query(self, query_str: str) -> PadoDataset:
+        """ Simplest implementation of querying from an existing PadoDataset"""
+        # TODO: improve this such that operations like .query().query() make sense
+        return PadoDataset(urlpath=self._urlpath,
+                           mode=self._mode,
+                           query=query_str)
+
     @property
     def path(self):
         """root folder of pado dataset"""
         return self._path
 
     @property
+    def urlpath(self):
+        """the fsspec urlpath for this dataset"""
+        return self._urlpath
+
+    @property
+    def filesystem(self) -> fsspec.AbstractFileSystem:
+        """the fsspec filesystem for this dataset"""
+        return self._fs
+
+    @property
     def identifier(self):
         return self._info["identifier"]
 
     @property
-    def images(self) -> ImageResourcesProvider:
-        """a sequence-like interface to all images in the dataset"""
+    def images(self) -> ImageProvider:
+        """mapping image_ids to images in the dataset"""
         if self._image_provider is None:
-            self._image_provider = make_chain([
-                SerializableImageResourcesProvider(p.name, self._path_images)
-                for p in self._path_images.glob("*") if p.is_dir()
-            ])
+            providers = []
+            for p in self._fs.glob(self._fspath(self._path_images, "*.parquet")):
+                if self._fs.isfile(p):
+                    with self._fs.open(p, mode='rb') as f:
+                        providers.append(
+                            ImageProvider.from_parquet(f)
+                        )
+            if len(providers) == 0:
+                image_provider = ImageProvider({})
+            elif len(providers) == 1:
+                image_provider = ImageProvider(providers[0])
+            else:
+                image_provider = GroupedImageProvider(*providers)
 
             if self._metadata_query_str is not None:
-                unique_image_ids = sorted(self.metadata[PadoColumn.IMAGE].unique())
-                self._image_provider = FilteredMapping(self._image_provider, valid_keys=unique_image_ids)
+                # in case metadata_query_str is set, we can retrieve the set of valid
+                # image_ids from the now already filtered metadata dataframe:
+                image_ids = map(ImageId.from_str, self.metadata[PadoColumn.IMAGE].unique())
+                image_provider = FilteredImageProvider(image_provider, valid_keys=image_ids)
+
+            self._image_provider = image_provider
 
         return self._image_provider
+
+    def _reassociate_images(self, *paths: Union[str, Path]):
+        if self._image_provider is None:
+            _ = self.images
+        if isinstance(self._image_provider, FilteredMapping):
+            raise NotImplementedError("not supported for filtered datasets")
+        elif isinstance(self._image_provider, ChainMap):
+            for ip in self._image_provider.maps:
+                for path in paths:
+                    ip.reassociate_resources(path)
+                ip.save()
+        elif isinstance(self._image_provider, ImageProvider):
+            for path in paths:
+                self._image_provider.reassociate_resources(path)
+            self._image_provider.save()
+        else:
+            raise NotImplementedError(f"unexpected image provider type '{self._image_provider}'")
 
     @property
     def metadata(self) -> pd.DataFrame:
         """a pandas DataFrame providing all metadata stored in the dataset"""
-        _ext = ".parquet.gzip"
+        _ext = ".parquet"
 
         if self._metadata_df is None:
-            md_dir = self._path_metadata
             dfs, keys = [], []
-            for metadata_file in md_dir.glob(f"*{_ext}"):
-                dfs.append(pd.read_parquet(metadata_file))
-                keys.append(metadata_file.name[: -len(_ext)])
+            for metadata_path in self._fs.glob(f"{self._path_metadata}/*{_ext}"):
+                with self._fs.open(metadata_path) as f:
+                    dfs.append(pd.read_parquet(f))
+                    keys.append(os.path.basename(metadata_path)[: -len(_ext)])
             # build the combined df and allow differentiating data sources
             df = pd.concat(dfs, keys=keys)
             # this implicitly assumes that "level_0" is reserved
@@ -255,26 +329,37 @@ class PadoDataset(DataSource):
         return self._metadata_df
 
     @property
-    def annotations(self) -> Mapping[str, AnnotationResources]:
+    def annotations(self) -> Mapping[ImageId, AnnotationResources]:
         """a mapping-like interface for all annotations per image"""
         if self._annotations_provider is None:
-            self._annotations_provider = make_chain([
-                get_annotation_provider(p)
-                for p in self._path_annotations.glob("*") if p.is_dir()
-            ])
+            providers = []
+            for p in self._fs.glob(self._fspath(self._path_annotations, "*")):
+                if self._fs.isdir(p):
+                    providers.append(
+                        get_annotation_provider(self._fs, p)
+                    )
+            self._annotations_provider = make_chain(providers)
         return self._annotations_provider
 
     def __iter__(self):
-        yield from self.images
+        return iter(self.images)
 
-    def __getitem__(self, item: str) -> PadoDataItemDict:
+    def __getitem__(self, item: ImageId) -> PadoDataItemDict:
         image = self.images[item]
-        if isinstance(image, RemoteImageResource):
-            warnings.warn(
-                "you're requesting data from a dataset that contains remote image resources"
-            )  # pragma: no cover
         _df = self.metadata
-        metadata = _df[_df[PadoColumn.IMAGE] == item]
+
+        if self._metadata_df_image_id_col is None:
+            def _convert_to_image_id(x):
+                try:
+                    return ImageId.from_str(x)
+                except ValueError:
+                    return ImageId(*x.split("__"))  # legacy support
+
+            self._metadata_df_image_id_col = _df[PadoColumn.IMAGE].apply(_convert_to_image_id)
+
+        metadata = _df[self._metadata_df_image_id_col == item]
+        if metadata.size == 0:
+            warnings.warn(f"no metadata for {item!r}")
 
         try:
             annotation_dict = self.annotations[item].copy()
@@ -290,25 +375,29 @@ class PadoDataset(DataSource):
     def __len__(self):
         return len(self.images)
 
+    def _fspath(self, *parts):
+        return os.fspath(pathlib.PurePath().joinpath(*parts))
+
+    def _fsopen(self, parts, mode="rb"):
+        if isinstance(parts, (str, Path)):
+            parts = (parts,)
+        return self._fs.open(self._fspath(*parts), mode=mode)
+
     def add_source(self, source: DataSource, copy_images: bool = True):
         if self._readonly:
-            raise RuntimeError("can't add sources to readonly dataset")
+            raise RuntimeError("Can't add sources to readonly dataset")
 
         # store metadata and images
         with source:
             self._store_metadata(source)
-            self._store_image_provider(source, copy_images)
+            self._store_image_provider(source, copy_images=copy_images)
             self._store_annotation_provider(source)
             self._store_dataset_toml(add_source=source)
 
     def _store_metadata(self, source: DataSource):
         """store the metadata in the dataset"""
         identifier = source.identifier
-        metadata_path = self._path_metadata / f"{identifier}.parquet.gzip"
-        if metadata_path.is_file():
-            # todo: allow extending
-            raise ValueError("source already exists")
-
+        metadata_path = self._fsopen((self._path_metadata, f"{identifier}.parquet"), mode="wb")
         source.metadata.to_parquet(metadata_path, compression="gzip")
         # clear cache
         self._metadata_df = self._metadata_col_map = None
@@ -316,36 +405,52 @@ class PadoDataset(DataSource):
     def _store_image_provider(
         self,
         source: DataSource,
+        *,
         copy_images: bool = True,
-        copier: Optional[Callable[[ImageResourcesProvider], None]] = None,
+        allow_overwrite: bool = False,
     ):
         """store the image provider to the dataset"""
         identifier = source.identifier
 
-        ip = SerializableImageResourcesProvider.from_provider(
-            identifier, self._path_images, source.images
-        )
+        ip = ImageProvider(source.images)
+        if not allow_overwrite and not set(ip).isdisjoint(self.images):
+            overlap = set(ip).union(self.images)
+            raise ValueError(f"Images already in dataset {overlap!r}")
+
         if copy_images:
-            if copier is None:
-                copier = ImageResourceCopier(identifier, self._path_images)
-            copier(ip)
+            # ingest images
+            for image_id, image in ip.items():
+                old_pth = os.fspath(image.fspath)
+                with fsspec.open(old_pth, mode='rb') as f:
+                    # noinspection PyPropertyAccess
+                    new_pth = self._fspath(self._path_images, image_id.site, image_id.to_path())
+                    self._fs.mkdirs(os.path.dirname(new_pth), exist_ok=True)
+                    self._fs.put_file(f.path, new_pth)
+                # need to update fspath to point to the new image
+                image.fspath = new_pth
+                ip[image_id] = image
+
+        ip.to_parquet(
+            fspath=self._fsopen((self._path_images, f"{identifier}.parquet"), mode="wb")
+        )
         # clear cache
         self._image_provider = None
+        self._metadata_df_image_id_col = None
 
     def _store_annotation_provider(self, source: DataSource):
         """store the annotation provider to the dataset"""
         path = self._path_annotations / source.identifier
-        store_annotation_provider(path, source.annotations)
+        store_annotation_provider(self._fs, os.fspath(path), source.annotations)
         # clear cache
         self._annotations_provider = None
 
     def _store_dataset_toml(
         self, add_source: Optional[DataSource] = None, *, _info=None
-    ) -> PadoInfoDict:
+    ) -> _PadoInfoDict:
         if _info is None:
             _info = self._info
 
-        info_dict = PadoInfoDict(
+        info_dict = _PadoInfoDict(
             identifier=_info["identifier"],
             created=_info.get("created", datetime.datetime.now()),
             updated=datetime.datetime.now(),
@@ -353,19 +458,19 @@ class PadoDataset(DataSource):
             sources=_info.get("sources", []),
         )
         if add_source:
-            source_dict = PadoDataSourceDict(
+            source_dict = _PadoDataSourceDict(
                 identifier=add_source.identifier,
                 added=datetime.datetime.now(),
                 num_images=len(add_source.images),
             )
             info_dict["sources"].append(source_dict)
 
-        with self._config.open("w") as config:
+        with self._fs.open(os.fspath(self._config), mode="w") as config:
             toml.dump(info_dict, config)
         return info_dict
 
-    def _load_dataset_toml(self) -> PadoInfoDict:
-        with self._config.open("r") as config:
+    def _load_dataset_toml(self) -> _PadoInfoDict:
+        with self._fs.open(os.fspath(self._config), mode="r") as config:
             dataset_config = toml.load(config)
         return dataset_config
 
@@ -393,7 +498,7 @@ class PadoDatasetChain:
             return r
 
     @cached_property
-    def images(self) -> ImageResourcesProvider:
+    def images(self) -> ImageProvider:
         """images in the pado dataset"""
         return make_priority_chain(
             (ds.images for ds in self._datasets),

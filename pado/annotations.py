@@ -1,11 +1,16 @@
 import json
 import lzma
+import os
+import warnings
 from collections import UserDict
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional
 
+import fsspec
 from shapely.geometry import asShape, mapping
 from shapely.geometry.base import BaseGeometry
+
+from pado.images import ImageId
 
 try:
     from typing import TypedDict  # novermin
@@ -13,7 +18,7 @@ except ImportError:
     from typing_extensions import TypedDict
 
 
-def is_valid_geometry(geometry) -> bool:
+def check_geometry(geometry, *, instantiate: bool = True, validate: bool = False) -> bool:
     """
     Returns True iff geometry is a valid shapely/geos geometry.
 
@@ -26,7 +31,11 @@ def is_valid_geometry(geometry) -> bool:
       https://shapely.readthedocs.io/en/stable/manual.html#object.is_valid
     """
     try:
-        return geometry.is_valid
+        if validate:
+            return geometry.is_valid
+        if instantiate:
+            str(geometry)
+        return True
     except ValueError:
         return False
 
@@ -57,19 +66,21 @@ class AnnotationResources(TypedDict):
     metadata: Dict[str, Any]
 
 
-class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
+class AnnotationResourcesProvider(UserDict, Mapping[ImageId, AnnotationResources]):
     """An AnnotationResourcesProvider is a map from keys (image_ids) to
     AnnotationResources.
 
     Lazy loads the annotation resources when requested.
     """
 
-    def __init__(self, path, suffix, load, dump=None):
+    LEGACY_SUPPORT_SEPARATOR = "__"
+
+    def __init__(self, fs, fspath, suffix, load, dump=None, legacy_support=True):
         """create a new AnnotationResourcesProvider
 
         Parameters
         ----------
-        path :
+        fspath :
             the base directory for the serialized annotations per image_id
         suffix :
             the file suffix for each serialized annotation resource
@@ -80,61 +91,95 @@ class AnnotationResourcesProvider(UserDict, Mapping[str, AnnotationResources]):
 
         """
         super().__init__()
-        path = Path(path)
-        path.mkdir(exist_ok=True)
-        self._file = lambda key: path.joinpath(key + suffix)
+
+        fs.mkdirs(fspath, exist_ok=True)
+
+        self._path = fspath
+        self._fs = fs
+        self._suffix = suffix
         self._load = load
         self._dump = dump
-        self._files = {}
-        for p in path.iterdir():
-            fn = p.name
-            if fn.endswith(suffix):
-                self._files[fn[: -len(suffix)]] = p
+        self._files: Dict[ImageId, str] = {}
+
+        legacy_recovered = 0
+        for current, dirs, files in fs.walk(fspath, maxdepth=1):
+            for fn in files:
+                if not fn.endswith(suffix):
+                    continue  # skip if not an annotation file
+
+                fn = fn[: -len(suffix)]
+                try:
+                    image_id = ImageId.from_str(fn)
+                except ValueError:
+                    if not legacy_support:
+                        continue
+                    image_id = ImageId(*fn.split(self.LEGACY_SUPPORT_SEPARATOR))
+                    legacy_recovered += 1
+
+                self._files[image_id] = os.path.join(current, fn + self._suffix)
+
+        if legacy_recovered > 0:
+            warnings.warn(f"legacy: converted {legacy_recovered} annotations to newer annotation storage fmt")
+
+    def _file(self, key: ImageId) -> str:
+        assert isinstance(key, ImageId)
+        p = os.path.join(self._path, f"{key.to_str()}{self._suffix}")
+        return p
 
     def __len__(self):
         return len(set().union(super().__iter__(), self._files))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[ImageId]:
         return iter(set().union(super().__iter__(), self._files))
 
-    def __missing__(self, key: str) -> AnnotationResources:
+    def __contains__(self, key: ImageId) -> bool:
+        return key in self.data or key in self._files
+
+    def __missing__(self, key: ImageId) -> AnnotationResources:
         fn = self._files[key]
-        with fn.open("rb") as fp:
-            resources = self._load(fp)
+        try:
+            with self._fs.open(fn, mode="rb") as fp:
+                resources = self._load(fp)
+        except FileNotFoundError:
+            raise KeyError(key)
         super().__setitem__(key, resources)
         return resources
 
-    def __setitem__(self, key: str, value: AnnotationResources):
+    def __setitem__(self, key: ImageId, value: AnnotationResources):
         if self._dump:
-            with self._file(key).open("wb") as fp:
+            with self._fs.open(self._file(key), mode="wb") as fp:
                 self._dump(value, fp)
         super().__setitem__(key, value)
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: ImageId):
+        # FIXME
         if self._dump:  # file deletion only allowed when dump provided
             if key in self._files:
                 fn = self._files.pop(key)
-                fn.unlink(missing_ok=True)
+                try:
+                    self._fs.rm(fn)
+                except FileNotFoundError:
+                    pass
         super().__delitem__(key)
 
     def __repr__(self):
         return f"{type(self).__name__}({set(self)})"
 
 
-def get_provider(path, fmt="geojson") -> AnnotationResourcesProvider:
+def get_provider(fs, path, fmt="geojson") -> AnnotationResourcesProvider:
     """create an AnnotationResourcesProvider for path and format"""
     # todo: determine format from path
     if fmt == "geojson":
         return AnnotationResourcesProvider(
-            path, ".geojson.xz", load_geojson, dump_geojson
+            fs, path, ".geojson.xz", load_geojson, dump_geojson
         )
     else:
         raise ValueError(f"unknown AnnotationResourcesProvider format '{fmt}'")
 
 
-def store_provider(path, provider, fmt="geojson") -> None:
+def store_provider(fs, path, provider, fmt="geojson") -> None:
     """store an AnnotationResourcesProvider at path using the format"""
-    get_provider(path, fmt).update(provider)
+    get_provider(fs, path, fmt).update(provider)
 
 
 # --- Annotation serialization ------------------------------------------------
@@ -149,6 +194,9 @@ def load_geojson(fp, *, drop_unclassified: bool = True, drop_broken_geometries: 
         a file pointer or file path
     drop_unclassified:
         drop an annotation in case it has no class set
+    drop_broken_geometries:
+        drop an annotation in case it is broken
+
     """
     # load file
     with lzma.open(fp, "rb") as reader:
@@ -170,7 +218,7 @@ def load_geojson(fp, *, drop_unclassified: bool = True, drop_broken_geometries: 
         properties = geojson["properties"]
         shape = asShape(geojson["geometry"])
 
-        if not drop_broken_geometries or is_valid_geometry(shape):
+        if not drop_broken_geometries or check_geometry(shape):
             annotations.append(
                 Annotation(
                     roi=shape,

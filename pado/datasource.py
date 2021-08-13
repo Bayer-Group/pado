@@ -4,7 +4,7 @@ from typing import Mapping
 import pandas as pd
 
 from pado.annotations import AnnotationResources
-from pado.images import ImageResourcesProvider
+from pado.images import ImageId, ImageProvider
 
 
 class DataSource(ABC):
@@ -24,7 +24,7 @@ class DataSource(ABC):
 
     @property
     @abstractmethod
-    def images(self) -> ImageResourcesProvider:
+    def images(self) -> ImageProvider:
         raise NotImplementedError("implement in subclass")
 
     @property
@@ -47,6 +47,28 @@ class DataSource(ABC):
         self.release()
 
 
+class SimpleDataSource(DataSource):
+
+    metadata: pd.DataFrame = None
+    images: ImageProvider = {}
+    annotations: Mapping[str, AnnotationResources] = {}
+
+    def __init__(self, identifier, metadata, images, annotations):
+        if not isinstance(identifier, str):
+            raise TypeError('identifier')
+        if not isinstance(metadata, pd.DataFrame):
+            raise TypeError('metadata')
+        if not isinstance(images, ImageProvider):
+            raise TypeError('images')
+        if not isinstance(annotations, dict):
+            raise TypeError('annotations')
+
+        self.identifier = identifier
+        self.metadata = metadata
+        self.images = images
+        self.annotations = annotations
+
+
 def verify_datasource(ds: DataSource, acquire=False):
     from pado.metadata import (
         PadoColumn,
@@ -61,7 +83,7 @@ def verify_datasource(ds: DataSource, acquire=False):
         verify_columns(df.columns, raise_if_invalid=True)
         # every image_id is present in metadata
         image_ids = set(ds.images)
-        if image_ids != set(df[PadoColumn.IMAGE]):  # maybe we should relax this
+        if image_ids != set(map(ImageId.from_str, df[PadoColumn.IMAGE].unique())):  # maybe we should relax this
             raise ValueError(
                 "metadata IMAGE column must have 1 or more rows for each image"
             )

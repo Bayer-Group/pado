@@ -339,6 +339,7 @@ class Image:
             }
             return levels_dict
 
+
     def get_size(self, mpp_xy: Optional[Tuple[float, float]] = None, level: Optional[int] = None) -> Tuple[int, int]:
         if mpp_xy is not None and level is not None:
             raise ValueError("can only specify one of: 'mpp_xy' and 'level'")
@@ -373,12 +374,13 @@ class Image:
             assert self.metadata[S_MPP_X] == self.metadata[S_MPP_Y]
             # lvl0_mpp = self._image_backend.level0_mpp
             lvl0_mpp = self.mpp
+
             lvl0_xy = tuple_round(
                 scale_xy(location_xy, current=mpp_xy, target=lvl0_mpp)
             )
-
             # mpp_map = self._image_backend.level_mpp_map
             mpp_map = self.level_mpp_map
+
             for lvl_best, mpp_best in mpp_map.items():
                 if mpp_xy[0] >= mpp_best[0]:
                     break

@@ -1,3 +1,5 @@
+import glob
+import os
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
@@ -5,21 +7,20 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from pado._test_source import TestDataSource
 from pado.dataset import PadoDataset, is_pado_dataset, verify_pado_dataset_integrity
 from pado.datasource import DataSource
-from pado.ext.testsource import TestDataSource
-from pado.images import SerializableImageResourcesProvider
+from pado.images import ImageId, ImageProvider
+from pado.img import Image
 from pado.metadata import PadoColumn
 
 
 def count_images(ds: PadoDataset):
     """helper to count images in a pado dataset"""
-
-    def is_image_file(p):
-        return p.is_file() and p.name != SerializableImageResourcesProvider.STORAGE_FILE
-
-    images = list(filter(is_image_file, (ds.path / "images").glob("**/*")))
-    return len(images)
+    return len([
+        f for f in ds.filesystem.glob(f"{ds.path}/images/**")
+        if ds.filesystem.isfile(f) and not f.endswith(".parquet")
+    ])
 
 
 def test_pado_testsource_verification(datasource: DataSource):
@@ -31,11 +32,14 @@ def test_pado_testsource_verification(datasource: DataSource):
 def test_pado_test_datasource_usage(datasource):
     with datasource:
         assert isinstance(datasource.metadata, pd.DataFrame)
-        for image in datasource.images.values():
-            assert image.id is not None
-            assert image.size > 0
-        for annotation in datasource.annotations:
-            assert isinstance(annotation, str)
+        for image_id, image in datasource.images.items():
+            assert isinstance(image_id, ImageId)
+            assert isinstance(image, Image)
+            assert image_id is not None
+            with image:
+                assert image.get_size() > (0, 0)
+        for image_id in datasource.annotations:
+            assert isinstance(image_id, ImageId)
 
 
 def test_pado_test_datasource_error_without_with(datasource):
@@ -46,14 +50,15 @@ def test_pado_test_datasource_error_without_with(datasource):
 
 
 def test_pado_test_datasource_image_ids(datasource):
+    # TODO: revisit
     datasource.acquire()
-    assert set(datasource.images) == {"i0.tif"}  # TODO: revisit
-    assert set(datasource.metadata[PadoColumn.IMAGE]) == {"i0.tif"}
-    assert set(datasource.annotations) == {"i0.tif"}
+    assert set(datasource.images) == {ImageId("i0.tif")}
+    assert set(map(ImageId.from_str, datasource.metadata[PadoColumn.IMAGE])) == {ImageId("i0.tif")}
+    assert set(datasource.annotations) == {ImageId("i0.tif")}
 
 
 def test_write_pado_dataset(datasource, tmp_path):
-    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
+    ds = PadoDataset(urlpath=tmp_path / "my_dataset", mode="x")
     ds.add_source(datasource)
     assert count_images(ds) == 1
     assert isinstance(ds.metadata, pd.DataFrame)
@@ -61,7 +66,7 @@ def test_write_pado_dataset(datasource, tmp_path):
 
 
 def test_add_multiple_datasets(tmp_path):
-    ds = PadoDataset(path=tmp_path / "my_dataset", mode="x")
+    ds = PadoDataset(urlpath=tmp_path / "my_dataset", mode="x")
     ds.add_source(TestDataSource(num_images=2, num_findings=12, identifier="s0"))
     ds.add_source(TestDataSource(num_images=1, num_findings=7, identifier="s1"))
     assert isinstance(ds.metadata, pd.DataFrame)
@@ -90,8 +95,8 @@ def test_pado_dataset_integrity_fail_folders(dataset: PadoDataset, tmp_path):
 def test_pado_dataset_integrity_fail_sources(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path) / "incomplete"
     shutil.copytree(dataset.path, p)
-    for md in p.glob(f"metadata/*"):
-        md.unlink()  # break the dataset
+    for md in glob.glob(os.fspath(p / f"metadata/*")):
+        os.unlink(md)  # break the dataset
     with pytest.raises(ValueError, match=".* missing metadata"):
         verify_pado_dataset_integrity(p)
 
@@ -133,27 +138,25 @@ def test_pado_dataset_open_with_different_identifier(dataset: PadoDataset):
 
 def test_datasource_image_serializing(datasource, tmp_path):
     with datasource:
-        ip = SerializableImageResourcesProvider.from_provider(
-            "placeholder", tmp_path, datasource.images
-        )
+        ip = ImageProvider(datasource.images)
 
     for _ in ip.values():
         pass
 
-    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+    assert len(set(ip)) == len(list(ip.values())) == len(ip.df)
 
 
-def test_serializable_image_resources_provider(datasource, tmp_path):
+def test_image_provider_serializing(datasource, tmp_path):
     with datasource:
-        ip_old = SerializableImageResourcesProvider.from_provider(
-            "placeholder", tmp_path, datasource.images
-        )
+        ip_old = ImageProvider(datasource.images)
+        ip_old.to_parquet(tmp_path / "old.parquet")
 
-    ip = SerializableImageResourcesProvider("placeholder", tmp_path)
+    ip = ImageProvider.from_parquet(tmp_path / "old.parquet")
     for _ in ip.values():
         pass
 
-    assert len(set(ip)) == len(list(ip.values())) == len(ip._df)
+    assert len(set(ip_old)) == len(list(ip.values())) == len(ip.df)
+    assert set(ip_old) == set(ip)
 
 
 @pytest.mark.parametrize(
@@ -173,8 +176,10 @@ def test_reload_dataset(datasource, tmp_path, copy_images):
     assert len(ds.images) == 1
     assert isinstance(ds.images, Mapping)
 
-    for image_id, image_resource in ds.images.items():
-        assert image_id == image_resource.id_str
+    with datasource:
+        image_ids = set(datasource.images)
+    for image_id, image in ds.images.items():
+        assert image_id in image_ids
 
 
 def test_dataset_ro_image_access(dataset_ro):
@@ -201,19 +206,20 @@ def test_datasource_df(datasource):
     with datasource:
         assert len(datasource.images) > 0
         for img_id, img in datasource.images.items():
-            assert img_id == img.id_str
+            assert isinstance(img_id, ImageId)
+            assert isinstance(img, Image)
 
 
 def test_dataset_ro_df_len(dataset_ro):
     assert len(dataset_ro.images) > 0
-    if isinstance(dataset_ro, SerializableImageResourcesProvider):
+    if isinstance(dataset_ro, ImageProvider):
         assert len(dataset_ro.images._df) == len(dataset_ro.images)
 
 
 def test_use_dataset_as_datasource(dataset_ro, tmp_path):
     dataset_path = tmp_path / "new_dataset"
     ds = PadoDataset(dataset_path, mode="x")
-    assert set(dataset_ro.annotations) == {"i0.tif"}
+    assert set(dataset_ro.annotations) == {ImageId("i0.tif")}
     ds.add_source(dataset_ro, copy_images=True)
 
 
