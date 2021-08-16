@@ -1,12 +1,23 @@
 """file utility functions"""
+import gzip
 import json
-import logging
+import lzma
 import os
 import sys
+import tarfile
+import zipfile
+from contextlib import ExitStack
+from contextlib import contextmanager
 from typing import Any
+from typing import BinaryIO
+from typing import ContextManager
+from typing import Generator
+from typing import IO
+from typing import Iterable
 from typing import Iterator
 from typing import NamedTuple
 from typing import Tuple
+from typing import Union
 
 if sys.version_info[:2] >= (3, 10):
     from typing import TypeGuard
@@ -19,15 +30,13 @@ from fsspec.core import OpenFile
 from pado.types import OpenFileLike
 from pado.types import UrlpathLike
 
-_logger = logging.getLogger(__name__)
-
 
 class _OpenFileAndParts(NamedTuple):
     file: OpenFile
     parts: Tuple[str, ...]
 
 
-def find_files(urlpath: UrlpathLike, *, glob: str = "**/*") -> Iterator[_OpenFileAndParts]:
+def find_files(urlpath: UrlpathLike, *, glob: str = "**/*") -> Iterable[_OpenFileAndParts]:
     """iterate over the files with matching at all paths"""
     ofile = urlpathlike_to_fsspec(urlpath)
     fs = ofile.fs
@@ -40,13 +49,13 @@ def find_files(urlpath: UrlpathLike, *, glob: str = "**/*") -> Iterator[_OpenFil
         rpth = os.path.relpath(p, base)
         return tuple(os.path.normpath(rpth).split(os.sep))
 
-    yield from (
+    return [
         _OpenFileAndParts(
             file=OpenFile(fs=fs, path=opth),
             parts=split_into_parts(pth, opth),
         )
         for opth in fs.glob(os.path.join(pth, glob))
-    )
+    ]
 
 
 def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
@@ -102,3 +111,65 @@ def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> OpenFileLike:
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
         fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
         return fs.open(json_obj["path"], mode=mode)
+
+
+@contextmanager
+def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[BinaryIO]:
+    """contextmanager for reading nested compressed files
+
+    supported formats: GZIP, LZMA, ZIP, TAR
+
+    """
+    GZIP = {b"\x1F\x8B"}
+    LZMA = {b"\xFD\x37\x7A\x58\x5A\x00"}
+    ZIP = {b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"}
+
+    def is_tar(fileobj):
+        _pos = fileobj.tell()
+        try:
+            t = tarfile.open(fileobj=fileobj)  # rewinds to 0 on failure
+            t.close()
+            return True
+        except tarfile.TarError:
+            return False
+        finally:
+            fileobj.seek(_pos)
+
+    with ExitStack() as stack:
+        if not (hasattr(file, 'read') and hasattr(file, 'seek')):
+            file = stack.enter_context(file)
+
+        pos = file.tell()
+        magic = file.read(8)
+        file.seek(pos)
+
+        if magic[:2] in GZIP:
+            fgz = stack.enter_context(gzip.open(file))
+            yield stack.enter_context(uncompressed(fgz))
+
+        elif magic[:6] in LZMA:
+            fxz = stack.enter_context(lzma.open(file))
+            yield stack.enter_context(uncompressed(fxz))
+
+        elif magic[:4] in ZIP:
+            fzip = stack.enter_context(zipfile.ZipFile(file))
+            paths = fzip.namelist()
+            if len(paths) != 1:
+                raise RuntimeError(
+                    "zip must contain exactly one file: won't auto uncompress"
+                )
+            fzipped = stack.enter_context(fzip.open(paths[0], mode="r"))
+            yield stack.enter_context(uncompressed(fzipped))
+
+        elif is_tar(file):
+            ftar = stack.enter_context(tarfile.open(fileobj=file))
+            members = ftar.getmembers()
+            if len(members) != 1:
+                raise RuntimeError(
+                    f"tar must contain exactly one file: won't auto uncompress"
+                )
+            ftarred = stack.enter_context(ftar.extractfile(members[0]))
+            yield stack.enter_context(uncompressed(ftarred))
+
+        else:
+            yield file
