@@ -13,9 +13,12 @@ from typing import Set
 from typing import Tuple
 
 import pandas as pd
+from tqdm import tqdm
 
 from pado._compat import cached_property
+from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
+from pado.images.ids import image_id_from_parts
 from pado.images.image import Image
 from pado.types import UrlpathLike
 from pado.io.files import find_files
@@ -129,6 +132,8 @@ class ImageProvider(BaseImageProvider):
             store.METADATA_KEY_STORE_VERSION,
             store.METADATA_KEY_PADO_VERSION,
             store.METADATA_KEY_PROVIDER_VERSION,
+            store.METADATA_KEY_CREATED_AT,
+            store.METADATA_KEY_CREATED_BY,
         } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls.__new__(cls)
         inst.df = df
@@ -250,6 +255,8 @@ def create_image_provider(
     identifier: Optional[str] = None,
     checksum: bool = True,
     resume: bool = False,
+    image_id_func: GetImageIdFunc = image_id_from_parts,
+    progress: bool = False,
 ) -> ImageProvider:
     """create an image provider from a directory containing images"""
     files_and_parts = find_files(search_urlpath, glob=search_glob)
@@ -259,9 +266,12 @@ def create_image_provider(
     else:
         ip = ImageProvider(identifier=identifier)
 
+    if progress:
+        files_and_parts = tqdm(files_and_parts)
+
     try:
         for fp in files_and_parts:
-            image_id = ImageId(*fp.parts, site=ip.identifier)
+            image_id = image_id_func(fp.file, fp.parts, ip.identifier)
             if resume and image_id in ip:
                 continue
             image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=checksum)

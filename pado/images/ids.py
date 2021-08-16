@@ -4,15 +4,19 @@ import hashlib
 import os.path as op
 from operator import itemgetter
 from pathlib import PurePath
+from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 from orjson import JSONDecodeError
 from orjson import OPT_SORT_KEYS
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
+
+from pado.types import OpenFileLike
 
 
 # noinspection PyMethodMayBeStatic
@@ -248,3 +252,59 @@ class ImageId(Tuple[Optional[str], ...]):
 def _hash_str(string: str, hasher=hashlib.sha256) -> str:
     """calculate the hash of a string"""
     return hasher(string.encode()).hexdigest()
+
+
+# === image id helpers ===
+
+GetImageIdFunc = Callable[[OpenFileLike, Tuple[str, ...], Optional[str]], Optional[ImageId]]
+
+
+def image_id_from_parts(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
+    return ImageId(*parts, site=identifier)
+
+
+def image_id_from_parts_without_extension(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
+    parts = PurePath(*parts).with_suffix('').parts
+    return ImageId(*parts, site=identifier)
+
+
+def image_id_from_json_file(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
+    import json
+    from pado.io.files import uncompressed
+    try:
+        with uncompressed(file) as f:
+            data = json.load(f)
+        fn = data["scan_name"]
+        sd = data["scan_date"]
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+    if sd.lower() == "fixme":
+        return ImageId(fn)
+    else:
+        return ImageId(sd, fn)
+
+
+def match_partial_image_ids_reversed(ids: Iterable[ImageId], image_id: ImageId) -> Optional[ImageId]:
+    """match image_ids from back to front
+
+    returns None if no match
+    raises ValueError in case match is ambiguous
+
+    """
+    match_set = set(ids)
+
+    def match(x: ImageId, s: Set[ImageId], idx: int) -> Optional[ImageId]:
+        try:
+            xi = x[idx]  # raises index error when out of parts to match
+        except IndexError:
+            raise ValueError(f"ambiguous: {x!r} -> {s!r}")
+        sj = set(sx for sx in s if sx[idx] == xi or xi is None)
+        if len(sj) == 1:
+            return sj.pop()
+        elif len(sj) == 0:
+            return None
+        else:
+            return match(x, sj, idx - 1)
+
+    return match(image_id, match_set, -1)
