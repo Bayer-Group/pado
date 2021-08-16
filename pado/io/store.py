@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import enum
 import json
+import os
 from abc import ABC
+from datetime import datetime
+from getpass import getuser
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -21,6 +24,7 @@ from pado.io.files import urlpathlike_to_fsspec
 
 
 class StoreType(str, enum.Enum):
+    ANNOTATION = "annotation"
     IMAGE = "image"
     METADATA = "metadata"
 
@@ -31,6 +35,8 @@ class Store(ABC):
     METADATA_KEY_STORE_VERSION = 'store_version'
     METADATA_KEY_STORE_TYPE = 'store_type'
     METADATA_KEY_IDENTIFIER = 'identifier'
+    METADATA_KEY_CREATED_AT = 'created_at'
+    METADATA_KEY_CREATED_BY = 'created_by'
     METADATA_KEY_USER_METADATA = 'user_metadata'
 
     USE_NULLABLE_DTYPES = False  # todo: switch to True?
@@ -71,6 +77,8 @@ class Store(ABC):
         self._md_set(dct, self.METADATA_KEY_PADO_VERSION, _pado_version)
         self._md_set(dct, self.METADATA_KEY_STORE_VERSION, self.version)
         self._md_set(dct, self.METADATA_KEY_STORE_TYPE, self.type.value)
+        self._md_set(dct, self.METADATA_KEY_CREATED_AT, datetime.utcnow().isoformat())
+        self._md_set(dct, self.METADATA_KEY_CREATED_BY, _get_user_host())
         if user_metadata:
             self._md_set(dct, self.METADATA_KEY_USER_METADATA, user_metadata)
         dct.update(table.schema.metadata)
@@ -115,6 +123,8 @@ class Store(ABC):
         store_version = self._md_get(_md, self.METADATA_KEY_STORE_VERSION, 0)
         store_type = self._md_get(_md, self.METADATA_KEY_STORE_TYPE, None)
         pado_version = self._md_get(_md, self.METADATA_KEY_PADO_VERSION, '0.0.0')
+        created_at = self._md_get(_md, self.METADATA_KEY_CREATED_AT, None)
+        created_by = self._md_get(_md, self.METADATA_KEY_CREATED_BY, None)
         user_metadata = self._md_get(_md, self.METADATA_KEY_USER_METADATA, {})
 
         # for subclasses
@@ -138,6 +148,8 @@ class Store(ABC):
             self.METADATA_KEY_PADO_VERSION: pado_version,
             self.METADATA_KEY_STORE_VERSION: self.version,
             self.METADATA_KEY_STORE_TYPE: StoreType(store_type),
+            self.METADATA_KEY_CREATED_AT: created_at,
+            self.METADATA_KEY_CREATED_BY: created_by,
         }
         user_metadata.update(version_info)
         if get_hook_data is not None:
@@ -155,3 +167,29 @@ def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
     except (KeyError, json.JSONDecodeError):
         return None
     return StoreType(store_type)
+
+
+def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
+    """return the store metadata from an urlpath"""
+    open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
+    table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
+    md = {}
+    for k, v in dict(table.schema.metadata).items():
+        k = k.decode()
+        if not k.startswith(Store.METADATA_PREFIX):
+            continue
+        else:
+            k = k[len(Store.METADATA_PREFIX) + 1:]
+        try:
+            v = json.loads(v)
+        except json.JSONDecodeError as err:
+            v = err
+        md[k] = v
+    return md
+
+
+def _get_user_host() -> Optional[str]:
+    try:
+        return f"{getuser()!s}@{os.uname().nodename!s}"
+    except (OSError, KeyError, ValueError):
+        return None
