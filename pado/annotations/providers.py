@@ -15,6 +15,7 @@ from typing import Optional
 import pandas as pd
 from tqdm import tqdm
 
+from pado._compat import cached_property
 from pado.annotations.annotation import Annotations
 from pado.annotations.formats import AnnotationModel
 from pado.annotations.loaders import AnnotationsFromFileFunc
@@ -61,7 +62,7 @@ class AnnotationProvider(BaseAnnotationProvider):
     df: pd.DataFrame
     identifier: str
 
-    def __init__(self, provider: Optional[AnnotationProvider] = None, *, identifier: Optional[str] = None):
+    def __init__(self, provider: Optional[BaseAnnotationProvider] = None, *, identifier: Optional[str] = None):
         if provider is None:
             provider = {}
 
@@ -153,14 +154,68 @@ class AnnotationProvider(BaseAnnotationProvider):
         store = AnnotationProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
         assert {
-                   store.METADATA_KEY_STORE_TYPE,
-                   store.METADATA_KEY_STORE_VERSION,
-                   store.METADATA_KEY_PADO_VERSION,
-                   store.METADATA_KEY_ANNOTATION_VERSION,
-               } == set(user_metadata), f"currently unused {user_metadata!r}"
+            store.METADATA_KEY_STORE_TYPE,
+            store.METADATA_KEY_STORE_VERSION,
+            store.METADATA_KEY_PADO_VERSION,
+            store.METADATA_KEY_CREATED_AT,
+            store.METADATA_KEY_CREATED_BY,
+            store.METADATA_KEY_ANNOTATION_VERSION,
+        } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls(identifier=identifier)
         inst.df = df
         return inst
+
+
+class GroupedAnnotationProvider(AnnotationProvider):
+    # todo: deduplicate
+
+    def __init__(self, *providers: BaseAnnotationProvider):
+        super().__init__()
+        self.providers = []
+        for p in providers:
+            if not isinstance(p, AnnotationProvider):
+                p = AnnotationProvider(p)
+            if isinstance(p, GroupedAnnotationProvider):
+                self.providers.extend(p.providers)
+            else:
+                self.providers.append(p)
+
+    @cached_property
+    def df(self):
+        return pd.concat([p.df for p in self.providers])
+
+    def __getitem__(self, image_id: ImageId) -> Annotations:
+        for ap in self.providers:
+            try:
+                return ap[image_id]
+            except KeyError:
+                pass
+        raise KeyError(image_id)
+
+    def __setitem__(self, image_id: ImageId, value: Annotations) -> None:
+        raise RuntimeError("can't add new item to GroupedImageProvider")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise RuntimeError("can't delete from {type(self).__name__}")
+
+    def __len__(self) -> int:
+        return len(set().union(*self.providers))
+
+    def __iter__(self) -> Iterator[ImageId]:
+        d = {}
+        for provider in reversed(self.providers):
+            d.update(dict.fromkeys(provider))
+        return iter(d)
+
+    def __repr__(self):
+        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
+
+    def to_parquet(self, urlpath: UrlpathLike) -> None:
+        super().to_parquet(urlpath)
+
+    @classmethod
+    def from_parquet(cls, urlpath: UrlpathLike) -> AnnotationProvider:
+        raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
 
 
 # === manipulation ============================================================
