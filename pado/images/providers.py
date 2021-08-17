@@ -12,6 +12,7 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -20,6 +21,9 @@ from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
 from pado.images.ids import image_id_from_parts
 from pado.images.image import Image
+from pado.io.files import urlpathlike_to_fsspec
+from pado.io.files import urlpathlike_to_string
+from pado.io.paths import match_partial_paths_reversed
 from pado.types import UrlpathLike
 from pado.io.files import find_files
 from pado.io.store import Store
@@ -284,33 +288,32 @@ def create_image_provider(
     return ip
 
 
-def reassociate_images(provider: BaseImageProvider, search_path, search_pattern="**/*.svs"):
-    """search a path and re-associate resources by filename"""
-    '''
-    def _fn(x):
-        pth = ImageResource.deserialize(x).local_path
-        if pth is None:
-            return None
-        return pth.name
+def update_image_provider_urlpaths(
+    search_urlpath: UrlpathLike,
+    search_glob: str,
+    *,
+    provider_urlpath: UrlpathLike,
+    inplace: bool = False,
+    ignore_ambiguous: bool = False,
+    progress: bool = False,
+) -> ImageProvider:
+    """search a path and re-associate image urlpaths by filename"""
+    files_and_parts = find_files(search_urlpath, glob=search_glob)
+    ip = ImageProvider.from_parquet(urlpath=provider_urlpath)
 
-    _local_path_name = self._df.apply(_fn, axis=1)
+    new_urlpaths = match_partial_paths_reversed(
+        current_urlpaths=ip.df.urlpath.apply(urlpathlike_to_fsspec),
+        new_urlpaths=list(x.file for x in files_and_parts),
+        ignore_ambiguous=ignore_ambiguous,
+        progress=progress,
+    )
 
-    idx = 0
-    total = len(_local_path_name)
-    for p in glob.iglob(f"{search_path}/{search_pattern}", recursive=True):
-        p = Path(p)
-        select = _local_path_name == p.name
-        num_select = select.sum()
-        if num_select.sum() != 1:
-            if num_select > 1:
-                warnings.warn(f"can't reassociate {p.name} due to multiple matches")
-            continue
-        idx += 1
-        print(self._identifier, idx, total, "reassociating", p.name)
-        row = self._df.loc[select].iloc[0]
-        resource = ImageResource.deserialize(row)
-        p = p.expanduser().absolute().resolve()
-        new_resource = LocalImageResource(resource.id, p, resource.checksum)
-        self[new_resource.id] = new_resource
-    '''
-    raise NotImplementedError("todo")
+    old = ip.df.urlpath.copy()
+    ip.df.loc[:, 'urlpath'] = [urlpathlike_to_string(p) for p in new_urlpaths]
+
+    if progress:
+        print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
+
+    if inplace:
+        ip.to_parquet(provider_urlpath)
+    return ip
