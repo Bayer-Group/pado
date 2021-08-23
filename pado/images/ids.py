@@ -4,6 +4,7 @@ import hashlib
 import os.path as op
 from operator import itemgetter
 from pathlib import PurePath
+from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Iterable
@@ -308,3 +309,23 @@ def match_partial_image_ids_reversed(ids: Iterable[ImageId], image_id: ImageId) 
             return match(x, sj, idx - 1)
 
     return match(image_id, match_set, -1)
+
+
+def ensure_image_id(maybe_image_id: Any) -> ImageId:
+    """guarantees that ImageId types get cast to ImageId"""
+    if isinstance(maybe_image_id, ImageId):
+        return maybe_image_id
+    elif isinstance(maybe_image_id, list) or maybe_image_id.__class__ is tuple:
+        site, *parts = maybe_image_id
+        return ImageId.make(parts, site=site)
+    elif isinstance(maybe_image_id, str):
+        try:
+            return ImageId.from_str(image_id_str=maybe_image_id)
+        except ValueError:
+            pass
+        try:
+            return ImageId.from_json(image_id_json=maybe_image_id)
+        except ValueError:
+            pass
+        raise ValueError(f"can't cast string {maybe_image_id!r} to ImageId")
+    raise TypeError(f"{maybe_image_id!r} of type {type(maybe_image_id).__name__!r}")
