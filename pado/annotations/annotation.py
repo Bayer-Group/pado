@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from reprlib import Repr
 from typing import Any
 from typing import Iterable
 from typing import MutableSequence
@@ -41,6 +42,17 @@ class Annotation:
             raise AttributeError(f"{key} is readonly")
         super().__setattr__(key, value)
 
+    def __repr__(self):
+        return f"{type(self).__name__}(model={self._model!r})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Annotation):
+            return False
+        return all(
+            self.__dict__[k] == other.__dict__[k]
+            for k in self.__dict__ if k not in {'_model', 'color'}
+        )
+
     @classmethod
     def from_obj(cls, obj: Any) -> Annotation:
         """instantiate an annotation from an object, i.e. a pd.Series"""
@@ -62,6 +74,10 @@ class Annotation:
         return dct
 
 
+_r = Repr()
+_r.maxlist = 3
+
+
 class Annotations(MutableSequence[Annotation]):
     df: pd.DataFrame
 
@@ -75,6 +91,14 @@ class Annotations(MutableSequence[Annotation]):
         self._image_id = image_id
         if image_id is not None:
             self._update_df_image_id(image_id)
+
+    def __repr__(self):
+        return f"{type(self).__name__}({_r.repr_list(self, 0)}, image_id={self._image_id!r})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Annotations):
+            return False
+        return all(a == b for a, b in zip(self, other))
 
     @property
     def image_id(self) -> Optional[ImageId]:
