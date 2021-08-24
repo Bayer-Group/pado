@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC
-from collections import Collection
+from collections.abc import Collection
 from itertools import repeat
 from typing import Any
 from typing import Callable
