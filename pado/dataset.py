@@ -63,6 +63,10 @@ class PadoDataset:
         self._root: str = of.path
         self._fs: fsspec.AbstractFileSystem = of.fs
 
+        # paths
+        if not self.readonly:
+            self._ensure_dir()
+
         # caches
         self._cached_index = None
         self._cached_image_provider = None
@@ -179,12 +183,14 @@ class PadoDataset:
         if self.readonly:
             raise RuntimeError(f"{self!r} opened in readonly mode")
 
-        if isinstance(obj, ImageProvider):
+        if isinstance(obj, PadoDataset):
+            for x in [obj.images, obj.metadata, obj.annotations]:
+                self.ingest_obj(x)
+        elif isinstance(obj, ImageProvider):
             if identifier is None and obj.identifier is None:
                 raise ValueError("need to provide an identifier for ImageProvider")
             identifier = identifier or obj.identifier
-            self._ensure_dir("images")
-            pth = self._get_fspath("images", f"{identifier}.image.parquet")
+            pth = self._get_fspath(f"{identifier}.image.parquet")
             obj.to_parquet(self._fs.open(pth, mode="xb"))
             # invalidate caches
             self._cached_index = None
@@ -194,11 +200,19 @@ class PadoDataset:
             if identifier is None and obj.identifier is None:
                 raise ValueError("need to provide an identifier for AnnotationProvider")
             identifier = identifier or obj.identifier
-            self._ensure_dir("annotations")
-            pth = self._get_fspath("annotations", f"{identifier}.annotation.parquet")
+            pth = self._get_fspath(f"{identifier}.annotation.parquet")
             obj.to_parquet(self._fs.open(pth, mode="xb"))
             # invalidate caches
             self._cached_annotation_provider = None
+
+        elif isinstance(obj, MetadataProvider):
+            if identifier is None and obj.identifier is None:
+                raise ValueError("need to provide an identifier for MetadataProvider")
+            identifier = identifier or obj.identifier
+            pth = self._get_fspath(f"{identifier}.metadata.parquet")
+            obj.to_parquet(self._fs.open(pth, mode="xb"))
+            # invalidate caches
+            self._cached_metadata_provider = None
 
         else:
             raise TypeError(f"unsupported object type {type(obj).__name__}: {obj!r}")
