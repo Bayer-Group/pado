@@ -5,30 +5,31 @@ import lzma
 import os
 import sys
 import tarfile
+import typing
 import zipfile
 from contextlib import ExitStack
 from contextlib import contextmanager
 from typing import Any
 from typing import BinaryIO
 from typing import ContextManager
-from typing import Generator
-from typing import IO
 from typing import Iterable
 from typing import Iterator
 from typing import NamedTuple
 from typing import Tuple
 from typing import Union
 
+import fsspec
+from fsspec import AbstractFileSystem
+from fsspec.core import OpenFile
+
+from pado.types import FsspecIOMode
+from pado.types import OpenFileLike
+from pado.types import UrlpathLike
+
 if sys.version_info[:2] >= (3, 10):
     from typing import TypeGuard
 else:
     from typing_extensions import TypeGuard
-
-import fsspec
-from fsspec.core import OpenFile
-
-from pado.types import OpenFileLike
-from pado.types import UrlpathLike
 
 
 class _OpenFileAndParts(NamedTuple):
@@ -93,7 +94,7 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
         raise TypeError(f"can't stringify: {urlpath!r} of type {type(urlpath)!r}")
 
 
-def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> OpenFileLike:
+def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> OpenFileLike:
     """use an urlpath-like object and return an fsspec.core.OpenFile"""
     if is_fsspec_open_file_like(obj):
         return obj
@@ -110,7 +111,24 @@ def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode='rb') -> OpenFileLike:
         if not isinstance(json_obj, dict):
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
         fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
-        return fs.open(json_obj["path"], mode=mode)
+        return fsopen(fs, json_obj["path"], mode=mode)
+
+
+def fsopen(
+    fs: AbstractFileSystem,
+    path: [str, os.PathLike],
+    *,
+    mode: FsspecIOMode = 'rb',
+) -> OpenFileLike:
+    """small helper to support mode 'x' for fsspec filesystems"""
+    if mode not in typing.get_args(FsspecIOMode):
+        raise ValueError("fsspec only supports a subset of IOModes")
+    if 'x' in mode:
+        if fs.exists(path):
+            raise FileExistsError(f"{path!r} at {fs!r}")
+        else:
+            mode = mode.replace('x', 'w')
+    return fs.open(path, mode=mode)
 
 
 @contextmanager

@@ -13,16 +13,14 @@ def urlpath():
         fs.rm("testdataset", recursive=True)
 
 
-@pytest.mark.xfail
 def test_dataset_add_source_non_local(datasource, urlpath):
     ds = PadoDataset(urlpath, mode="x")
-    ds.ingest_obj(datasource)  # memory filesystem returns none on open
+    ds.ingest_obj(datasource)
 
 
-@pytest.mark.xfail
 def test_dataset_non_local_access(datasource, urlpath):
     ds = PadoDataset(urlpath, mode="x")
-    ds.ingest_obj(datasource)  # memory filesystem returns none on open
+    ds.ingest_obj(datasource)
 
     image_id = next(iter(ds.images))
     a = ds.annotations[image_id]

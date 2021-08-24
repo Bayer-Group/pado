@@ -20,6 +20,7 @@ from pado.images import GroupedImageProvider
 from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
+from pado.io.files import fsopen
 from pado.metadata import GroupedMetadataProvider
 from pado.metadata import MetadataProvider
 from pado.types import IOMode
@@ -102,7 +103,7 @@ class PadoDataset:
         if self._cached_image_provider is None:
 
             providers = [
-                ImageProvider.from_parquet(self._fs.open(p, mode='rb'))
+                ImageProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
                 for p in self._fs.glob(self._get_fspath("*.image.parquet"))
                 if self._fs.isfile(p)
             ]
@@ -123,7 +124,7 @@ class PadoDataset:
         if self._cached_annotation_provider is None:
 
             providers = [
-                AnnotationProvider.from_parquet(self._fs.open(p, mode='rb'))
+                AnnotationProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
                 for p in self._fs.glob(self._get_fspath("*.annotation.parquet"))
                 if self._fs.isfile(p)
             ]
@@ -144,7 +145,7 @@ class PadoDataset:
         if self._cached_metadata_provider is None:
 
             providers = [
-                MetadataProvider.from_parquet(self._fs.open(p, mode='rb'))
+                MetadataProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
                 for p in self._fs.glob(self._get_fspath("*.metadata.parquet"))
                 if self._fs.isfile(p)
             ]
@@ -191,7 +192,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for ImageProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image.parquet")
-            obj.to_parquet(self._fs.open(pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
             self._cached_index = None
             self._cached_image_provider = None
@@ -201,7 +202,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for AnnotationProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.annotation.parquet")
-            obj.to_parquet(self._fs.open(pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
             self._cached_annotation_provider = None
 
@@ -210,7 +211,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for MetadataProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.metadata.parquet")
-            obj.to_parquet(self._fs.open(pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
             self._cached_metadata_provider = None
 

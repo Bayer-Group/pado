@@ -30,6 +30,7 @@ from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.images.providers import BaseImageProvider
+from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fsspec
 from pado.metadata import MetadataProvider
 from pado.metadata.providers import BaseMetadataProvider
@@ -181,10 +182,10 @@ def mock_images(target: UrlpathLike, number: int, *, base: bool = False) -> Base
             img_data = fn.read_bytes()
             img_path = os.path.join(path, f"{stem}.svs")
 
-            with fs.open(img_path, mode='xb') as f:
+            with fsopen(fs, img_path, mode='xb') as f:
                 f.write(img_data)
 
-        image = Image(fs.open(img_path), load_metadata=True, load_file_info=True, checksum=True)
+        image = Image(fsopen(fs, img_path), load_metadata=True, load_file_info=True, checksum=True)
         ip[image_id] = image
 
     if base:

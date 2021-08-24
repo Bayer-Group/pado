@@ -40,3 +40,4 @@ class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
 
 UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
 IOMode = Literal['r', 'r+', 'w', 'a', 'x']
+FsspecIOMode = Literal['r', 'rb', 'w', 'wb', 'a', 'ab', 'x', 'xb']
