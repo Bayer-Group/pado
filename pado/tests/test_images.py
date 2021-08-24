@@ -207,6 +207,7 @@ def test_image_id_file_mapper_to_path():
 # --- test in datasets ------------------------------------------------
 
 def test_image_id_in_dataset(dataset_ro):
-    key = next(iter(dataset_ro))
+    key = next(iter(dataset_ro.images))
     assert isinstance(key, ImageId)
-    assert ImageId("i0.tif") in set(dataset_ro.images)
+    assert key in dataset_ro.annotations
+    assert key in dataset_ro.metadata

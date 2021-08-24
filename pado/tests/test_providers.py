@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from pado._test_source import make_temporary_tiff
+from pado.mock import temporary_mock_svs
 from pado.images import ImageProvider
 from pado.images.providers import create_image_provider
 
@@ -17,7 +17,7 @@ def multi_image_folder(tmp_path):
     for idx, subfolder in enumerate(['a_1_x', 'b_2_y', 'c_3_z']):
         s = base.joinpath(subfolder)
         s.mkdir()
-        with make_temporary_tiff(f'image_{idx}') as img_fn:
+        with temporary_mock_svs(f'image_{idx}') as img_fn:
             data = Path(img_fn).read_bytes()
         s.joinpath(f'image_{idx}.svs').write_bytes(data)
     yield base

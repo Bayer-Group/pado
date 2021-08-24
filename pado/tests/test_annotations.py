@@ -3,27 +3,41 @@ import os
 import fsspec
 import pytest
 
-from pado.annotations import get_provider
+from pado.annotations import AnnotationProvider
+from pado.annotations.formats import AnnotationModel
 from pado.images import ImageId
 
 
 @pytest.fixture(scope="function")
 def annotations(datasource):
-    with datasource:
-        yield datasource.annotations
+    yield datasource.annotations
 
 
 def test_datasource_annotation_keys(datasource):
-    with datasource:
-        assert set(datasource.annotations) == {ImageId("i0.tif")}
+    assert set(datasource.annotations) == {
+        ImageId("mock_image_0.svs", site="mock"),
+        ImageId("mock_image_1.svs", site="mock"),
+        ImageId("mock_image_2.svs", site="mock"),
+    }
 
 
-def test_annotation_serialization_roundtrip(annotations, tmpdir):
-    p = tmpdir.mkdir("annotations")
-    fs, _, [path] = fsspec.get_fs_token_paths(os.fspath(p))
-    provider = get_provider(fs, path)
-    provider.update(annotations)
+def test_annotation_serialization_roundtrip(annotations, tmp_path):
+    annotations: AnnotationProvider
 
-    assert provider is not annotations
-    assert set(provider) == set(annotations) == {ImageId("i0.tif")}
-    assert provider[ImageId("i0.tif")] == annotations[ImageId("i0.tif")]
+    p = tmp_path.joinpath("_serialized_provider.annotations.parquet")
+    annotations.to_parquet(p)
+
+    new_annotations = AnnotationProvider.from_parquet(p)
+
+    assert annotations is not new_annotations
+    assert set(annotations) == set(new_annotations) == {
+        ImageId("mock_image_0.svs", site="mock"),
+        ImageId("mock_image_1.svs", site="mock"),
+        ImageId("mock_image_2.svs", site="mock"),
+    }
+    iid = ImageId("mock_image_0.svs", site="mock")
+
+    a0 = annotations[iid][0]
+    b0 = new_annotations[iid][0]
+    assert a0 == b0
+    assert annotations[iid] == new_annotations[iid]

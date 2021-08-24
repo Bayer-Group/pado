@@ -8,7 +8,7 @@ from pandas.testing import assert_frame_equal
 
 from pado._version import version as _pado_version
 from pado.io.store import StoreType
-from pado.metadata.store import MetadataStore
+from pado.metadata.providers import MetadataStore
 
 
 @pytest.fixture(scope='function')
@@ -30,7 +30,7 @@ def test_meta_store_roundtrip(parquet_path):
     meta = {'abc': 1}
 
     store = MetadataStore()
-    store.to_urlpath(parquet_path, df, identifier=identifier, **meta)
+    store.to_urlpath(df, parquet_path, identifier=identifier, **meta)
     df2, identifier2, meta2 = store.from_urlpath(parquet_path)
 
     # ensure version info is there
@@ -38,6 +38,8 @@ def test_meta_store_roundtrip(parquet_path):
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_VERSION) == 1
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_TYPE) == StoreType.METADATA
     assert meta2.pop(MetadataStore.METADATA_KEY_DATASET_VERSION) == MetadataStore.DATASET_VERSION
+    assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_AT) is not None
+    assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_BY) is not None
 
     # ensure round trip
     assert_frame_equal(df, df2, check_column_type=True, check_index_type=True, check_exact=True)
