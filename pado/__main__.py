@@ -51,6 +51,9 @@ def info_(args, subparser):
     except FileNotFoundError as e:
         print(f"error: not a pado dataset '{e}'")
         return -1
+    except ValueError as e:
+        print(f"error: not a pado dataset '{args.dataset_path}'")
+        return -1
     else:
         return 0
 
