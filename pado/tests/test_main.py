@@ -1,10 +1,6 @@
 import io
-import tempfile
 from collections import namedtuple
 from contextlib import redirect_stdout
-from pathlib import Path
-
-import pytest
 
 from pado.__main__ import main
 

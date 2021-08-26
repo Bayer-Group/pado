@@ -15,16 +15,14 @@ def urlpath():
 
 def test_dataset_add_source_non_local(datasource, urlpath):
     ds = PadoDataset(urlpath, mode="x")
-    ds.add_source(datasource)
+    ds.ingest_obj(datasource)
 
 
 def test_dataset_non_local_access(datasource, urlpath):
     ds = PadoDataset(urlpath, mode="x")
-    ds.add_source(datasource)
+    ds.ingest_obj(datasource)
 
-    image_id = next(iter(ds))
-    dct = ds[image_id]
-    assert set(dct) == {'annotations', 'image', 'metadata'}
-    assert dct['annotations']
-    assert dct['image']
-    assert not dct['metadata'].empty
+    image_id = next(iter(ds.images))
+    a = ds.annotations[image_id]
+    m = ds.metadata[image_id]
+    i = ds.images[image_id]

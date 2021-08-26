@@ -9,7 +9,7 @@ from pathlib import Path
 
 # -- argparse improvements ---------------------------------------------
 
-def subcommand(*arguments, parent):  # type: ignore
+def subcommand(*arguments, parent):
     """decorator helper for commandline"""
     def decorator(func):
         fn = func.__name__.rstrip('_')
@@ -48,10 +48,9 @@ def cli_info_cmd(dataset_path):
     ds = PadoDataset(dataset_path, mode="r")
 
     return textwrap.dedent(f"""\
-        Path: {ds.path}
+        Path: {ds.urlpath}
         Images: {len(ds.images)}
-        Image Metadata: {len(ds.metadata.pado.images)}
-        Annotated Images: {len(ds.annotations)}
         Findings Metadata: {len(ds.metadata)}
+        Annotated Images: {len(ds.annotations)}
         Annotations: {sum(map(lambda x: len(x['annotations']), ds.annotations.values()))}
     """)

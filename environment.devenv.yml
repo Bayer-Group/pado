@@ -35,6 +35,8 @@ dependencies:
   - numpy
   - pandas
   - shapely
+  - pydantic
+  - geojson-pydantic
 
   # support for pado.ext.testsource
   - tifffile
@@ -44,6 +46,6 @@ dependencies:
   - pytest-cov
 
   # pip installs
-  - pip:      # [ PADO_DEVEL or PADO_DEVEL_CI ]
-    - "git+https://github.com/Bayer-Group/tiffslide.git#egg=tiffslide"  # [ PADO_DEVEL_CI ]
-    - "-e ."  # [ PADO_DEVEL ]
+  - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
+    - tiffslide  # [ PADO_DEVEL_CI ]
+    - "-e ."     # [ PADO_DEVEL ]

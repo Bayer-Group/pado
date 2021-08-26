@@ -51,18 +51,21 @@ def info_(args, subparser):
     except FileNotFoundError as e:
         print(f"error: not a pado dataset '{e}'")
         return -1
+    except ValueError as e:
+        print(f"error: not a pado dataset '{args.dataset_path}'")
+        return -1
     else:
         return 0
 
 
 @subcommand(
     argument("search_paths", nargs="+", help="paths to search for files"),
-    argument("--ext", nargs=1, metavar=("file_extension",), help="paths to search for files", action="append"),
+    argument("--ext", nargs=1, metavar=("file_extension",), help="files extensions", action="append"),
 )
 def file_search(args, subparser):
     """search for files at locations"""
     import itertools
-    from pado.fileutils import file_finder
+    from pado.io.files import file_finder
 
     if not args.search_paths:
         print(subparser.format_help())
