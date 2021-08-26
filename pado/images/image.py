@@ -10,6 +10,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Tuple
+from typing import Union
 
 import tiffslide
 import zarr.core
@@ -27,9 +29,9 @@ from tiffslide import TiffSlide
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
-from pado.types import UrlpathLike
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
+from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     import PIL
@@ -311,10 +313,16 @@ class Image:
             mpp=self.mpp,
         )
 
-    def get_thumbnail(self, size: IntSize) -> PIL.Image.Image:
+    def get_thumbnail(self, size: Union[IntSize, Tuple[int, int]]) -> PIL.Image.Image:
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
-        return self._slide.get_thumbnail(size=(size.width, size.height))
+        if isinstance(size, tuple):
+            _, _ = size
+        elif isinstance(size, IntSize):
+            size = size.as_tuple()
+        else:
+            raise TypeError(f"expected tuple or IntSize, got {size!r} of cls {type(size).__name__}")
+        return self._slide.get_thumbnail(size=size)
 
     def get_array(
         self,
