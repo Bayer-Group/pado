@@ -332,13 +332,12 @@ class Image:
             number_levels = int(properties['openslide.level-count'])
             level_downsamples = []
             for i in range(number_levels):
-                level_downsamples.append(int(properties[f'openslide.level[{i}].downsample']))
+                level_downsamples.append(float(properties[f'openslide.level[{i}].downsample']))
             levels_dict = {
                 lvl: (float(mpp_x * ds), float(mpp_y * ds))
                 for lvl, ds in enumerate(level_downsamples)
             }
             return levels_dict
-
 
     def get_size(self, mpp_xy: Optional[Tuple[float, float]] = None, level: Optional[int] = None) -> Tuple[int, int]:
         if mpp_xy is not None and level is not None:
