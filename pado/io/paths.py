@@ -11,9 +11,10 @@ from typing import Tuple
 
 from tqdm import tqdm
 
+from pado.io.files import urlpathlike_to_fs_and_path
+from pado.io.files import urlpathlike_to_fsspec
 from pado.types import OpenFileLike
 from pado.types import UrlpathLike
-from pado.io.files import urlpathlike_to_fsspec
 
 
 def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> UrlpathLike:
@@ -32,7 +33,7 @@ def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> Urlpath
 
 
 def match_partial_paths_reversed(
-    current_urlpaths: Sequence[OpenFileLike],
+    current_urlpaths: Sequence[UrlpathLike],
     new_urlpaths: Sequence[OpenFileLike],
     *,
     ignore_ambiguous: bool = False,
@@ -44,10 +45,15 @@ def match_partial_paths_reversed(
     raises ValueError in case match is ambiguous
 
     """
-    current_path_parts = {
-        PurePath(of.path).parts: {'index': idx, 'cur': of, 'new': None}
-        for idx, of in enumerate(current_urlpaths)
-    }
+    current_path_parts = {}
+    for _idx, urlpathlike in enumerate(current_urlpaths):
+        fs, path = urlpathlike_to_fs_and_path(urlpathlike)
+        parts = PurePath(path).parts
+        current_path_parts[parts] = {
+            'index': _idx,
+            'cur': urlpathlike,
+            'new': None,
+        }
     parts = set(current_path_parts)
 
     def match(x: Tuple[str, ...], s: Set[Tuple[str, ...]], idx: int) -> Optional[Tuple[str, ...]]:

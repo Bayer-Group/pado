@@ -114,6 +114,27 @@ def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> Ope
         return fsopen(fs, json_obj["path"], mode=mode)
 
 
+def urlpathlike_to_fs_and_path(obj: UrlpathLike) -> Tuple[AbstractFileSystem, str]:
+    """use an urlpath-like object and return an fsspec.AbstractFileSystem and a path"""
+    if is_fsspec_open_file_like(obj):
+        return obj.fs, obj.path
+
+    try:
+        json_obj = json.loads(obj)  # type: ignore
+    except (json.JSONDecodeError, TypeError):
+        if isinstance(obj, os.PathLike):
+            obj = os.fspath(obj)
+        if not isinstance(obj, str):
+            raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+        fs, _, (path,) = fsspec.get_fs_token_paths(obj)
+        return fs, path
+    else:
+        if not isinstance(json_obj, dict):
+            raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
+        fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        return fs, json_obj["path"]
+
+
 def fsopen(
     fs: AbstractFileSystem,
     path: [str, os.PathLike],

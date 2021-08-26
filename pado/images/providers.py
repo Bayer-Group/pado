@@ -302,7 +302,7 @@ def update_image_provider_urlpaths(
     ip = ImageProvider.from_parquet(urlpath=provider_urlpath)
 
     new_urlpaths = match_partial_paths_reversed(
-        current_urlpaths=ip.df.urlpath.apply(urlpathlike_to_fsspec),
+        current_urlpaths=ip.df.urlpath,
         new_urlpaths=list(x.file for x in files_and_parts),
         ignore_ambiguous=ignore_ambiguous,
         progress=progress,
