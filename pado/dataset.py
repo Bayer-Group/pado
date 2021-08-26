@@ -21,6 +21,7 @@ from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.io.files import fsopen
+from pado.io.files import urlpathlike_to_fs_and_path
 from pado.metadata import GroupedMetadataProvider
 from pado.metadata import MetadataProvider
 from pado.types import IOMode
@@ -62,7 +63,6 @@ class PadoDataset:
         self._mode: IOMode = mode
         of = urlpathlike_to_fsspec(urlpath, mode=self._mode + "b")
         self._root: str = of.path
-        self._fs: fsspec.AbstractFileSystem = of.fs
 
         # paths
         if not self.readonly:
@@ -78,6 +78,10 @@ class PadoDataset:
     def urlpath(self) -> str:
         """the urlpath pointing to the PadoDataset"""
         return self._urlpath
+
+    @property
+    def _fs(self) -> fsspec.AbstractFileSystem:
+        return urlpathlike_to_fs_and_path(self._urlpath)[0]
 
     @property
     def readonly(self) -> bool:
@@ -102,10 +106,11 @@ class PadoDataset:
         """mapping image_ids to images in the dataset"""
         if self._cached_image_provider is None:
 
+            fs = self._fs
             providers = [
-                ImageProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
-                for p in self._fs.glob(self._get_fspath("*.image.parquet"))
-                if self._fs.isfile(p)
+                ImageProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                for p in fs.glob(self._get_fspath("*.image.parquet"))
+                if fs.isfile(p)
             ]
 
             if len(providers) == 0:
@@ -123,10 +128,11 @@ class PadoDataset:
         """mapping image_ids to annotations in the dataset"""
         if self._cached_annotation_provider is None:
 
+            fs = self._fs
             providers = [
-                AnnotationProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
-                for p in self._fs.glob(self._get_fspath("*.annotation.parquet"))
-                if self._fs.isfile(p)
+                AnnotationProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                for p in fs.glob(self._get_fspath("*.annotation.parquet"))
+                if fs.isfile(p)
             ]
 
             if len(providers) == 0:
@@ -144,10 +150,11 @@ class PadoDataset:
         """mapping image_ids to metadata in the dataset"""
         if self._cached_metadata_provider is None:
 
+            fs = self._fs
             providers = [
-                MetadataProvider.from_parquet(fsopen(self._fs, p, mode='rb'))
-                for p in self._fs.glob(self._get_fspath("*.metadata.parquet"))
-                if self._fs.isfile(p)
+                MetadataProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                for p in fs.glob(self._get_fspath("*.metadata.parquet"))
+                if fs.isfile(p)
             ]
 
             if len(providers) == 0:
@@ -237,9 +244,9 @@ class PadoDataset:
 
     def _ensure_dir(self, *parts: Union[str, os.PathLike]) -> str:
         """ensure that a folder within the dataset exists"""
-        pth = self._get_fspath(*parts)
-        if not self._fs.isdir(pth):
-            self._fs.mkdir(pth)
+        fs, pth = self._fs, self._get_fspath(*parts)
+        if not fs.isdir(pth):
+            fs.mkdir(pth)
         return pth
 
 
