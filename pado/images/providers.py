@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import uuid
 from abc import ABC
 from typing import Any
@@ -21,7 +22,6 @@ from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
 from pado.images.ids import image_id_from_parts
 from pado.images.image import Image
-from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.io.paths import match_partial_paths_reversed
 from pado.types import UrlpathLike
@@ -259,6 +259,7 @@ def create_image_provider(
     identifier: Optional[str] = None,
     checksum: bool = True,
     resume: bool = False,
+    ignore_broken: bool = True,
     image_id_func: GetImageIdFunc = image_id_from_parts,
     progress: bool = False,
 ) -> ImageProvider:
@@ -278,8 +279,15 @@ def create_image_provider(
             image_id = image_id_func(fp.file, fp.parts, ip.identifier)
             if resume and image_id in ip:
                 continue
-            image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=checksum)
-            ip[image_id] = image
+            try:
+                image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=checksum)
+            except KeyboardInterrupt:
+                raise
+            except BaseException as e:
+                if not ignore_broken:
+                    raise e
+            else:
+                ip[image_id] = image
 
     finally:
         if output_urlpath is not None:

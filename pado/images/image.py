@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import ExitStack
 from datetime import datetime
@@ -36,6 +37,9 @@ from pado.types import UrlpathLike
 if TYPE_CHECKING:
     import PIL
     import numpy as np
+
+
+_log = logging.getLogger(__name__)
 
 
 # --- metadata and info models ---
@@ -159,10 +163,15 @@ class Image:
         """open an image instance"""
         if not self._ctx:
             self._ctx = ctx = ExitStack()
-            open_file = urlpathlike_to_fsspec(self.urlpath)
-            file_obj = ctx.enter_context(open_file)
-            # noinspection PyTypeChecker
-            self._slide = ctx.enter_context(TiffSlide(file_obj))
+            try:
+                open_file = urlpathlike_to_fsspec(self.urlpath)
+                file_obj = ctx.enter_context(open_file)
+                # noinspection PyTypeChecker
+                self._slide = ctx.enter_context(TiffSlide(file_obj))
+            except Exception as e:
+                _log.error(f"{self.urlpath!r} with error {e!r}")
+                self.close()
+                raise
         return self
 
     def close(self):
