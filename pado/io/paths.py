@@ -1,6 +1,5 @@
 """helpers for dealing with fsspec OpenFile"""
 import fnmatch
-import json
 import os.path
 from operator import itemgetter
 from pathlib import PurePath
@@ -11,23 +10,19 @@ from typing import Tuple
 
 from tqdm import tqdm
 
+from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
-from pado.io.files import urlpathlike_to_fsspec
+from pado.io.files import urlpathlike_to_string
 from pado.types import OpenFileLike
 from pado.types import UrlpathLike
 
 
 def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> UrlpathLike:
     """return the root dir from a urlpath-like path to a dir or file"""
-    ofile = urlpathlike_to_fsspec(urlpath)
-    fs = ofile.fs
-    pth = ofile.path
+    fs, pth = urlpathlike_to_fs_and_path(urlpath)
     root, file = os.path.split(pth)
     if fnmatch.fnmatch(file, allow_file):
-        return json.dumps({
-            "path": root,
-            "fs": fs.to_json(),
-        })
+        return urlpathlike_to_string(fsopen(fs, root))
     else:
         return urlpath
 
