@@ -149,7 +149,7 @@ def fsopen(
             raise FileExistsError(f"{path!r} at {fs!r}")
         else:
             mode = mode.replace('x', 'w')
-    return fs.open(path, mode=mode)
+    return OpenFile(fs, path, mode=mode)
 
 
 @contextmanager
