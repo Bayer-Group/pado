@@ -6,17 +6,12 @@ import pathlib
 import uuid
 from typing import Any
 from typing import Callable
-from typing import Iterator
 from typing import List
 from typing import NamedTuple
 from typing import Optional
-from typing import Protocol
 from typing import Sequence
-from typing import TYPE_CHECKING
-from typing import Tuple
 from typing import Union
 from typing import get_args
-from typing import runtime_checkable
 
 import fsspec
 import numpy as np
@@ -37,11 +32,9 @@ from pado.io.store import StoreType
 from pado.io.store import get_store_type
 from pado.metadata import GroupedMetadataProvider
 from pado.metadata import MetadataProvider
+from pado.types import DatasetSplitter
 from pado.types import IOMode
 from pado.types import UrlpathLike
-
-if TYPE_CHECKING:
-    import numpy.typing as npt
 
 __all__ = [
     "PadoDataset"
@@ -195,6 +188,7 @@ class PadoDataset:
 
     def get_by_id(self, image_id: ImageId) -> PadoItem:
         return PadoItem(
+            image_id,
             self.images.get(image_id),
             self.annotations.get(image_id),
             self.metadata.get(image_id),
@@ -203,6 +197,7 @@ class PadoDataset:
     def get_by_idx(self, idx: int) -> PadoItem:
         image_id = self.index[idx]
         return PadoItem(
+            image_id,
             self.images.get(image_id),
             self.annotations.get(image_id),
             self.metadata.get(image_id),
@@ -210,7 +205,12 @@ class PadoDataset:
 
     # === filter functionality ===
 
-    def filter(self, ids_or_func: Sequence[ImageId] | FilterFunc, *, out_dir: Optional[UrlpathLike] = None) -> PadoDataset:
+    def filter(
+        self,
+        ids_or_func: Sequence[ImageId] | Callable[[PadoItem], bool],
+        *,
+        out_dir: Optional[UrlpathLike] = None
+    ) -> PadoDataset:
         """filter a pado dataset"""
         # todo: if this is not fast enough might consider lazy filtering
 
@@ -231,7 +231,7 @@ class PadoDataset:
             mp = {}
             for image_id in self.index:
                 item = self.get_by_id(image_id)
-                keep = func(image_id, item.image, item.annotations, item.metadata)
+                keep = func(item)
                 if keep:
                     ip[image_id] = item.image
                     ap[image_id] = item.annotations
@@ -248,7 +248,7 @@ class PadoDataset:
 
     def partition(
         self,
-        splitter: Splitter,
+        splitter: DatasetSplitter,
         label_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
         group_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
     ) -> List[TrainTestDatasetTuple]:
@@ -346,6 +346,7 @@ class PadoDataset:
 # === helpers and utils =======================================================
 
 class PadoItem(NamedTuple):
+    id: Optional[ImageId]
     image: Optional[Image]
     annotations: Optional[Annotations]
     metadata: Optional[pd.DataFrame]
@@ -354,18 +355,3 @@ class PadoItem(NamedTuple):
 class TrainTestDatasetTuple(NamedTuple):
     train: PadoDataset
     test: PadoDataset
-
-
-FilterFunc = Callable[[ImageId, Optional[Image], Optional[Annotations], Optional[pd.DataFrame]], bool]
-
-
-@runtime_checkable
-class Splitter(Protocol):
-    """splitter classes from sklearn.model_selection"""
-    def split(
-        self,
-        X: Sequence[Any],
-        y: Optional[Sequence[Any]],
-        groups: Optional[Sequence[Any]],
-    ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
-        ...
