@@ -103,6 +103,9 @@ class PadoDataset:
         """is the dataset in readonly mode"""
         return self._mode == "r"
 
+    def __repr__(self):
+        return f"{type(self).__name__}({self.urlpath!r}, mode={self._mode!r})"
+
     # === data properties ===
 
     @property
