@@ -3,14 +3,23 @@ from __future__ import annotations
 import collections.abc
 import os
 import pathlib
-import typing
+import uuid
 from typing import Any
+from typing import Callable
+from typing import Iterator
+from typing import List
 from typing import NamedTuple
 from typing import Optional
+from typing import Protocol
 from typing import Sequence
+from typing import TYPE_CHECKING
+from typing import Tuple
 from typing import Union
+from typing import get_args
+from typing import runtime_checkable
 
 import fsspec
+import numpy as np
 import pandas as pd
 
 from pado.annotations import AnnotationProvider
@@ -22,27 +31,34 @@ from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
-from pado.metadata import GroupedMetadataProvider
-from pado.metadata import MetadataProvider
-from pado.types import IOMode
-from pado.types import UrlpathLike
-from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.io.paths import get_root_dir
 from pado.io.store import StoreType
 from pado.io.store import get_store_type
+from pado.metadata import GroupedMetadataProvider
+from pado.metadata import MetadataProvider
+from pado.types import IOMode
+from pado.types import UrlpathLike
+
+if TYPE_CHECKING:
+    import numpy.typing as npt
+
+__all__ = [
+    "PadoDataset"
+]
 
 
 class PadoDataset:
     __version__ = 2
 
-    def __init__(self, urlpath: UrlpathLike, mode: IOMode = "r"):
+    def __init__(self, urlpath: UrlpathLike | None, mode: IOMode = "r"):
         """open or create a new PadoDataset
 
         Parameters
         ----------
         urlpath:
-            fsspec urlpath to `pado.dataset.toml` file, or its parent directory
+            fsspec urlpath to `pado.dataset.toml` file, or its parent directory.
+            If explicitly set to None, uses an in-memory filesystem to store the dataset.
         mode:
             'r' --> readonly, error if not there
             'r+' --> read/write, error if not there
@@ -51,18 +67,20 @@ class PadoDataset:
             'x' --> read/write, create if not there, error if there
 
         """
+        if urlpath is None:
+            # enable in-memory pado datasets
+            urlpath = f"memory://pado-{uuid.uuid4()}"
+
         urlpath = get_root_dir(urlpath, allow_file="pado.dataset.toml")
         try:
             self._urlpath: str = urlpathlike_to_string(urlpath)
-        except TypeError:
-            raise
-        if mode not in typing.get_args(IOMode):
+        except TypeError as err:
+            raise TypeError(f"incompatible urlpath {urlpath!r}") from err
+        if mode not in get_args(IOMode):
             raise ValueError(f"unsupported mode {mode!r}")
 
         # file
         self._mode: IOMode = mode
-        of = urlpathlike_to_fsspec(urlpath, mode=self._mode + "b")
-        self._root: str = of.path
 
         # paths
         if not self.readonly:
@@ -81,7 +99,13 @@ class PadoDataset:
 
     @property
     def _fs(self) -> fsspec.AbstractFileSystem:
-        return urlpathlike_to_fs_and_path(self._urlpath)[0]
+        fs, _ = urlpathlike_to_fs_and_path(self._urlpath)
+        return fs
+
+    @property
+    def _root(self) -> str:
+        _, path = urlpathlike_to_fs_and_path(self._urlpath)
+        return path
 
     @property
     def readonly(self) -> bool:
@@ -98,7 +122,7 @@ class PadoDataset:
             if isinstance(image_ids, collections.abc.Sequence):
                 self._cached_index = image_ids
             else:
-                self._cached_index = list(image_ids)
+                self._cached_index = tuple(image_ids)
         return self._cached_index
 
     @property
@@ -184,6 +208,69 @@ class PadoDataset:
             self.metadata.get(image_id),
         )
 
+    # === filter functionality ===
+
+    def filter(self, ids_or_func: Sequence[ImageId] | FilterFunc, *, out_dir: Optional[UrlpathLike] = None) -> PadoDataset:
+        """filter a pado dataset"""
+        # todo: if this is not fast enough might consider lazy filtering
+
+        if isinstance(ids_or_func, ImageId):
+            raise ValueError("must provide a list of ImageIds")
+
+        if isinstance(ids_or_func, Sequence):
+            ids = pd.Series(ids_or_func).apply(str.__call__)
+            _ip, _ap, _mp = self.images, self.annotations, self.metadata
+            ip = ImageProvider(_ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier)
+            ap = AnnotationProvider(_ap.df.loc[_ip.df.index.intersection(ids), :], identifier=_ap.identifier)
+            mp = MetadataProvider(_mp.df.loc[_mp.df.index.intersection(ids), :], identifier=_mp.identifier)
+
+        elif callable(ids_or_func):
+            func = ids_or_func
+            ip = {}
+            ap = {}
+            mp = {}
+            for image_id in self.index:
+                item = self.get_by_id(image_id)
+                keep = func(image_id, item.image, item.annotations, item.metadata)
+                if keep:
+                    ip[image_id] = item.image
+                    ap[image_id] = item.annotations
+                    mp[image_id] = item.metadata
+
+        else:
+            raise TypeError(f"requires sequence of ImageId or a callable of type FilterFunc, got {ids_or_func!r}")
+
+        ds = PadoDataset(out_dir, mode="w")
+        ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
+        ds.ingest_obj(AnnotationProvider(ap, identifier=self.annotations.identifier))
+        ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
+        return PadoDataset(out_dir, mode="r")
+
+    def partition(
+        self,
+        splitter: Splitter,
+        label_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
+        group_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
+    ) -> List[TrainTestDatasetTuple]:
+        """partition a pado dataset into train and test"""
+        if label_func is not None:
+            labels = label_func(self)
+        else:
+            labels = None
+        if group_func is not None:
+            groups = group_func(self)
+        else:
+            groups = None
+        splits = splitter.split(X=self.index, y=labels, groups=groups)
+        image_ids = np.array(self.index)
+
+        output = []
+        for train_idxs, test_idxs in splits:
+            ds0 = self.filter(image_ids[train_idxs])
+            ds1 = self.filter(image_ids[test_idxs])
+            output.append(TrainTestDatasetTuple(ds0, ds1))
+        return output
+
     # === data ingestion and summary ===
 
     def ingest_obj(self, obj: Any, *, identifier: Optional[str] = None) -> None:
@@ -233,6 +320,12 @@ class PadoDataset:
         if store_type == StoreType.IMAGE:
             self.ingest_obj(ImageProvider.from_parquet(urlpath), identifier=identifier)
 
+        elif store_type == StoreType.ANNOTATION:
+            self.ingest_obj(AnnotationProvider.from_parquet(urlpath), identifier=identifier)
+
+        elif store_type == StoreType.METADATA:
+            self.ingest_obj(MetadataProvider.from_parquet(urlpath), identifier=identifier)
+
         else:
             raise NotImplementedError("todo: implement more files")
 
@@ -256,3 +349,23 @@ class PadoItem(NamedTuple):
     image: Optional[Image]
     annotations: Optional[Annotations]
     metadata: Optional[pd.DataFrame]
+
+
+class TrainTestDatasetTuple(NamedTuple):
+    train: PadoDataset
+    test: PadoDataset
+
+
+FilterFunc = Callable[[ImageId, Optional[Image], Optional[Annotations], Optional[pd.DataFrame]], bool]
+
+
+@runtime_checkable
+class Splitter(Protocol):
+    """splitter classes from sklearn.model_selection"""
+    def split(
+        self,
+        X: Sequence[Any],
+        y: Optional[Sequence[Any]],
+        groups: Optional[Sequence[Any]],
+    ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
+        ...
