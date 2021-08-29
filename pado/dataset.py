@@ -36,9 +36,7 @@ from pado.types import DatasetSplitter
 from pado.types import IOMode
 from pado.types import UrlpathLike
 
-__all__ = [
-    "PadoDataset"
-]
+__all__ = ["PadoDataset"]
 
 
 class PadoDataset:
@@ -264,7 +262,24 @@ class PadoDataset:
         label_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
         group_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
     ) -> List[TrainTestDatasetTuple]:
-        """partition a pado dataset into train and test"""
+        """partition a pado dataset into train and test
+
+        Parameters
+        ----------
+        splitter:
+            a DatasetSplitter instance (basically all sklearn.model_selection splitter classes)
+        label_func:
+            gets called with the pado dataset and has to return a sequence of labels with the
+            same length as the dataset.index. (default None)
+        group_func:
+            gets called with the pado dataset and has to return a sequence of groups with the
+            same length as the dataset.index. (default None)
+
+        Notes
+        -----
+        dependent on the provided splitter instance, label_func and group_func might be ignored.
+
+        """
         if label_func is not None:
             labels = label_func(self)
         else:
@@ -358,6 +373,7 @@ class PadoDataset:
 # === helpers and utils =======================================================
 
 class PadoItem(NamedTuple):
+    """A 'row' of a dataset as returned by PadoDataset.get_by_* methods"""
     id: Optional[ImageId]
     image: Optional[Image]
     annotations: Optional[Annotations]
@@ -365,5 +381,6 @@ class PadoItem(NamedTuple):
 
 
 class TrainTestDatasetTuple(NamedTuple):
+    """train test tuple as returned by PadoDataset.partition method"""
     train: PadoDataset
     test: PadoDataset
