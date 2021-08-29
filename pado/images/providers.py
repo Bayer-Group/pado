@@ -68,13 +68,20 @@ class ImageProvider(BaseImageProvider):
     df: pd.DataFrame
     identifier: str
 
-    def __init__(self, provider: Optional[BaseImageProvider] = None, identifier: Optional[str] = None):
+    def __init__(self, provider: BaseImageProvider | pd.DataFrame | dict | None = None, *, identifier: Optional[str] = None):
         if provider is None:
             provider = {}
 
         if isinstance(provider, ImageProvider):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
+        elif isinstance(provider, pd.DataFrame):
+            try:
+                _ = map(ImageId.from_str, provider.index)
+            except (TypeError, ValueError):
+                raise ValueError("provider dataframe index has non ImageId indices")
+            self.df = provider.copy()
+            self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, BaseImageProvider):
             if not provider:
                 self.df = pd.DataFrame(columns=Image.__fields__)
