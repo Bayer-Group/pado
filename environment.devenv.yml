@@ -48,5 +48,5 @@ dependencies:
 
   # pip installs
   - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
-    - tiffslide  # [ PADO_DEVEL_CI ]
+    - tiffslide>=0.2.0  # [ PADO_DEVEL_CI ]
     - "-e ."     # [ PADO_DEVEL ]

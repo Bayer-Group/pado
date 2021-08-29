@@ -376,18 +376,12 @@ class Image:
                 )
                 raise ValueError(f"region not at level {level}, got {region!r} at {_guess}")
 
-        # TODO:
-        #   this interface should be made public in tiffslide
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
 
-        try:
-            # noinspection PyProtectedMember
-            return self._slide._read_region_as_array(  # type: ignore
-                location.as_tuple(), level, region.as_tuple()
-            )
-        except AttributeError:
-            if self._slide is None:
-                raise RuntimeError(f"{self!r} not opened and not in context manager")
-            raise
+        return self._slide.read_region(
+            location.as_tuple(), level, region.as_tuple(), as_array=True
+        )
 
     def get_zarr(self, level: int) -> zarr.core.Array:
         """return the entire level as zarr"""
