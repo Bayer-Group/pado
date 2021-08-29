@@ -265,7 +265,7 @@ class PadoDataset:
         splitter: DatasetSplitter,
         label_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
         group_func: Optional[Callable[[PadoDataset], Sequence[Any]]] = None,
-    ) -> List[TrainTestDatasetTuple]:
+    ) -> List[Split]:
         """partition a pado dataset into train and test
 
         Parameters
@@ -299,7 +299,7 @@ class PadoDataset:
         for train_idxs, test_idxs in splits:
             ds0 = self.filter(image_ids[train_idxs])
             ds1 = self.filter(image_ids[test_idxs])
-            output.append(TrainTestDatasetTuple(ds0, ds1))
+            output.append(Split(ds0, ds1))
         return output
 
     # === data ingestion and summary ===
@@ -384,7 +384,7 @@ class PadoItem(NamedTuple):
     metadata: Optional[pd.DataFrame]
 
 
-class TrainTestDatasetTuple(NamedTuple):
+class Split(NamedTuple):
     """train test tuple as returned by PadoDataset.partition method"""
     train: PadoDataset
     test: PadoDataset
