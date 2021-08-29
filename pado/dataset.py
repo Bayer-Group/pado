@@ -4,6 +4,8 @@ import collections.abc
 import os
 import pathlib
 import uuid
+from collections.abc import Iterable
+from collections.abc import Sized
 from typing import Any
 from typing import Callable
 from typing import List
@@ -14,7 +16,6 @@ from typing import Union
 from typing import get_args
 
 import fsspec
-import numpy as np
 import pandas as pd
 
 from pado.annotations import AnnotationProvider
@@ -230,7 +231,7 @@ class PadoDataset:
         if isinstance(ids_or_func, ImageId):
             raise ValueError("must provide a list of ImageIds")
 
-        if isinstance(ids_or_func, Sequence):
+        if isinstance(ids_or_func, Iterable) and isinstance(ids_or_func, Sized):
             ids = pd.Series(ids_or_func).apply(str.__call__)
             _ip, _ap, _mp = self.images, self.annotations, self.metadata
             ip = ImageProvider(_ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier)
@@ -292,7 +293,7 @@ class PadoDataset:
         else:
             groups = None
         splits = splitter.split(X=self.index, y=labels, groups=groups)
-        image_ids = np.array(self.index)
+        image_ids = pd.Series(self.index).values
 
         output = []
         for train_idxs, test_idxs in splits:
