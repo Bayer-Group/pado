@@ -209,9 +209,21 @@ class PadoDataset:
         self,
         ids_or_func: Sequence[ImageId] | Callable[[PadoItem], bool],
         *,
-        out_dir: Optional[UrlpathLike] = None
+        urlpath: Optional[UrlpathLike] = None
     ) -> PadoDataset:
-        """filter a pado dataset"""
+        """filter a pado dataset
+
+        Parameters
+        ----------
+        ids_or_func:
+            either a Sequence of ImageId instances or a function that gets
+            called with each PadoItem and returns a bool indicating if it should
+            be kept or not.
+        urlpath:
+            a urlpath to store the filtered provider. If None (default) returns
+            a in-memory PadoDataset
+
+        """
         # todo: if this is not fast enough might consider lazy filtering
 
         if isinstance(ids_or_func, ImageId):
@@ -240,11 +252,11 @@ class PadoDataset:
         else:
             raise TypeError(f"requires sequence of ImageId or a callable of type FilterFunc, got {ids_or_func!r}")
 
-        ds = PadoDataset(out_dir, mode="w")
+        ds = PadoDataset(urlpath, mode="w")
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
         ds.ingest_obj(AnnotationProvider(ap, identifier=self.annotations.identifier))
         ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
-        return PadoDataset(out_dir, mode="r")
+        return PadoDataset(ds.urlpath, mode="r")
 
     def partition(
         self,
