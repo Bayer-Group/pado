@@ -235,7 +235,7 @@ class PadoDataset:
             ids = pd.Series(ids_or_func).apply(str.__call__)
             _ip, _ap, _mp = self.images, self.annotations, self.metadata
             ip = ImageProvider(_ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier)
-            ap = AnnotationProvider(_ap.df.loc[_ip.df.index.intersection(ids), :], identifier=_ap.identifier)
+            ap = AnnotationProvider(_ap.df.loc[_ap.df.index.intersection(ids), :], identifier=_ap.identifier)
             mp = MetadataProvider(_mp.df.loc[_mp.df.index.intersection(ids), :], identifier=_mp.identifier)
 
         elif callable(ids_or_func):
