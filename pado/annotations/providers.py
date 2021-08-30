@@ -83,6 +83,8 @@ class AnnotationProvider(BaseAnnotationProvider):
                 indices = []
                 data = []
                 for key, value in provider.items():
+                    if value is None:
+                        continue
                     indices.extend(repeat(ImageId.to_str(key), len(value)))
                     data.extend(a.to_record() for a in value)
                 self.df = pd.DataFrame.from_records(
