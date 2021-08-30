@@ -331,7 +331,7 @@ class Image:
             size = size.as_tuple()
         else:
             raise TypeError(f"expected tuple or IntSize, got {size!r} of cls {type(size).__name__}")
-        return self._slide.get_thumbnail(size=size)
+        return self._slide.get_thumbnail(size=size, use_embedded=True)
 
     def get_array(
         self,
