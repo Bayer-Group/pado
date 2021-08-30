@@ -27,19 +27,20 @@ dependencies:
 
   # pado requirements
   - appdirs
-  - orjson
   - fsspec
+  - geojson-pydantic
+  - imagecodecs
+  - numpy
+  - orjson
+  - pandas
+  - pillow
+  - pyarrow
+  - pydantic
+  - shapely
+  - tifffile>=2020.9.22
   - toml
   - tqdm
-  - pyarrow
-  - numpy
-  - pandas
-  - shapely
-  - pydantic
-  - geojson-pydantic
-
-  # support for pado.ext.testsource
-  - tifffile
+  - zarr
 
   # testing relevant things
   - pytest>=6
@@ -47,5 +48,5 @@ dependencies:
 
   # pip installs
   - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
-    - tiffslide  # [ PADO_DEVEL_CI ]
+    - tiffslide>=0.2.0  # [ PADO_DEVEL_CI ]
     - "-e ."     # [ PADO_DEVEL ]

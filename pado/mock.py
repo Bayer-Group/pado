@@ -31,6 +31,7 @@ from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.images.providers import BaseImageProvider
 from pado.io.files import fsopen
+from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_fsspec
 from pado.metadata import MetadataProvider
 from pado.metadata.providers import BaseMetadataProvider
@@ -75,7 +76,7 @@ def mock_image_ids(number: int, *, fmt="mock_image_{:d}.svs", site="mock") -> Li
 
 
 def mock_dataset(
-    urlpath: UrlpathLike,
+    urlpath: Optional[UrlpathLike],
     *,
     num_images: int = 3,
     images_urlpath: Optional[UrlpathLike] = None,
@@ -84,8 +85,7 @@ def mock_dataset(
     ds = PadoDataset(urlpath, mode="x")
 
     if images_urlpath is None:
-        of = urlpathlike_to_fsspec(urlpath)
-        fs, path = of.fs, of.path
+        fs, path = urlpathlike_to_fs_and_path(ds.urlpath)
         _p = os.path.join(path, '_mocked_images')
         fs.mkdir(_p)
         images_urlpath = OpenFile(path=_p, fs=fs)

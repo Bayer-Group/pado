@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import ExitStack
 from datetime import datetime
@@ -10,6 +11,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import TYPE_CHECKING
+from typing import Tuple
+from typing import Union
 
 import tiffslide
 import zarr.core
@@ -27,13 +30,16 @@ from tiffslide import TiffSlide
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
-from pado.types import UrlpathLike
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
+from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     import PIL
     import numpy as np
+
+
+_log = logging.getLogger(__name__)
 
 
 # --- metadata and info models ---
@@ -157,10 +163,15 @@ class Image:
         """open an image instance"""
         if not self._ctx:
             self._ctx = ctx = ExitStack()
-            open_file = urlpathlike_to_fsspec(self.urlpath)
-            file_obj = ctx.enter_context(open_file)
-            # noinspection PyTypeChecker
-            self._slide = ctx.enter_context(TiffSlide(file_obj))
+            try:
+                open_file = urlpathlike_to_fsspec(self.urlpath)
+                file_obj = ctx.enter_context(open_file)
+                # noinspection PyTypeChecker
+                self._slide = ctx.enter_context(TiffSlide(file_obj))
+            except Exception as e:
+                _log.error(f"{self.urlpath!r} with error {e!r}")
+                self.close()
+                raise
         return self
 
     def close(self):
@@ -311,10 +322,16 @@ class Image:
             mpp=self.mpp,
         )
 
-    def get_thumbnail(self, size: IntSize) -> PIL.Image.Image:
+    def get_thumbnail(self, size: Union[IntSize, Tuple[int, int]]) -> PIL.Image.Image:
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
-        return self._slide.get_thumbnail(size=(size.width, size.height))
+        if isinstance(size, tuple):
+            _, _ = size
+        elif isinstance(size, IntSize):
+            size = size.as_tuple()
+        else:
+            raise TypeError(f"expected tuple or IntSize, got {size!r} of cls {type(size).__name__}")
+        return self._slide.get_thumbnail(size=size, use_embedded=True)
 
     def get_array(
         self,
@@ -359,18 +376,12 @@ class Image:
                 )
                 raise ValueError(f"region not at level {level}, got {region!r} at {_guess}")
 
-        # TODO:
-        #   this interface should be made public in tiffslide
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
 
-        try:
-            # noinspection PyProtectedMember
-            return self._slide._read_region_as_array(  # type: ignore
-                location.as_tuple(), level, region.as_tuple()
-            )
-        except AttributeError:
-            if self._slide is None:
-                raise RuntimeError(f"{self!r} not opened and not in context manager")
-            raise
+        return self._slide.read_region(
+            location.as_tuple(), level, region.as_tuple(), as_array=True
+        )
 
     def get_zarr(self, level: int) -> zarr.core.Array:
         """return the entire level as zarr"""

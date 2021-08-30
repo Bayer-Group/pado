@@ -3,10 +3,12 @@ import gzip
 import json
 import lzma
 import os
+import pickle
 import sys
 import tarfile
 import typing
 import zipfile
+from ast import literal_eval
 from contextlib import ExitStack
 from contextlib import contextmanager
 from typing import Any
@@ -30,6 +32,9 @@ if sys.version_info[:2] >= (3, 10):
     from typing import TypeGuard
 else:
     from typing_extensions import TypeGuard
+
+
+_PADO_FSSPEC_PICKLE_PROTOCOL = 4
 
 
 class _OpenFileAndParts(NamedTuple):
@@ -75,8 +80,12 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
     if is_fsspec_open_file_like(urlpath):
         fs: fsspec.AbstractFileSystem = urlpath.fs
         path: str = urlpath.path
+        try:
+            serialized_fs = fs.to_json()
+        except NotImplementedError:
+            serialized_fs = repr(pickle.dumps(fs, protocol=_PADO_FSSPEC_PICKLE_PROTOCOL))
         return json.dumps({
-            "fs": fs.to_json(),
+            "fs": serialized_fs,
             "path": path
         })
 
@@ -110,7 +119,10 @@ def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> Ope
     else:
         if not isinstance(json_obj, dict):
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
-        fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        try:
+            fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        except json.JSONDecodeError:
+            fs = pickle.loads(literal_eval(json_obj["fs"]))
         return fsopen(fs, json_obj["path"], mode=mode)
 
 
@@ -131,7 +143,10 @@ def urlpathlike_to_fs_and_path(obj: UrlpathLike) -> Tuple[AbstractFileSystem, st
     else:
         if not isinstance(json_obj, dict):
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
-        fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        try:
+            fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+        except json.JSONDecodeError:
+            fs = pickle.loads(literal_eval(json_obj["fs"]))
         return fs, json_obj["path"]
 
 
@@ -149,7 +164,7 @@ def fsopen(
             raise FileExistsError(f"{path!r} at {fs!r}")
         else:
             mode = mode.replace('x', 'w')
-    return fs.open(path, mode=mode)
+    return OpenFile(fs, path, mode=mode)
 
 
 @contextmanager

@@ -60,7 +60,7 @@ class MetadataProvider(BaseMetadataProvider):
 
     def __init__(
         self,
-        provider: Optional[Union[BaseMetadataProvider, pd.DataFrame]] = None,
+        provider: BaseMetadataProvider | pd.DataFrame | dict | None = None,
         *,
         identifier: Optional[str] = None,
     ) -> None:

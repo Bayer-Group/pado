@@ -5,10 +5,15 @@ A collection of useful types and abstract base classes in pado
 from __future__ import annotations
 
 import sys
+from typing import Any
 from typing import AnyStr
 from typing import ContextManager
 from typing import IO
+from typing import Iterator
+from typing import Optional
+from typing import Sequence
 from typing import TYPE_CHECKING
+from typing import Tuple
 from typing import Union
 
 if sys.version_info >= (3, 8):
@@ -24,6 +29,7 @@ if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
     import os
 
+    import numpy.typing as npt
     from fsspec import AbstractFileSystem
 
 
@@ -41,3 +47,15 @@ class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
 UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
 IOMode = Literal['r', 'r+', 'w', 'a', 'x']
 FsspecIOMode = Literal['r', 'rb', 'w', 'wb', 'a', 'ab', 'x', 'xb']
+
+
+@runtime_checkable
+class DatasetSplitter(Protocol):
+    """splitter classes from sklearn.model_selection"""
+    def split(
+        self,
+        X: Sequence[Any],
+        y: Optional[Sequence[Any]],
+        groups: Optional[Sequence[Any]],
+    ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
+        ...
