@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     import PIL
     import numpy as np
 
-
 _log = logging.getLogger(__name__)
 
 
@@ -100,12 +99,12 @@ class Image:
     __fields__ = _SerializedImage.__fields__
 
     def __init__(
-        self,
-        urlpath: UrlpathLike,
-        *,
-        load_metadata: bool = False,
-        load_file_info: bool = False,
-        checksum: bool = False,
+            self,
+            urlpath: UrlpathLike,
+            *,
+            load_metadata: bool = False,
+            load_file_info: bool = False,
+            checksum: bool = False,
     ):
         """instantiate an image from an urlpath"""
         self.urlpath = urlpath
@@ -206,7 +205,9 @@ class Image:
             dimensions = slide.dimensions
 
             _used_keys: Dict[str, Any] = {}
-            def pget(key): return _used_keys.setdefault(key, props.get(key))
+
+            def pget(key):
+                return _used_keys.setdefault(key, props.get(key))
 
             return ImageMetadata(
                 width=dimensions[0],
@@ -334,12 +335,12 @@ class Image:
         return self._slide.get_thumbnail(size=size, use_embedded=True)
 
     def get_array(
-        self,
-        location: IntPoint,
-        region: IntSize,
-        level: int,
-        *,
-        runtime_type_checks: bool = True
+            self,
+            location: IntPoint,
+            region: IntSize,
+            level: int,
+            *,
+            runtime_type_checks: bool = True
     ) -> np.ndarray:
         """return array from a defined level"""
         if runtime_type_checks:
@@ -382,6 +383,53 @@ class Image:
         return self._slide.read_region(
             location.as_tuple(), level, region.as_tuple(), as_array=True
         )
+
+    def get_array_at_mpp(
+            self,
+            location: IntPoint,
+            region: IntSize,
+            target_mpp: MPP
+    ) -> np.ndarray:
+        """return array from a defined mpp and a position (in the target mpp)"""
+
+        def _scale_xy(to_transform: Union[IntPoint, IntSize], mpp_current: MPP, mpp_target: MPP):
+            pos_x, pos_y = to_transform.as_tuple()
+            mpp_x_current, mpp_y_current = mpp_current.as_tuple()
+            mpp_x_target, mpp_y_target = mpp_target.as_tuple()
+            return int(round(pos_x * mpp_x_current / mpp_x_target)), int(round(pos_y * mpp_y_current / mpp_y_target))
+
+        assert location.mpp.as_tuple() == target_mpp.as_tuple()
+
+        mpp_xy = target_mpp.as_tuple()
+
+        lvl0_mpp = self.mpp
+        # we find the corresponding location at level0
+        lvl0_xy = _scale_xy(location, mpp_current=target_mpp, mpp_target=lvl0_mpp)
+
+        assert mpp_xy[0] == mpp_xy[1]
+        for lvl_best, mpp_best in self.level_mpp.items():
+            if mpp_xy[0] >= mpp_best.as_tuple()[0]:
+                break
+        else:
+            raise NotImplementedError(f"requesting a smaller mpp than provided in the image {mpp_xy!r}")
+
+        if mpp_xy == mpp_best:
+            # no need to rescale
+            array = self._slide.read_region(
+                        location=lvl0_xy,
+                        level=lvl_best,
+                        size=region.as_tuple()
+            )
+        else:
+            # we need to rescale to the target_mpp
+            region_best = _scale_xy(region, mpp_current=target_mpp, mpp_target=mpp_best)
+
+            array = self._slide.read_region(
+                        location=lvl0_xy,
+                        level=lvl_best,
+                        size=region_best.as_tuple()
+            )
+        return array
 
     def get_zarr(self, level: int) -> zarr.core.Array:
         """return the entire level as zarr"""
