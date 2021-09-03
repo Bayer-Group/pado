@@ -427,7 +427,7 @@ class Image:
             array = self._slide.read_region(
                         location=lvl0_xy,
                         level=lvl_best,
-                        size=region_best.as_tuple()
+                        size=region_best
             )
         return array
 
