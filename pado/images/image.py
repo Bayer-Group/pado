@@ -416,18 +416,20 @@ class Image:
         if mpp_xy == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                        location=lvl0_xy,
-                        level=lvl_best,
-                        size=region.as_tuple()
+                location=lvl0_xy,
+                level=lvl_best,
+                size=region.as_tuple(),
+                as_array=True
             )
         else:
             # we need to rescale to the target_mpp
             region_best = _scale_xy(region, mpp_current=target_mpp, mpp_target=mpp_best)
 
             array = self._slide.read_region(
-                        location=lvl0_xy,
-                        level=lvl_best,
-                        size=region_best
+                location=lvl0_xy,
+                level=lvl_best,
+                size=region_best,
+                as_array=True
             )
         return array
 
