@@ -411,7 +411,8 @@ class Image:
             if mpp_xy[0] >= mpp_best.as_tuple()[0]:
                 break
         else:
-            raise NotImplementedError(f"requesting a smaller mpp than provided in the image {mpp_xy!r}")
+            raise NotImplementedError(f"requesting a smaller mpp {mpp_xy!r} "
+                                      f"than provided in the image {self.level_mpp.items()!r}")
 
         if mpp_xy == mpp_best:
             # no need to rescale
