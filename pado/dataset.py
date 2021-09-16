@@ -37,7 +37,8 @@ from pado.types import DatasetSplitter
 from pado.types import IOMode
 from pado.types import UrlpathLike
 
-__all__ = ["PadoDataset"]
+__all__ = ["PadoDataset",
+           "PadoItem"]
 
 
 class PadoDataset:
