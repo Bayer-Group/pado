@@ -48,7 +48,7 @@ class ImageMetadata(BaseModel):
     # essentials
     width: int
     height: int
-    objective_power: str  # todo
+    objective_power: Optional[str]  # todo
     mpp_x: PositiveFloat
     mpp_y: PositiveFloat
     downsamples: List[PositiveFloat]
