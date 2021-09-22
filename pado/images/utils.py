@@ -146,4 +146,4 @@ class IntSize(Size):
         return self
 
     def as_tuple(self) -> Tuple[int, int]:
-        return self.x, self.y
+        return int(self.x), int(self.y)
