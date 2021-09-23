@@ -1,17 +1,15 @@
 import fsspec
+import uuid
 import pytest
 
 from pado.dataset import PadoDataset
 
-
-@pytest.fixture
+@pytest.fixture(scope='function')
 def urlpath():
-    fs: fsspec.AbstractFileSystem = fsspec.get_filesystem_class("memory")()
-    try:
-        yield "memory://testdataset"  # nonlocal
-    finally:
-        fs.rm("testdataset", recursive=True)
-
+    # the fsspec memory filesystem is shared,
+    # so provide a new path for each invocation
+    unique = uuid.uuid4().hex
+    yield f"memory://{unique}"
 
 def test_dataset_add_source_non_local(datasource, urlpath):
     ds = PadoDataset(urlpath, mode="x")
