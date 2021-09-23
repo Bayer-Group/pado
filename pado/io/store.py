@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import json
 import os
+import platform
 from abc import ABC
 from datetime import datetime
 from getpass import getuser
@@ -190,6 +191,6 @@ def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
 
 def _get_user_host() -> Optional[str]:
     try:
-        return f"{getuser()!s}@{os.uname().nodename!s}"
+        return f"{getuser()!s}@{platform.uname().node!s}"
     except (OSError, KeyError, ValueError):
         return None
