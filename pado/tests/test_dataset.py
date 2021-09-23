@@ -151,3 +151,13 @@ def test_iterate_dataset(dataset_ro):
     for k in dataset_ro:
         md = dataset_ro[k]
         assert {"image", "metadata", "annotations"}.issubset(md)
+
+
+def test_ingested_dataset_attribute_retrieval(datasource):
+    ds = PadoDataset(None, mode="x")
+    ds.ingest_obj(datasource)
+
+    image_id = next(iter(ds.images))
+    a = ds.annotations[image_id]
+    m = ds.metadata[image_id]
+    i = ds.images[image_id]
