@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import enum
 import struct
-from typing import ClassVar
 from typing import List
 from typing import Optional
 
@@ -11,7 +10,6 @@ from geojson_pydantic import Feature
 from geojson_pydantic.geometries import Geometry
 from geojson_pydantic.geometries import parse_geometry_obj
 from pydantic import BaseModel
-from pydantic import Field
 from pydantic import validator
 from pydantic.color import Color
 from shapely.geometry import shape
@@ -48,12 +46,10 @@ class Annotator(BaseModel):
     type: AnnotatorType
     name: str
 
-    # add a default instance thats not part of the model in case the annotator
-    # is unknown. NOTE: could have done metaclass, or descriptor but assignment
-    # to cls is easiest... that's why this annotation is added for the IDE
-    UNKNOWN: ClassVar["Annotator"] = Field(None)  # helps pycharm know about .UNKNOWN
 
-
+# add a default instance thats not part of the model in case the annotator
+# is unknown. NOTE: could have done metaclass, or descriptor but assignment
+# to cls is easiest...
 Annotator.UNKNOWN = Annotator(type=AnnotatorType.UNKNOWN, name="unknown")
 
 
