@@ -11,7 +11,7 @@ jobs:
       max-parallel: 5
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]  # [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: [3.8]
         # include:
         #   # we'll test the python support on ubuntu
