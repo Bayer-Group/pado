@@ -373,8 +373,6 @@ class PadoDataset:
             raise NotImplementedError("todo: implement more files")
 
     # === describe (summarise) dataset ===
-
-    # TODO: make a rich description of the dataset, and include the ability to format the output (json/plain text etc..)
     def describe(self, format:str = 'plain_text') -> str:
         valid_formats = ['plain_text', 'json']
         
