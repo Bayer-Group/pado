@@ -379,7 +379,7 @@ class PadoDataset:
         
         if output_format not in valid_formats:
             # not sure if this should raise a value error..
-            raise ValueError
+            raise ValueError(f'"{output_format}" is not a valid output format.')
         
         if output_format == 'plain_text':
             return textwrap.dedent(f"""\

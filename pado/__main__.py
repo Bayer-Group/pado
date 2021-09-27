@@ -52,7 +52,7 @@ def info_(args, subparser):
         print(f"error: not a pado dataset '{e}'")
         return -1
     except ValueError as e:
-        print(f"error: not a pado dataset '{e}'")
+        print(f"error: '{e}'")
         return -1
     else:
         return 0
