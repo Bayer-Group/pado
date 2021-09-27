@@ -47,4 +47,4 @@ def cli_info_cmd(dataset_path):
 
     ds = PadoDataset(dataset_path, mode="r")
 
-    return ds.describe(format='text')
+    return ds.describe(output_format='json')

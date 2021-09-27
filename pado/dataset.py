@@ -373,21 +373,24 @@ class PadoDataset:
             raise NotImplementedError("todo: implement more files")
 
     # === describe (summarise) dataset ===
-    def describe(self, format:str = 'plain_text') -> str:
+    def describe(self, output_format:str = 'plain_text') -> str:
+        """A 'to string' method for essential PadoDataset information"""
         valid_formats = ['plain_text', 'json']
         
-        if format not in valid_formats:
+        if output_format not in valid_formats:
             # not sure if this should raise a value error..
             raise ValueError
         
-        if format == 'plain_text':
+        if output_format == 'plain_text':
             return textwrap.dedent(f"""\
-                Path: {self.urlpath}
-                Images: {len(self.images)}
+                Path to dataset: {self.urlpath}
+                Images: {[item[0] for item in self.images.items()]}
                 Findings Metadata: {len(self.metadata)}
                 Annotated Images: {len(self.annotations)}
                 Total Annotations: {sum(len(x) for x in list(self.annotations.values()))}
             """)
+        elif output_format == 'json':
+            print([item[0].to_json() for item in self.images.items()])
         else:
             raise NotImplementedError
 
