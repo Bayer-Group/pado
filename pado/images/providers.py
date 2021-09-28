@@ -306,14 +306,17 @@ def update_image_provider_urlpaths(
     search_urlpath: UrlpathLike,
     search_glob: str,
     *,
-    provider_urlpath: UrlpathLike,
+    provider: ImageProvider | UrlpathLike,
     inplace: bool = False,
     ignore_ambiguous: bool = False,
     progress: bool = False,
 ) -> ImageProvider:
     """search a path and re-associate image urlpaths by filename"""
     files_and_parts = find_files(search_urlpath, glob=search_glob)
-    ip = ImageProvider.from_parquet(urlpath=provider_urlpath)
+    if isinstance(provider, ImageProvider):
+        ip = provider
+    else:
+        ip = ImageProvider.from_parquet(urlpath=provider)
 
     new_urlpaths = match_partial_paths_reversed(
         current_urlpaths=ip.df.urlpath,
@@ -329,5 +332,5 @@ def update_image_provider_urlpaths(
         print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
 
     if inplace:
-        ip.to_parquet(provider_urlpath)
+        ip.to_parquet(provider)
     return ip
