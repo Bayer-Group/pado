@@ -4,9 +4,10 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from pado.mock import temporary_mock_svs
 from pado.images import ImageProvider
 from pado.images.providers import create_image_provider
+from pado.images.providers import update_image_provider_urlpaths
+from pado.mock import temporary_mock_svs
 
 
 @pytest.fixture
@@ -58,3 +59,28 @@ def test_roundtrip_image_provider(image_provider):
     assert ip0.identifier == ip1.identifier
     assert set(ip0) == set(ip1)
     assert list(ip0.values()) == list(ip1.values())
+
+
+@pytest.fixture
+def no_fsspec_instantiation(monkeypatch):
+    def _raise_(self, *args, **kwargs):
+        raise RuntimeError(f"{type(self).__name__}(*{args!r}, **{kwargs!r}) instantiated")
+
+    with monkeypatch.context() as m:
+        m.setattr('fsspec.AbstractFileSystem.__init__', _raise_)
+        yield
+
+
+@pytest.fixture
+def stored_image_provider(tmp_path, image_provider):
+    stored_image_prodiver = tmp_path.joinpath("some.images.parquet")
+    image_provider.to_parquet(stored_image_prodiver)
+    yield stored_image_prodiver
+
+
+def test_update_image_provider_urlpaths_does_not_instantiate(no_fsspec_instantiation, multi_image_folder, stored_image_provider):
+    update_image_provider_urlpaths(
+        search_urlpath=multi_image_folder,
+        search_glob="**/*.svs",
+        provider_urlpath=stored_image_provider,
+    )
