@@ -11,6 +11,7 @@ import zipfile
 from ast import literal_eval
 from contextlib import ExitStack
 from contextlib import contextmanager
+from pathlib import PurePath
 from typing import Any
 from typing import BinaryIO
 from typing import ContextManager
@@ -22,7 +23,9 @@ from typing import Union
 
 import fsspec
 from fsspec import AbstractFileSystem
+from fsspec import get_filesystem_class
 from fsspec.core import OpenFile
+from fsspec.core import strip_protocol
 
 from pado.types import FsspecIOMode
 from pado.types import OpenFileLike
@@ -148,6 +151,30 @@ def urlpathlike_to_fs_and_path(obj: UrlpathLike) -> Tuple[AbstractFileSystem, st
         except json.JSONDecodeError:
             fs = pickle.loads(literal_eval(json_obj["fs"]))
         return fs, json_obj["path"]
+
+
+def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
+    """take an urlpathlike object and return the path parts
+
+    this does not instantiate the fsspec.AbstractFilesystem class.
+    (does not open connections, etc on instantiation)
+    """
+    if is_fsspec_open_file_like(obj):
+        path = obj.path
+    else:
+        try:
+            json_obj = json.loads(obj)  # type: ignore
+        except (json.JSONDecodeError, TypeError):
+            if isinstance(obj, os.PathLike):
+                obj = os.fspath(obj)
+            if not isinstance(obj, str):
+                raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+            path = strip_protocol(obj)
+        else:
+            if not isinstance(json_obj, dict):
+                raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
+            path = json_obj['path']
+    return PurePath(path).parts
 
 
 def fsopen(

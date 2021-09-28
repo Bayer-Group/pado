@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
+from pado.io.files import urlpathlike_to_path_parts
 from pado.io.files import urlpathlike_to_string
 from pado.types import OpenFileLike
 from pado.types import UrlpathLike
@@ -29,11 +30,11 @@ def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> Urlpath
 
 def match_partial_paths_reversed(
     current_urlpaths: Sequence[UrlpathLike],
-    new_urlpaths: Sequence[OpenFileLike],
+    new_urlpaths: Sequence[UrlpathLike],
     *,
     ignore_ambiguous: bool = False,
     progress: bool = False,
-) -> Sequence[OpenFileLike]:
+) -> Sequence[UrlpathLike]:
     """match paths for re-assigning files
 
     returns a new sequence of paths replacing current with new ones
@@ -42,8 +43,7 @@ def match_partial_paths_reversed(
     """
     current_path_parts = {}
     for _idx, urlpathlike in enumerate(current_urlpaths):
-        fs, path = urlpathlike_to_fs_and_path(urlpathlike)
-        parts = PurePath(path).parts
+        parts = urlpathlike_to_path_parts(urlpathlike)
         current_path_parts[parts] = {
             'index': _idx,
             'cur': urlpathlike,
@@ -70,10 +70,11 @@ def match_partial_paths_reversed(
     if progress:
         new_urlpaths = tqdm(new_urlpaths, desc="matching new files")
 
-    for of in new_urlpaths:
-        m = match(PurePath(of.path).parts, parts, -1)
+    for new_up in new_urlpaths:
+        new_parts = urlpathlike_to_path_parts(new_up)
+        m = match(new_parts, parts, -1)
         if m:
-            current_path_parts[m]['new'] = of
+            current_path_parts[m]['new'] = new_up
 
     return [
         x['new'] or x['cur']
