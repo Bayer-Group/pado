@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import uuid
 from abc import ABC
 from typing import Any

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import enum
 import json
-import os
 import platform
 from abc import ABC
 from datetime import datetime
