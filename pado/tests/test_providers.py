@@ -1,12 +1,15 @@
 import os
+import unittest.mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 
-from pado.mock import temporary_mock_svs
 from pado.images import ImageProvider
 from pado.images.providers import create_image_provider
+from pado.images.providers import update_image_provider_urlpaths
+from pado.io.paths import match_partial_paths_reversed
+from pado.mock import temporary_mock_svs
 
 
 @pytest.fixture
@@ -58,3 +61,16 @@ def test_roundtrip_image_provider(image_provider):
     assert ip0.identifier == ip1.identifier
     assert set(ip0) == set(ip1)
     assert list(ip0.values()) == list(ip1.values())
+
+
+def test_match_partial_paths_reversed_does_not_instantiate(multi_image_folder, image_provider):
+    # we want this test to fail whenever fsspec.spec.AbstractFileSystem or any of its
+    # subclasses gets instantiated. The problem here is, that AbsractFileSystem instances
+    # are cached through some metaclass magic in fsspec.spec._Cached.
+    # so the way to make sure we fail is to mock __call__ in the metaclass:
+    with unittest.mock.patch('fsspec.spec._Cached.__call__', side_effect=RuntimeError):
+        m = match_partial_paths_reversed(
+            current_urlpaths=image_provider.df.urlpath.values,
+            new_urlpaths=list(multi_image_folder.rglob("*.svs")),
+        )
+        assert len(m) == 3
