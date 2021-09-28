@@ -405,8 +405,8 @@ class PadoDataset:
                     - width ~ ({self.images.df['width'].mean():.3}, {self.images.df['width'].std():.3})
                     - height ~ ({self.images.df['height'].mean():.3}, {self.images.df['height'].std():.3})
                 Image File Size (bytes):
-                    - mean image size: {self.images.df['size_bytes'].mean() / 1e6 :.3} MB
-                    - total size of all images: {self.images.df['size_bytes'].sum() / 1e9 :.3} GB
+                    - mean image size: {self.images.df['size_bytes'].mean() / 1e6 :.3f} MB
+                    - total size of all images: {self.images.df['size_bytes'].sum() / 1e9 :.3f} GB
                 
                 === ANNOTATIONS ===
                 Total number of annotations: {sum(len(x) for x in list(self.annotations.values()))}
