@@ -33,6 +33,7 @@ dependencies:
   - numpy
   - orjson
   - pandas
+  - geopandas
   - pillow
   - pyarrow
   - pydantic

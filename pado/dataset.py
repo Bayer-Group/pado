@@ -17,7 +17,9 @@ from typing import Union
 from typing import get_args
 
 import fsspec
+import shapely
 import pandas as pd
+import geopandas as gpd
 
 from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
@@ -373,22 +375,48 @@ class PadoDataset:
             raise NotImplementedError("todo: implement more files")
 
     # === describe (summarise) dataset ===
+    def describe(self, output_format:str = 'plain_text') -> str:
+        """A 'to string' method for essential PadoDataset information"""
 
-    # TODO: make a rich description of the dataset, and include the ability to format the output (json/plain text etc..)
-    def describe(self, format:str = 'plain_text') -> str:
-        valid_formats = ['plain_text', 'json']
-        
-        if format not in valid_formats:
+        valid_formats = ('plain_text', 'json')
+
+        if output_format not in valid_formats:
             # not sure if this should raise a value error..
-            raise ValueError
+            raise ValueError(f'"{output_format}" is not a valid output format.')
+
+        # convert annotations df to geodataframe
+        gs = gpd.GeoSeries.from_wkt(self.annotations.df['geometry'])
+        annotations_gdf = gpd.GeoDataFrame(self.annotations.df, geometry=gs)
+        annotations_gdf['area'] = annotations_gdf.geometry.area
+        annotation_classes_by_area = annotations_gdf.groupby('classification')['area'].sum().sort_values(ascending=False)
+        common_classes = annotations_gdf['classification'].value_counts()
         
-        if format == 'plain_text':
+        if output_format == 'plain_text':
             return textwrap.dedent(f"""\
-                Path: {self.urlpath}
-                Images: {len(self.images)}
-                Findings Metadata: {len(self.metadata)}
-                Annotated Images: {len(self.annotations)}
-                Total Annotations: {sum(len(x) for x in list(self.annotations.values()))}
+                === SUMMARY ===
+                Path to dataset: {self.urlpath}
+                Number of images: {len(self.images)}
+                
+                === IMAGES ===
+                Image Size Distribution (mean, std): 
+                    - mpp_x ~ ({self.images.df['mpp_x'].mean():.3}, {self.images.df['mpp_x'].std():.3})
+                    - mpp_y ~ ({self.images.df['mpp_y'].mean():.3}, {self.images.df['mpp_y'].std():.3})
+                    - width ~ ({self.images.df['width'].mean():.3}, {self.images.df['width'].std():.3})
+                    - height ~ ({self.images.df['height'].mean():.3}, {self.images.df['height'].std():.3})
+                Image File Size (bytes):
+                    - mean image size: {self.images.df['size_bytes'].mean() / 1e6 :.3f} MB
+                    - total size of all images: {self.images.df['size_bytes'].sum() / 1e9 :.3f} GB
+                
+                === ANNOTATIONS ===
+                Total number of annotations: {sum(len(x) for x in list(self.annotations.values()))}
+                Mean annotations per image: {self.annotations.df.groupby('image_id')['geometry'].count().mean():.3}
+                Five most common classes: {list(common_classes[:5].to_dict().items())}
+                Classes sorted by total annotation area (top five): {
+                    list(annotation_classes_by_area[:5].to_dict().items())
+                }
+                
+                === METADATA ===
+                Keys available: {self.metadata.df.columns.to_list()}
             """)
         else:
             raise NotImplementedError
