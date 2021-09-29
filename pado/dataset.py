@@ -375,7 +375,6 @@ class PadoDataset:
             raise NotImplementedError("todo: implement more files")
 
     # === describe (summarise) dataset ===
-]
     def describe(self, output_format:str = 'plain_text') -> str:
         """A 'to string' method for essential PadoDataset information"""
 
@@ -419,8 +418,6 @@ class PadoDataset:
                 === METADATA ===
                 Keys available: {self.metadata.df.columns.to_list()}
             """)
-
-
         else:
             raise NotImplementedError
 
