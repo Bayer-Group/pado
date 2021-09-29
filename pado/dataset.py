@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections.abc
 import os
 import pathlib
+import textwrap
 import uuid
 from collections.abc import Iterable
 from collections.abc import Sized
@@ -61,16 +62,26 @@ class PadoDataset:
 
         """
         if urlpath is None:
-            # enable in-memory pado datasets
-            urlpath = f"memory://pado-{uuid.uuid4()}"
+            # enable in-memory pado datasets and change mode to enable write
+            self._urlpath = f"memory://pado-{uuid.uuid4()}"
+            mode = 'r+'
+        else:
+            # check provided urlpath and mode
+            urlpath = get_root_dir(urlpath, allow_file="pado.dataset.toml")
+            try:
+                self._urlpath: str = urlpathlike_to_string(urlpath)
+            except TypeError as err:
+                raise TypeError(f"incompatible urlpath {urlpath!r}") from err
 
-        urlpath = get_root_dir(urlpath, allow_file="pado.dataset.toml")
-        try:
-            self._urlpath: str = urlpathlike_to_string(urlpath)
-        except TypeError as err:
-            raise TypeError(f"incompatible urlpath {urlpath!r}") from err
-        if mode not in get_args(IOMode):
-            raise ValueError(f"unsupported mode {mode!r}")
+            # check mode
+            if mode not in get_args(IOMode):
+                raise ValueError(f"unsupported mode {mode!r}")
+
+            # if the dataset files should be there, check them
+            if mode != 'x':
+                fs = self._fs
+                if not list(fs.glob(self._get_fspath("*.image.parquet"))):
+                    raise ValueError(f"error: {self._urlpath} not a valid dataset since it has no image parquet file.")
 
         # file
         self._mode: IOMode = mode
@@ -303,7 +314,7 @@ class PadoDataset:
             output.append(Split(ds0, ds1))
         return output
 
-    # === data ingestion and summary ===
+    # === data ingestion ===
 
     def ingest_obj(self, obj: Any, *, identifier: Optional[str] = None) -> None:
         """ingest an object into the dataset"""
@@ -360,6 +371,27 @@ class PadoDataset:
 
         else:
             raise NotImplementedError("todo: implement more files")
+
+    # === describe (summarise) dataset ===
+
+    # TODO: make a rich description of the dataset, and include the ability to format the output (json/plain text etc..)
+    def describe(self, format:str = 'plain_text') -> str:
+        valid_formats = ['plain_text', 'json']
+        
+        if format not in valid_formats:
+            # not sure if this should raise a value error..
+            raise ValueError
+        
+        if format == 'plain_text':
+            return textwrap.dedent(f"""\
+                Path: {self.urlpath}
+                Images: {len(self.images)}
+                Findings Metadata: {len(self.metadata)}
+                Annotated Images: {len(self.annotations)}
+                Total Annotations: {sum(len(x) for x in list(self.annotations.values()))}
+            """)
+        else:
+            raise NotImplementedError
 
     # === internal utility methods ===
 
