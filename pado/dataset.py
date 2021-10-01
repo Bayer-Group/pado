@@ -40,8 +40,10 @@ from pado.types import DatasetSplitter
 from pado.types import IOMode
 from pado.types import UrlpathLike
 
-__all__ = ["PadoDataset",
-           "PadoItem"]
+__all__ = [
+    "PadoDataset",
+    "PadoItem"
+]
 
 
 class PadoDataset:
@@ -375,7 +377,8 @@ class PadoDataset:
             raise NotImplementedError("todo: implement more files")
 
     # === describe (summarise) dataset ===
-    def describe(self, output_format:str = 'plain_text') -> str:
+
+    def describe(self, output_format: str = 'plain_text') -> str:
         """A 'to string' method for essential PadoDataset information"""
 
         valid_formats = ('plain_text', 'json')
