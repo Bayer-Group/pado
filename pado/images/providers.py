@@ -336,6 +336,6 @@ def update_image_provider_urlpaths(
     if progress:
         print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
 
-    if inplace:
+    if inplace and not isinstance(provider, ImageProvider):
         ip.to_parquet(provider)
     return ip
