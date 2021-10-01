@@ -7,6 +7,7 @@ from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Iterator
+from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
 from typing import Set
@@ -263,7 +264,7 @@ def create_image_provider(
     *,
     output_urlpath: Optional[UrlpathLike],
     identifier: Optional[str] = None,
-    checksum: bool = True,
+    checksum: bool | Mapping[ImageId, str] = True,
     resume: bool = False,
     ignore_broken: bool = True,
     image_id_func: GetImageIdFunc = image_id_from_parts,
@@ -285,8 +286,12 @@ def create_image_provider(
             image_id = image_id_func(fp.file, fp.parts, ip.identifier)
             if resume and image_id in ip:
                 continue
+            if isinstance(checksum, Mapping):
+                chk = checksum[image_id]
+            else:
+                chk = checksum
             try:
-                image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=checksum)
+                image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=chk)
             except KeyboardInterrupt:
                 raise
             except BaseException as e:
