@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os.path
 import uuid
 from abc import ABC
 from typing import Any
@@ -22,12 +23,14 @@ from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
 from pado.images.ids import image_id_from_parts
 from pado.images.image import Image
+from pado.io.files import find_files
+from pado.io.files import urlpathlike_to_fs_and_path
+from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.io.paths import match_partial_paths_reversed
-from pado.types import UrlpathLike
-from pado.io.files import find_files
 from pado.io.store import Store
 from pado.io.store import StoreType
+from pado.types import UrlpathLike
 
 
 # === storage =================================================================
@@ -339,3 +342,70 @@ def update_image_provider_urlpaths(
     if inplace and not isinstance(provider, ImageProvider):
         ip.to_parquet(provider)
     return ip
+
+
+def copy_image(
+    provider: ImageProvider,
+    image_id: ImageId | Iterable[ImageId],
+    dest: UrlpathLike,
+    *,
+    update_provider: bool = True,
+    progress: bool = False,
+    chunk_size: int = 2**20,
+    **update_kwargs
+) -> None:
+    """copy image data to a new location"""
+    if not isinstance(provider, ImageProvider):
+        raise TypeError(f"expected ImageProvider instance, got {type(provider).__name__}")
+
+    # prepare image ids
+    if isinstance(image_id, ImageId):
+        image_ids = [image_id]
+    else:
+        image_ids = list(image_id)
+
+    if progress and len(image_ids) > 1:
+        image_ids = tqdm(image_ids, desc="images", disable=not progress)
+
+    # prepare destination dir
+    dst_fs, dst_root = urlpathlike_to_fs_and_path(dest)
+    if not dst_fs.isdir(dst_root):
+        dst_fs.mkdir(dst_root, create_parents=True)
+
+    # copy images
+    for image_id in image_ids:
+        image = provider[image_id]
+
+        dst_fn = os.path.join(dst_root, image_id.site, *image_id.parts)
+        dst_dir = os.path.dirname(dst_fn)
+
+        with urlpathlike_to_fsspec(image.urlpath, mode="rb") as src:
+            dst_fs.mkdir(dst_dir, create_parents=True)
+            try:
+                with dst_fs.open(dst_fn, mode="wb") as dst:
+
+                    prg = tqdm(
+                        desc="copy",
+                        total=image.file_info.size_bytes,
+                        unit="B",
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        disable=not progress,
+                    )
+
+                    # iterate in chunks
+                    for chunk in iter(lambda: src.read(chunk_size), b""):
+                        dst.write(chunk)
+                        prg.update(chunk_size)
+
+            except Exception:
+                dst_fs.mv(dst_fn, f"{dst_fn}.broken.partial")
+                raise
+
+    if update_provider:
+        update_image_provider_urlpaths(
+            dest, "**/*.svs",
+            provider=provider,
+            progress=progress,
+            **update_kwargs
+        )

@@ -6,8 +6,10 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from pado.images import ImageProvider
+from pado.images.providers import copy_image
 from pado.images.providers import create_image_provider
 from pado.images.providers import update_image_provider_urlpaths
+from pado.io.files import find_files
 from pado.io.paths import match_partial_paths_reversed
 from pado.mock import temporary_mock_svs
 
@@ -74,3 +76,13 @@ def test_match_partial_paths_reversed_does_not_instantiate(multi_image_folder, i
             new_urlpaths=list(multi_image_folder.rglob("*.svs")),
         )
         assert len(m) == 3
+
+
+def test_copy_image(tmp_path, image_provider):
+    new_dst = tmp_path.joinpath("new_storage_location")
+    iid = next(iter(image_provider))
+
+    copy_image(image_provider, iid, new_dst)
+
+    assert "new_storage_location" in image_provider[iid].urlpath
+    assert len(list(find_files(new_dst, glob="**/*.svs"))) == 1
