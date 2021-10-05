@@ -421,8 +421,27 @@ class PadoDataset:
                 === METADATA ===
                 Keys available: {self.metadata.df.columns.to_list()}
             """)
+        elif output_format == "json":
+            return {
+                'path': self.urlpath,
+                'num_images': len(self.images),
+                'mean_mpp_x': self.images.df['mpp_x'].mean(),
+                'mean_mpp_y': self.images.df['mpp_y'].mean(),
+                'mean_image_width': self.images.df['width'].mean(),
+                'mean_image_height': self.images.df['height'].mean(),
+                'mean_image_size': self.images.df['size_bytes'].mean(),
+                'mean_annotations_per_image': self.annotations.df.groupby('image_id')['geometry'].count().mean(),
+                'std_mpp_x': self.images.df['mpp_x'].std(),
+                'std_mpp_y': self.images.df['mpp_y'].mean(),
+                'std_image_width': self.images.df['width'].std(),
+                'std_image_height': self.images.df['height'].std(),
+                'total_size_images': self.images.df['size_bytes'].sum(),
+                'total_num_annotations': sum(len(x) for x in list(self.annotations.values())),
+                'common_classes': list(common_classes[:5].to_dict().items()),
+                'common_classes_by_annotation_area': list(annotation_classes_by_area[:5].to_dict().items()),
+            }
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f'Format "{output_format}" is not allowed.')
 
     # === internal utility methods ===
 
