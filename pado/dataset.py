@@ -432,7 +432,7 @@ class PadoDataset:
                 'mean_image_size': self.images.df['size_bytes'].mean(),
                 'mean_annotations_per_image': self.annotations.df.groupby('image_id')['geometry'].count().mean(),
                 'std_mpp_x': self.images.df['mpp_x'].std(),
-                'std_mpp_y': self.images.df['mpp_y'].mean(),
+                'std_mpp_y': self.images.df['mpp_y'].std(),
                 'std_image_width': self.images.df['width'].std(),
                 'std_image_height': self.images.df['height'].std(),
                 'total_size_images': self.images.df['size_bytes'].sum(),
