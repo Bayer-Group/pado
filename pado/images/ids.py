@@ -17,6 +17,9 @@ from orjson import OPT_SORT_KEYS
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
 
+from itsdangerous import base64_decode
+from itsdangerous import base64_encode
+
 from pado.types import OpenFileLike
 
 
@@ -208,13 +211,9 @@ class ImageId(Tuple[Optional[str], ...]):
         """need to overwrite tuple.__ne__"""
         return not self.__eq__(other)
 
-    def to_url_hash(self, *, full: bool = False) -> str:
-        """return a one way hash of the image_id"""
-        if not full:
-            # noinspection PyPropertyAccess
-            return _hash_str(self.last)
-        else:
-            return _hash_str(self.to_str())
+    def to_url_id(self) -> str:
+        """return a base64 encoded string representation of imageid"""
+        return base64_encode(self.to_str().encode()).decode()
 
     # --- path methods ------------------------------------------------
 

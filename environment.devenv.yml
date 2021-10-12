@@ -42,6 +42,7 @@ dependencies:
   - toml
   - tqdm
   - zarr
+  - itsdangerous
 
   # testing relevant things
   - pytest>=6
