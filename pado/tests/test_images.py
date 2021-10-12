@@ -150,13 +150,10 @@ def test_image_id_eq_dont_coerce():
     assert iid != iid_tuple
 
 
-def test_image_id_to_url_hash():
+def test_image_id_to_base64_encoding():
     iid = ImageId('a', 'b', site='mars')
-    iid_fn_hash = "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d"
-    iid_full_hash = "ba9e6288694f5297e59a74d2f6227da026a0b8637d20f32dceb2fdd0992c5c1e"
-    assert iid.to_url_hash() == iid_fn_hash  # default
-    assert iid.to_url_hash(full=False) == iid_fn_hash
-    assert iid.to_url_hash(full=True) == iid_full_hash
+    iid_b64_encoded = "SW1hZ2VJZCgnYScsICdiJywgc2l0ZT0nbWFycycp"
+    assert iid.to_url_id() == iid_b64_encoded
 
 
 def test_image_id_current_hash_assumption():
