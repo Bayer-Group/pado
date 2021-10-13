@@ -277,7 +277,10 @@ def create_image_provider(
     files_and_parts = find_files(search_urlpath, glob=search_glob)
 
     if resume:
-        ip = ImageProvider.from_parquet(urlpath=output_urlpath)
+        try:
+            ip = ImageProvider.from_parquet(urlpath=output_urlpath)
+        except FileNotFoundError:
+            ip = ImageProvider(identifier=identifier)
     else:
         ip = ImageProvider(identifier=identifier)
 
