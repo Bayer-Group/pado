@@ -60,12 +60,13 @@ class TileIterator:
     Note: we should subclass to enable all sorts of fancy tile iteration
 
     """
+
     def __init__(
-        self,
-        image: Image,
-        *,
-        size: IntSize,
-        level: int,
+            self,
+            image: Image,
+            *,
+            size: IntSize,
+            level: int,
     ):
         """create a tile iterator instance"""
         if not isinstance(image, Image):
@@ -89,9 +90,9 @@ class TileIterator:
 
         # todo: incomplete tiles at borders are currently discarded
         x, y = np.mgrid[
-            0: img_lvl.width - tile_size.width + 1: tile_size.width,
-            0: img_lvl.height - tile_size.height + 1: tile_size.height,
-        ]
+               0: img_lvl.width - tile_size.width + 1: tile_size.width,
+               0: img_lvl.height - tile_size.height + 1: tile_size.height,
+               ]
 
         # todo: check if this ordering makes sense? maybe depend on chunk order in zarr
         bounds = np.hstack((
@@ -101,10 +102,11 @@ class TileIterator:
             y.reshape(-1, 1) + tile_size.height,
         ))
 
-        mpp_xy = self.image.level_mpp[self.level].as_tuple()
+        mpp_xy = self.image.level_mpp[self.level]
         z_array = self.image.get_zarr(self.level)
 
         return (
-            Tile(mpp=mpp_xy, bounds=(x0, x1, y0, y1), data=z_array[y0:y1, x0:x1], parent=img)
+            Tile(mpp=mpp_xy.as_tuple(), bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
+                 data=z_array[y0:y1, x0:x1], parent=img)
             for x0, x1, y0, y1 in bounds
         )
