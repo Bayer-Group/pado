@@ -51,6 +51,7 @@ class MPP:
 
 _P = TypeVar("_P", bound="Point")
 _S = TypeVar("_S", bound="Size")
+_B = TypeVar("_B", bound="Bounds")
 
 
 @dataclass(frozen=True)
@@ -147,3 +148,56 @@ class IntSize(Size):
 
     def as_tuple(self) -> Tuple[int, int]:
         return int(self.x), int(self.y)
+
+
+@dataclass(frozen=True)
+class Bounds:
+    """
+    A general 4D size that aims at representing rectangular shapes.
+    It optionally comes with a MPP for scaling
+    """
+    x_left: PositiveFloat
+    y_left: PositiveFloat
+    x_right: PositiveFloat
+    y_right: PositiveFloat
+    mpp: Optional[MPP] = None
+
+    def round(self) -> Bounds:
+        return Bounds(round(self.x_left), round(self.y_left), round(self.x_right), round(self.y_right), self.mpp)
+
+    def scale(self, mpp: MPP) -> Bounds:
+        """scale bounds to a new mpp"""
+        current = self.mpp
+        if current is None:
+            raise ValueError(f"Can't scale: {self!r} has no mpp")
+        return Bounds(
+            x_left=self.x_left * current.x / mpp.x,
+            y_left=self.y_left * current.y / mpp.y,
+            x_right=self.x_right * current.x / mpp.x,
+            y_right=self.y_right * current.y / mpp.y,
+            mpp=mpp,
+        )
+
+    @property
+    def upper_left_coords(self) -> Size:
+        return Size(x=self.x_left, y=self.y_left, mpp=self.mpp)
+
+    @property
+    def width(self):
+        return self.x_right - self.x_left
+
+    @property
+    def height(self):
+        return self.y_right - self.y_left
+
+    @property
+    def tile_size(self) -> Size:
+        return Size(x=self.width, y=self.height, mpp=self.mpp)
+
+    @classmethod
+    def from_tuple(cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP) -> _B:
+        x_left, y_left, x_right, y_right = xyxy
+        return cls(x_left=x_left, y_left=y_left, x_right=x_right, y_right=y_right, mpp=mpp)
+
+    def as_tuple(self) -> Tuple[float, float, float, float]:
+        return self.x_left, self.y_left, self.x_right, self.y_right
