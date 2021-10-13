@@ -191,8 +191,8 @@ class Bounds:
         return self.y_right - self.y_left
 
     @property
-    def tile_size(self) -> Size:
-        return Size(x=self.width, y=self.height, mpp=self.mpp)
+    def size(self) -> IntSize:
+        return IntSize(x=self.width, y=self.height, mpp=self.mpp)
 
     @classmethod
     def from_tuple(cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP) -> _B:
