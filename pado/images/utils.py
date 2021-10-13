@@ -17,6 +17,7 @@ __all__ = [
     "IntPoint",
     "IntSize",
     "MPP",
+    "Bounds"
 ]
 
 # NOTE:

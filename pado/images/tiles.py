@@ -11,12 +11,12 @@ from shapely.geometry import Polygon
 
 from pado._compat import cached_property
 from pado.images.utils import IntPoint
+from pado.images.utils import Bounds
 from pado.images.utils import MPP
 from pado.images.utils import IntSize
 
 if TYPE_CHECKING:
     from pado.images.image import Image
-    # from pado.images.utils import IntSize
 
 
 class Tile:
@@ -25,12 +25,13 @@ class Tile:
     def __init__(
             self,
             mpp: Tuple[float, float],
-            bounds: Tuple[int, int, int, int],
+            bounds: Bounds,
             data: Optional[np.ndarray] = None,
             parent: Optional[Image] = None,
     ):
+        assert mpp == bounds.mpp.as_tuple(), "tile mpp does not coincide with bounds mpp"
         self._mpp = mpp
-        self._bounds = bounds
+        self.bounds = bounds
         self.data: Optional[np.ndarray] = data
         self.parent: Optional[Image] = parent
 
@@ -40,18 +41,17 @@ class Tile:
 
     @cached_property
     def size(self) -> IntSize:
-        b = self._bounds
-        return IntSize.from_tuple((b[2] - b[0], b[3] - b[1]), mpp=self.mpp)
+        return self.bounds.size
 
     @cached_property
     def x0y0(self) -> IntPoint:
-        return IntPoint.from_tuple(self._bounds[:2], mpp=self.mpp)
+        return IntPoint.from_tuple(self.bounds.upper_left_coords.as_tuple(), mpp=self.mpp)
 
     def shape(self, mpp: Optional[MPP] = None) -> Polygon:
         if mpp is None:
-            return Polygon.from_bounds(*self._bounds)
+            return Polygon.from_bounds(*self.bounds.as_tuple())
         else:
-            raise NotImplementedError("todo: allow shape scaling")
+            return Polygon.from_bounds(*self.bounds.scale(mpp=mpp).as_tuple())
 
 
 class TileIterator:
