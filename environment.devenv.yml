@@ -27,6 +27,7 @@ dependencies:
 
   # pado requirements
   - appdirs
+  - dynaconf
   - fsspec
   - geojson-pydantic
   - imagecodecs
