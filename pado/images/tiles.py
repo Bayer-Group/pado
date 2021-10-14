@@ -24,20 +24,16 @@ class Tile:
 
     def __init__(
             self,
-            mpp: Tuple[float, float],
+            mpp: MPP,
             bounds: Bounds,
             data: Optional[np.ndarray] = None,
             parent: Optional[Image] = None,
     ):
-        assert mpp == bounds.mpp.as_tuple(), "tile mpp does not coincide with bounds mpp"
-        self._mpp = mpp
+        assert mpp.as_tuple() == bounds.mpp.as_tuple(), "tile mpp does not coincide with bounds mpp"
+        self.mpp = mpp
         self.bounds = bounds
         self.data: Optional[np.ndarray] = data
         self.parent: Optional[Image] = parent
-
-    @cached_property
-    def mpp(self) -> MPP:
-        return MPP.from_tuple(self._mpp)
 
     @cached_property
     def size(self) -> IntSize:
