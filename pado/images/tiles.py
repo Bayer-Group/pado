@@ -101,7 +101,7 @@ class TileIterator:
         z_array = self.image.get_zarr(self.level)
 
         return (
-            Tile(mpp=mpp_xy.as_tuple(), bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
+            Tile(mpp=mpp_xy, bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
                  data=z_array[y0:y1, x0:x1], parent=img)
             for x0, x1, y0, y1 in bounds
         )
