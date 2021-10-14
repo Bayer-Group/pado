@@ -82,10 +82,12 @@ class PadoDataset:
                 raise ValueError(f"unsupported mode {mode!r}")
 
             # if the dataset files should be there, check them
-            if mode != 'x':
-                fs = self._fs
+            fs = self._fs
+            if mode in {'r', 'r+'}:
                 if not list(fs.glob(self._get_fspath("*.image.parquet"))):
                     raise ValueError(f"error: {self._urlpath} not a valid dataset since it has no image parquet file.")
+            else:
+                pass  # fixme
 
         # file
         self._mode: IOMode = mode
