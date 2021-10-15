@@ -9,6 +9,7 @@ import numpy as np
 from shapely.geometry import Polygon
 
 from pado._compat import cached_property
+from pado.annotations.utils import Geometry
 from pado.images.utils import IntPoint
 from pado.images.utils import Bounds
 from pado.images.utils import MPP
@@ -42,11 +43,11 @@ class Tile:
     def x0y0(self) -> IntPoint:
         return IntPoint.from_tuple(self.bounds.upper_left_coords.as_tuple(), mpp=self.mpp)
 
-    def shape(self, mpp: Optional[MPP] = None) -> Polygon:
+    def shape(self, mpp: Optional[MPP] = None) -> Geometry:
         if mpp is None:
-            return Polygon.from_bounds(*self.bounds.as_tuple())
+            return Geometry.from_geometry(geometry=Polygon.from_bounds(*self.bounds.as_tuple()), mpp=self.mpp)
         else:
-            return Polygon.from_bounds(*self.bounds.scale(mpp=mpp).as_tuple())
+            return Geometry.from_geometry(geometry=Polygon.from_bounds(*self.bounds.scale(mpp=mpp).as_tuple()), mpp=mpp)
 
 
 class TileIterator:
