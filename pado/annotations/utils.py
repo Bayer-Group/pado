@@ -1,4 +1,5 @@
 from typing import Optional
+from typing import Tuple
 from typing import Type
 from typing import TypeVar
 from shapely.affinity import scale as shapely_scale
@@ -38,7 +39,18 @@ class Geometry:
             mpp=mpp,
         )
 
+    @property
+    def is_valid(self):
+        return self.geometry.is_valid
+
+    def fix_geometry(self, buffer_size: Optional[Tuple[int, int]] = None):
+        if buffer_size is None:
+            buffer_size = (0, 0)
+        if not self.is_valid:
+            self.geometry = self.geometry.buffer(buffer_size[0])
+            if not self.is_valid:
+                self.geometry = self.geometry.buffer(buffer_size[0])
+
     @classmethod
     def from_geometry(cls: Type[_G], geometry: BaseGeometry, *, mpp: MPP) -> _G:
-
         return cls(geometry=geometry, mpp=mpp)
