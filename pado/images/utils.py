@@ -213,7 +213,7 @@ class Geometry:
     """
     A general class for dealing with BaseGeometries at various MPPs.
     """
-    geometry: BaseGeometry
+    geometry: Optional[BaseGeometry]
     mpp: Optional[MPP] = None
 
     def scale(self, mpp: MPP) -> _G:
