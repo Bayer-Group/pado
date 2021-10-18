@@ -10,6 +10,7 @@ from pydantic import PositiveFloat
 from pydantic import StrictInt
 from pydantic import conint
 from pydantic.dataclasses import dataclass
+from shapely.affinity import scale as shapely_scale
 
 __all__ = [
     "Point",
@@ -17,7 +18,8 @@ __all__ = [
     "IntPoint",
     "IntSize",
     "MPP",
-    "Bounds"
+    "Bounds",
+    "Geometry"
 ]
 
 # NOTE:
@@ -26,6 +28,7 @@ __all__ = [
 #  where downsample levels in svs files are slightly off due to integer sizes
 #  of the pyramidal layers.
 #  Anyways, this is just a reminder in case we run into problems in the future.
+from shapely.geometry.base import BaseGeometry
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,7 @@ class MPP:
 _P = TypeVar("_P", bound="Point")
 _S = TypeVar("_S", bound="Size")
 _B = TypeVar("_B", bound="Bounds")
+_G = TypeVar("_G", bound="Geometry")
 
 
 @dataclass(frozen=True)
@@ -202,3 +206,42 @@ class Bounds:
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
         return self.x_left, self.y_left, self.x_right, self.y_right
+
+
+@dataclass(frozen=True)
+class Geometry:
+    """
+    A general class for dealing with BaseGeometries at various MPPs.
+    """
+    geometry: BaseGeometry
+    mpp: Optional[MPP] = None
+
+    def scale(self, mpp: MPP) -> _G:
+        """scale geometry to a new mpp"""
+        current = self.mpp
+        if current is None:
+            raise ValueError(f"Can't scale: {self!r} has no mpp")
+
+        factor_x = self.mpp.x / mpp.x
+        factor_y = self.mpp.y / mpp.y
+
+        return Geometry(
+            geometry=shapely_scale(self.geometry, xfact=factor_x, yfact=factor_y, origin=(0, 0)),
+            mpp=mpp,
+        )
+
+    @property
+    def is_valid(self):
+        return self.geometry.is_valid
+
+    def fix_geometry(self, buffer_size: Optional[Tuple[int, int]] = None):
+        if buffer_size is None:
+            buffer_size = (0, 0)
+        if not self.is_valid:
+            self.geometry = self.geometry.buffer(buffer_size[0])
+            if not self.is_valid:
+                self.geometry = self.geometry.buffer(buffer_size[0])
+
+    @classmethod
+    def from_geometry(cls: Type[_G], geometry: BaseGeometry, *, mpp: MPP) -> _G:
+        return cls(geometry=geometry, mpp=mpp)
