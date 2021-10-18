@@ -9,11 +9,11 @@ import numpy as np
 from shapely.geometry import Polygon
 
 from pado._compat import cached_property
-from pado.annotations.utils import Geometry
-from pado.images.utils import IntPoint
 from pado.images.utils import Bounds
-from pado.images.utils import MPP
+from pado.images.utils import Geometry
+from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.images.utils import MPP
 
 if TYPE_CHECKING:
     from pado.images.image import Image

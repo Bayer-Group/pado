@@ -208,12 +208,12 @@ class Bounds:
         return self.x_left, self.y_left, self.x_right, self.y_right
 
 
-@dataclass(frozen=True)
+@dataclass(config=type('', (), {'arbitrary_types_allowed': True}))
 class Geometry:
     """
     A general class for dealing with BaseGeometries at various MPPs.
     """
-    geometry: Optional[BaseGeometry]
+    geometry: BaseGeometry
     mpp: Optional[MPP] = None
 
     def scale(self, mpp: MPP) -> _G:
