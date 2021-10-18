@@ -26,17 +26,17 @@ dependencies:
   - setuptools_scm
 
   # pado requirements
-  - appdirs
   - dynaconf
   - fsspec
   - geojson-pydantic
+  - geopandas
   - imagecodecs
   - itsdangerous
   - numpy
   - orjson
   - pandas
-  - geopandas
   - pillow
+  - platformdirs
   - pyarrow
   - pydantic
   - shapely
