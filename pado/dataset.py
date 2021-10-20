@@ -264,9 +264,12 @@ class PadoDataset:
             for image_id in self.index:
                 item = self.get_by_id(image_id)
                 keep = func(item)
-                if keep:
-                    ip[image_id] = item.image
+                if not keep:
+                    continue
+                ip[image_id] = item.image
+                if item.annotations is not None:
                     ap[image_id] = item.annotations
+                if item.metadata is not None:
                     mp[image_id] = item.metadata
 
         else:
