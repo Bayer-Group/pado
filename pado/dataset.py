@@ -272,10 +272,17 @@ class PadoDataset:
         else:
             raise TypeError(f"requires sequence of ImageId or a callable of type FilterFunc, got {ids_or_func!r}")
 
+        if len(ip) == 0:
+            raise RuntimeError("didn't match any images")
+
         ds = PadoDataset(urlpath, mode="w")
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
-        ds.ingest_obj(AnnotationProvider(ap, identifier=self.annotations.identifier))
-        ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
+
+        if len(ap) > 0:
+            ds.ingest_obj(AnnotationProvider(ap, identifier=self.annotations.identifier))
+        if len(mp) > 0:
+            ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
+
         return PadoDataset(ds.urlpath, mode="r")
 
     def partition(
