@@ -7,6 +7,7 @@ from typing import Type
 from typing import TypeVar
 
 from pydantic import PositiveFloat
+from pydantic import NonNegativeFloat
 from pydantic import StrictInt
 from pydantic import conint
 from pydantic.dataclasses import dataclass
@@ -161,10 +162,10 @@ class Bounds:
     A general 4D size that aims at representing rectangular shapes.
     It optionally comes with a MPP for scaling
     """
-    x_left: PositiveFloat
-    y_left: PositiveFloat
-    x_right: PositiveFloat
-    y_right: PositiveFloat
+    x_left: NonNegativeFloat
+    y_left: NonNegativeFloat
+    x_right: NonNegativeFloat
+    y_right: NonNegativeFloat
     mpp: Optional[MPP] = None
 
     def round(self) -> Bounds:
@@ -184,8 +185,8 @@ class Bounds:
         )
 
     @property
-    def upper_left_coords(self) -> Size:
-        return Size(x=self.x_left, y=self.y_left, mpp=self.mpp)
+    def upper_left_coords(self) -> IntPoint:
+        return IntPoint(x=int(self.x_left), y=int(self.y_left), mpp=self.mpp)
 
     @property
     def width(self):
@@ -197,7 +198,7 @@ class Bounds:
 
     @property
     def size(self) -> IntSize:
-        return IntSize(x=self.width, y=self.height, mpp=self.mpp)
+        return IntSize(x=int(self.width), y=int(self.height), mpp=self.mpp)
 
     @classmethod
     def from_tuple(cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP) -> _B:
