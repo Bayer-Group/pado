@@ -13,9 +13,15 @@ from typing import MutableMapping
 from typing import Optional
 from typing import Set
 from typing import Tuple
+from typing import Type
 
 import numpy as np
 import pandas as pd
+from fsspec.core import OpenFile
+from fsspec.implementations.cached import CachingFileSystem
+from fsspec.implementations.cached import SimpleCacheFileSystem
+from fsspec.implementations.cached import WholeFileCacheFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from tqdm import tqdm
 
 from pado._compat import cached_property
@@ -257,6 +263,69 @@ class FilteredImageProvider(ImageProvider):
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
         raise NotImplementedError(f"unsupported operation for {cls.__name__!r}()")
+
+
+class LocallyCachedImageProvider(ImageProvider):
+    """image provider that prepends a fsspec CachingFileSystem
+
+    use to route a normal ImageProvider through a local cache
+    """
+
+    def __init__(
+        self,
+        provider: BaseImageProvider | pd.DataFrame | dict | None = None,
+        *,
+        identifier: Optional[str] = None,
+        cache_cls: Type[CachingFileSystem] = WholeFileCacheFileSystem,
+        **cache_kwargs,
+    ):
+        super().__init__(provider, identifier=identifier)
+        self._cache_cls = cache_cls
+        self._cache_kw = cache_kwargs
+
+    def _prepend_cache(self, urlpath: UrlpathLike) -> UrlpathLike:
+        """prepend the cache to the urlpath"""
+        fs, path = urlpathlike_to_fs_and_path(urlpath)
+        cached_fs = self._cache_cls(**self._cache_kw, fs=fs)
+        return OpenFile(fs=cached_fs, path=path)
+
+    def __getitem__(self, image_id: ImageId) -> Image:
+        image = super().__getitem__(image_id)
+        image.urlpath = self._prepend_cache(image.urlpath)
+        return image
+
+    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+        for row in self.df.itertuples(index=True, name='ImageAsRow'):
+            # noinspection PyProtectedMember
+            x = row._asdict()
+            i = x.pop("Index")
+            image = Image.from_obj(x)
+            image.urlpath = self._prepend_cache(image.urlpath)
+            yield ImageId.from_str(i),
+
+    def __setitem__(self, image_id: ImageId, image: Image) -> None:
+        raise NotImplementedError(f"can't add to {type(self).__name__}")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise NotImplementedError(f"can't delete from {type(self).__name__}")
+
+    def to_parquet(self, urlpath: UrlpathLike) -> None:
+        raise NotImplementedError(f"")
+
+
+def image_is_cached_or_local(image: Image) -> bool:
+    """check if an image can be accessed locally"""
+    fs, path = urlpathlike_to_fs_and_path(image.urlpath)
+    if isinstance(fs, LocalFileSystem):
+        return os.path.isfile(path)
+    elif isinstance(fs, SimpleCacheFileSystem):
+        # noinspection PyProtectedMember
+        return fs._check_file(path) is not None
+    elif isinstance(fs, CachingFileSystem):
+        # noinspection PyProtectedMember
+        return fs._check_file(path) is not False
+    else:
+        return False
 
 
 # === manipulation ============================================================
