@@ -328,6 +328,25 @@ def image_is_cached_or_local(image: Image) -> bool:
         return False
 
 
+def image_cached_percentage(image: Image) -> float:
+    """return how much of an image is currently cached"""
+    fs, path = urlpathlike_to_fs_and_path(image.urlpath)
+    if isinstance(fs, LocalFileSystem):
+        return 100.0
+    elif isinstance(fs, CachingFileSystem):
+        # noinspection PyProtectedMember
+        if fs._check_file(path):
+            return 100.0
+        else:
+            sha = fs.hash_name(path, fs.same_names)
+            fn = os.path.join(fs.storage[-1], sha)
+            cached_bytes = os.stat(fn).st_size
+            image_bytes = image.file_info.size_bytes.to("b")
+            return min(100.0 * cached_bytes / image_bytes, 100.0)
+    else:
+        return 0.0
+
+
 # === manipulation ============================================================
 
 def create_image_provider(
