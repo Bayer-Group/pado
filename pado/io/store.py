@@ -18,7 +18,6 @@ import pyarrow
 import pyarrow.parquet
 from pandas.io.parquet import BaseImpl
 
-import pado.settings
 from pado._version import version as _pado_version
 from pado.io.files import urlpathlike_to_fsspec
 from pado.types import UrlpathLike
@@ -190,6 +189,7 @@ def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
 
 
 def _get_user_host() -> Optional[str]:
+    import pado.settings
     try:
         return pado.settings.settings.override_user_host
     except AttributeError:
