@@ -335,17 +335,14 @@ def image_cached_percentage(image: Image) -> float:
         return 100.0
     elif isinstance(fs, CachingFileSystem):
         # noinspection PyProtectedMember
-        if fs._check_file(path):
-            return 100.0
+        sha = fs.hash_name(path, fs.same_names)
+        fn = os.path.join(fs.storage[-1], sha)
+        if not os.path.exists(fn):
+            return 0.0
         else:
-            sha = fs.hash_name(path, fs.same_names)
-            fn = os.path.join(fs.storage[-1], sha)
-            if not os.path.exists(fn):
-                return 0.0
-            else:
-                cached_bytes = os.stat(fn).st_size
-                image_bytes = image.file_info.size_bytes.to("b")
-                return min(100.0 * cached_bytes / image_bytes, 100.0)
+            cached_bytes = os.stat(fn).st_size
+            image_bytes = image.file_info.size_bytes.to("b")
+            return min(100.0 * cached_bytes / image_bytes, 100.0)
     else:
         return 0.0
 
