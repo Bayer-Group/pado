@@ -25,15 +25,22 @@ class Tile:
     def __init__(
             self,
             mpp: MPP,
+            lvl0_mpp: MPP,
             bounds: Bounds,
             data: Optional[np.ndarray] = None,
             parent: Optional[Image] = None,
     ):
         assert mpp.as_tuple() == bounds.mpp.as_tuple(), "tile mpp does not coincide with bounds mpp"
         self.mpp = mpp
+        self.level0_mpp = lvl0_mpp
         self.bounds = bounds
         self.data: Optional[np.ndarray] = data
         self.parent: Optional[Image] = parent
+
+        # compute quantities at level0. This is useful when, for instance, visualizing objects on original svs
+        self.level0_bounds = bounds.scale(mpp=self.level0_mpp)
+        self.level0_tile_size = self.size.scale(mpp=self.level0_mpp)
+        self.level0_x0y0 = self.x0y0.scale(mpp=self.level0_mpp)
 
     @cached_property
     def size(self) -> IntSize:
@@ -75,6 +82,9 @@ class TileIterator:
         self.size: IntSize = size
         self.level: int = int(level)
 
+        with self.image:
+            self.level0_mpp_xy = self.image.level_mpp[0]
+
     def __iter__(self) -> Iterator[Tile]:
         """return a plain iterator with no overlap over all tiles of the image
 
@@ -102,7 +112,7 @@ class TileIterator:
         z_array = self.image.get_zarr(self.level)
 
         return (
-            Tile(mpp=mpp_xy, bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
+            Tile(mpp=mpp_xy, lvl0_mpp=self.level0_mpp_xy, bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
                  data=z_array[y0:y1, x0:x1], parent=img)
             for x0, x1, y0, y1 in bounds
         )
