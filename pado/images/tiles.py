@@ -30,7 +30,7 @@ class Tile:
             data: Optional[np.ndarray] = None,
             parent: Optional[Image] = None,
     ):
-        assert mpp.as_tuple() == bounds.mpp.as_tuple(), "tile mpp does not coincide with bounds mpp"
+        assert mpp.as_tuple() == bounds.mpp.as_tuple(), f"tile mpp does not coincide with bounds mpp: {mpp} vs {bounds.mpp}"
         self.mpp = mpp
         self.level0_mpp = lvl0_mpp
         self.bounds = bounds
