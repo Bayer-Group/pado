@@ -5,6 +5,7 @@ import os
 import pathlib
 import textwrap
 import uuid
+import warnings
 from collections.abc import Iterable
 from collections.abc import Sized
 from typing import Any
@@ -19,7 +20,6 @@ from typing import get_args
 import fsspec
 import shapely
 import pandas as pd
-import geopandas as gpd
 
 from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
@@ -392,6 +392,14 @@ class PadoDataset:
 
     def describe(self, output_format: str = 'plain_text') -> str:
         """A 'to string' method for essential PadoDataset information"""
+        try:
+            import geopandas as gpd
+        except ImportError:
+            warnings.warn(
+                "PadoDataset.describe() requires `geopandas`",
+                stacklevel=2,
+            )
+            raise
 
         valid_formats = ('plain_text', 'json')
 
