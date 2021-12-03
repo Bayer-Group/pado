@@ -1,8 +1,5 @@
-import platform
 import sys
-import textwrap
 from argparse import ArgumentTypeError
-from collections import defaultdict
 from functools import partial
 from pathlib import Path
 
@@ -38,13 +35,3 @@ class DirectoryType:
         if p.is_dir():
             return p
         raise ArgumentTypeError(f"'{cmd_input}' is not a directory")
-
-
-# -- commands -----------------------------------------------------------------
-
-def cli_info_cmd(dataset_path):
-    from pado.dataset import PadoDataset
-
-    ds = PadoDataset(dataset_path, mode="r")
-
-    return ds.describe()

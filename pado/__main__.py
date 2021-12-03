@@ -1,92 +1,130 @@
-import argparse
-import functools
-import sys
 from pathlib import Path
+from typing import Optional
 
-from pado._cli import subcommand, argument, DirectoryType, cli_info_cmd
+import typer
+import typer.colors
+from typer import Argument
+from typer import Option
+
+from rich.console import Console
+from rich.table import Table
+
+
+from pado._version import version as pado_version
 from pado.dataset import PadoDataset
 
 
-parser = argparse.ArgumentParser(
-    prog="python -m pado" if Path(sys.argv[0]).name == "__main__.py" else None,
-    description="""\
- ██████╗  █████╗ ██████╗  ██████╗ 
- ██╔══██╗██╔══██╗██╔══██╗██╔═══██╗
- ██████╔╝███████║██║  ██║██║   ██║
- ██╔═══╝ ██╔══██║██║  ██║██║   ██║
- ██║     ██║  ██║██████╔╝╚██████╔╝
- ╚═╝     ╚═╝  ╚═╝╚═════╝  ╚═════╝ """,
-    epilog="#### [PA]thological [D]ata [O]bsession ####",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
+# --- pado command line interface -------------------------------------
+from pado.settings import dataset_registry
+
+cli = typer.Typer(
+    name="pado",
+    epilog="#### pado dataset management ####",
 )
-subparsers = parser.add_subparsers(dest="cmd", title="pado command")
-subcommand = functools.partial(subcommand, parent=subparsers)
-parser.add_argument('--version', action='store_true', help="print version")
 
 
-def main(commandline=None):
-    """main command line argument handling"""
-    args = parser.parse_args(commandline)
-    if args.cmd is None:
-        if args.version:
-            from pado import __version__
-            print(f"{__version__}")
+@cli.command("version")
+def version():
+    """show the pado version"""
+    typer.echo(pado_version)
+
+
+@cli.command("info")
+def info(
+    name: Optional[str] = Option(...),
+    path: Optional[Path] = Argument(None, exists=True, file_okay=False, dir_okay=True, readable=True),
+):
+    """return info regarding the pado dataset"""
+    if name is not None and path is not None:
+        typer.echo("Can't specify both name and path", err=True)
+        raise typer.Exit(1)
+    elif name is None and path is None:
+        typer.echo("Specify --name or path", err=True)
+        raise typer.Exit(1)
+
+    if name is not None:
+        with dataset_registry() as registry:
+            path = registry[name]
+
+    out = PadoDataset(path, mode="r").describe()
+    typer.echo(out)
+
+
+# --- pado dataset info -----------------------------------------------
+
+cli_registry = typer.Typer()
+cli.add_typer(cli_registry, name="registry")
+
+
+@cli_registry.command(name="add")
+def registry_add(
+    name: str = Argument(...),
+    location: str = Argument(...),
+):
+    """manage registries for datasets"""
+    try:
+        ds = PadoDataset(location, mode="r")
+    except ValueError as err:
+        typer.secho(f"error: {err!s}", err=True)
+        typer.secho(f"PadoDataset at {location!s} is not readable", err=True)
+        raise typer.Exit(1)
+    with dataset_registry() as registry:
+        registry[name] = ds.urlpath
+    typer.secho(f"Added {name} at {location}", color=typer.colors.GREEN)
+
+
+@cli_registry.command(name="list")
+def registry_list(check_readable: bool = Option(False)):
+    """list configured registries"""
+    with dataset_registry() as registry:
+        name_urlpaths = list(registry.items())
+
+    def readable(p) -> Optional[bool]:
+        if not check_readable:
+            return None
         else:
-            parser.print_help()
-        return 0
+            try:
+                PadoDataset(urlpath, mode="r")
+            except ValueError:
+                return False
+            else:
+                return True
+
+    entries = []
+    for name, urlpath in name_urlpaths:
+        entries.append((name, urlpath, readable(urlpath)))
+
+    if not entries:
+        typer.secho("No datasets registered", color=typer.colors.YELLOW, err=True)
     else:
-        return args.cmd_func(args)
+        table = Table(title="Registered Datasets")
+        table.add_column("Name", justify="left", no_wrap=True)
+        table.add_column("Location", justify="left")
+        if check_readable:
+            table.add_column("Readable")
+
+        for name, urlpath, read in entries:
+            if check_readable:
+                table.add_row(name, urlpath, read)
+            else:
+                table.add_row(name, urlpath)
+        Console().print(table)
 
 
-@subcommand(
-    argument('dataset_path', help="path to pado dataset"),
-)
-def info_(args, subparser):
-    """show pado dataset information"""
-    if not args.dataset_path:
-        print(subparser.format_help())
-        return 0
+@cli_registry.command(name="remove")
+def registry_remove(
+    name: str = Argument(...),
+):
+    """remove a registry"""
     try:
-        print(cli_info_cmd(args.dataset_path))
-    except FileNotFoundError as e:
-        print(f"error: not a pado dataset '{e}'")
-        return -1
-    except ValueError as e:
-        print(f"error: '{e}'")
-        return -1
+        with dataset_registry() as registry:
+            location = registry[name]
+            del registry[name]
+    except KeyError:
+        typer.secho(f"Name {name!r} not registered", err=True)
     else:
-        return 0
-
-
-@subcommand(
-    argument("search_paths", nargs="+", help="paths to search for files"),
-    argument("--ext", nargs=1, metavar=("file_extension",), help="files extensions", action="append"),
-)
-def file_search(args, subparser):
-    """search for files at locations"""
-    import itertools
-    from pado.io.files import file_finder
-
-    if not args.search_paths:
-        print(subparser.format_help())
-        return 0
-
-    if not args.ext:
-        exts = ('.svs', )
-    else:
-        exts = tuple(e if e[0] == "." else f".{e}" for e in args.ext)
-
-    files = file_finder(args.search_paths, extensions=exts)
-    try:
-        f = next(files)
-    except StopIteration:
-        print("no files found", file=sys.stderr)
-        return -1
-
-    for f in sorted(itertools.chain([f], files)):
-        print(f)
-    return 0
+        typer.secho(f"Removed {name} at {location}", color=typer.colors.GREEN)
 
 
 if __name__ == "__main__":  # pragma: no cover
-    sys.exit(main())
+    cli()

@@ -6,7 +6,13 @@ A user can override the settings via dynaconf.
 """
 from __future__ import annotations
 
+import json
+import os.path
+import shutil
+import warnings
+from contextlib import ExitStack
 from pathlib import Path
+from typing import Optional
 
 from dynaconf import Dynaconf
 from dynaconf import Validator
@@ -16,6 +22,7 @@ from platformdirs import user_config_path
 __all__ = [
     'pado_cache_path',
     'pado_config_path',
+    'dataset_registry',
 ]
 
 settings = Dynaconf(
@@ -48,3 +55,74 @@ def pado_cache_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path
     if ensure_dir and not pth.is_dir():
         pth.mkdir(parents=True, exist_ok=True)
     return pth
+
+
+class _DatasetRegistry:
+    """a simple json file based key value store"""
+    FILENAME = ".pado_dataset_registry.json"
+    def __init__(self):
+        self._cm: Optional[ExitStack] = None
+        self._data: Optional[dict] = None
+
+    def __enter__(self):
+        fn = os.path.join(
+            pado_config_path(ensure_dir=True),
+            self.FILENAME,
+        )
+        try:
+            with open(fn, "r") as f:
+                self._data = json.load(f)
+        except FileNotFoundError:
+            self._data = {}
+        except json.JSONDecodeError:
+            shutil.move(fn, f"{fn}.corrupted")
+            warnings.warn(f"registry corrupted and moved to {fn}.corrupted")
+            self._data = {}
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        fn = os.path.join(
+            pado_config_path(ensure_dir=True),
+            self.FILENAME,
+        )
+        with open(fn, "w") as f:
+            json.dump(self._data, f, indent=2)
+        self._data = None
+
+    def __contains__(self, name: str):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        return name in self._data
+
+    def __iter__(self):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        return iter(self._data)
+
+    def __getitem__(self, name: str):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        if not isinstance(name, str):
+            raise TypeError(f"name must be a string, got {name!r} of {type(name).__name__}")
+        return self._data[name]
+
+    def __setitem__(self, name: str, path):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        if not isinstance(name, str):
+            raise TypeError(f"name must be a string, got {name!r} of {type(name).__name__}")
+        self._data[name] = path
+
+    def __delitem__(self, name: str):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        del self._data[name]
+
+    def items(self):
+        for name in self:
+            yield name, self[name]
+
+
+def dataset_registry():
+    """return the dataset registry instance"""
+    return _DatasetRegistry()
