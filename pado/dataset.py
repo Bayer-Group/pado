@@ -3,11 +3,12 @@ from __future__ import annotations
 import collections.abc
 import os
 import pathlib
+import sys
 import textwrap
 import uuid
-import warnings
 from collections.abc import Iterable
 from collections.abc import Sized
+from enum import Enum
 from typing import Any
 from typing import Callable
 from typing import List
@@ -16,10 +17,16 @@ from typing import Optional
 from typing import Sequence
 from typing import Union
 from typing import get_args
+from typing import overload
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 import fsspec
-import shapely
 import pandas as pd
+import shapely.wkt
 
 from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
@@ -42,7 +49,8 @@ from pado.types import UrlpathLike
 
 __all__ = [
     "PadoDataset",
-    "PadoItem"
+    "PadoItem",
+    "DescribeFormat",
 ]
 
 
@@ -390,76 +398,74 @@ class PadoDataset:
 
     # === describe (summarise) dataset ===
 
-    def describe(self, output_format: str = 'plain_text') -> str:
+    @overload
+    def describe(self, output_format: Literal[DescribeFormat.PLAIN_TEXT]) -> str: ...
+    @overload
+    def describe(self, output_format: Literal[DescribeFormat.DICT]) -> dict: ...
+
+    def describe(self, output_format: DescribeFormat = "plain_text") -> Union[str, dict]:
         """A 'to string' method for essential PadoDataset information"""
-        try:
-            import geopandas as gpd
-        except ImportError:
-            warnings.warn(
-                "PadoDataset.describe() requires `geopandas`",
-                stacklevel=2,
-            )
-            raise
+        if output_format not in list(DescribeFormat):
+            raise ValueError(f"{output_format!r} is not a valid output format.")
 
-        valid_formats = ('plain_text', 'json')
+        # convert annotations df
+        idf = self.images.df
+        adf = self.annotations.df
+        adf['area'] = adf['geometry'].apply(lambda x: shapely.wkt.loads(x).area)
+        agg_annotations = adf.groupby('classification')['area'].agg(['sum', 'count'])
+        data = {
+            'path': self.urlpath,
+            'num_images': len(self.images),
+            'mean_mpp_x': idf['mpp_x'].mean(),
+            'mean_mpp_y': idf['mpp_y'].mean(),
+            'mean_image_width': idf['width'].mean(),
+            'mean_image_height': idf['height'].mean(),
+            'mean_image_size': idf['size_bytes'].mean(),
+            'mean_annotations_per_image': adf.groupby('image_id')['geometry'].count().mean(),
+            'metadata_columns': self.metadata.df.columns.to_list(),
+            'std_mpp_x': idf['mpp_x'].std(),
+            'std_mpp_y': idf['mpp_y'].std(),
+            'std_image_width': idf['width'].std(),
+            'std_image_height': idf['height'].std(),
+            'total_size_images': idf['size_bytes'].sum(),
+            'total_num_annotations': sum(len(x) for x in list(self.annotations.values())),
+            'common_classes': list(agg_annotations['count'].sort_values(ascending=False)[:5].items()),
+            'common_classes_by_annotation_area': list(agg_annotations['sum'].sort_values(ascending=False)[:5].items()),
+        }
 
-        if output_format not in valid_formats:
-            # not sure if this should raise a value error..
-            raise ValueError(f'"{output_format}" is not a valid output format.')
+        if output_format in {DescribeFormat.DICT, DescribeFormat.JSON}:
+            return data
 
-        # convert annotations df to geodataframe
-        gs = gpd.GeoSeries.from_wkt(self.annotations.df['geometry'])
-        annotations_gdf = gpd.GeoDataFrame(self.annotations.df, geometry=gs)
-        annotations_gdf['area'] = annotations_gdf.geometry.area
-        annotation_classes_by_area = annotations_gdf.groupby('classification')['area'].sum().sort_values(ascending=False)
-        common_classes = annotations_gdf['classification'].value_counts()
-        
-        if output_format == 'plain_text':
-            return textwrap.dedent(f"""\
+        elif output_format == DescribeFormat.PLAIN_TEXT:
+            return textwrap.dedent("""\
                 === SUMMARY ===
-                Path to dataset: {self.urlpath}
-                Number of images: {len(self.images)}
+                Path to dataset: {path}
+                Number of images: {num_images}
                 
                 === IMAGES ===
                 Image Size Distribution (mean, std): 
-                    - mpp_x ~ ({self.images.df['mpp_x'].mean():.3}, {self.images.df['mpp_x'].std():.3})
-                    - mpp_y ~ ({self.images.df['mpp_y'].mean():.3}, {self.images.df['mpp_y'].std():.3})
-                    - width ~ ({self.images.df['width'].mean():.3}, {self.images.df['width'].std():.3})
-                    - height ~ ({self.images.df['height'].mean():.3}, {self.images.df['height'].std():.3})
+                    - mpp_x ~ ({mean_mpp_x:.3}, {std_mpp_x:.3})
+                    - mpp_y ~ ({mean_mpp_y:.3}, {std_mpp_y:.3})
+                    - width ~ ({mean_image_width:.3}, {std_image_width:.3})
+                    - height ~ ({mean_image_height:.3}, {std_image_height:.3})
                 Image File Size (bytes):
-                    - mean image size: {self.images.df['size_bytes'].mean() / 1e6 :.3f} MB
-                    - total size of all images: {self.images.df['size_bytes'].sum() / 1e9 :.3f} GB
+                    - mean image size: {mean_image_size_mb:.3f} MB
+                    - total size of all images: {total_size_images_gb:.3f} GB
                 
                 === ANNOTATIONS ===
-                Total number of annotations: {sum(len(x) for x in list(self.annotations.values()))}
-                Mean annotations per image: {self.annotations.df.groupby('image_id')['geometry'].count().mean():.3}
-                Five most common classes: {list(common_classes[:5].to_dict().items())}
-                Classes sorted by total annotation area (top five): {
-                    list(annotation_classes_by_area[:5].to_dict().items())
-                }
+                Total number of annotations: {total_num_annotations}
+                Mean annotations per image: {mean_annotations_per_image:.3}
+                Five most common classes: {common_classes}
+                Classes sorted by total annotation area (top five): {common_classes_by_annotation_area}
                 
                 === METADATA ===
-                Keys available: {self.metadata.df.columns.to_list()}
-            """)
-        elif output_format == "json":
-            return {
-                'path': self.urlpath,
-                'num_images': len(self.images),
-                'mean_mpp_x': self.images.df['mpp_x'].mean(),
-                'mean_mpp_y': self.images.df['mpp_y'].mean(),
-                'mean_image_width': self.images.df['width'].mean(),
-                'mean_image_height': self.images.df['height'].mean(),
-                'mean_image_size': self.images.df['size_bytes'].mean(),
-                'mean_annotations_per_image': self.annotations.df.groupby('image_id')['geometry'].count().mean(),
-                'std_mpp_x': self.images.df['mpp_x'].std(),
-                'std_mpp_y': self.images.df['mpp_y'].std(),
-                'std_image_width': self.images.df['width'].std(),
-                'std_image_height': self.images.df['height'].std(),
-                'total_size_images': self.images.df['size_bytes'].sum(),
-                'total_num_annotations': sum(len(x) for x in list(self.annotations.values())),
-                'common_classes': list(common_classes[:5].to_dict().items()),
-                'common_classes_by_annotation_area': list(annotation_classes_by_area[:5].to_dict().items()),
-            }
+                Keys available: {metadata_columns}
+            """).format(
+                mean_image_size_mb=data['mean_image_size'] / 1e6,
+                total_size_images_gb=data['total_size_images'] / 1e9,
+                **data
+            )
+
         else:
             raise NotImplementedError(f'Format "{output_format}" is not allowed.')
 
@@ -491,3 +497,10 @@ class Split(NamedTuple):
     """train test tuple as returned by PadoDataset.partition method"""
     train: PadoDataset
     test: PadoDataset
+
+
+class DescribeFormat(str, Enum):
+    """supported formats for PadoDataset.describe"""
+    PLAIN_TEXT = "plain_text"
+    DICT = "dict"
+    JSON = "json"

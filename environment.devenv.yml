@@ -29,7 +29,6 @@ dependencies:
   - dynaconf
   - fsspec
   - geojson-pydantic
-  - geopandas
   - imagecodecs
   - itsdangerous
   - numpy
