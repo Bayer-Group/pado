@@ -177,6 +177,17 @@ def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
     return PurePath(path).parts
 
 
+def urlpathlike_to_localpath(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> str:
+    """take an urlpathlike object and return a local path"""
+    if "r" not in mode:
+        raise ValueError("urlpathlike_to_localpath only works for read modes")
+    of = urlpathlike_to_fsspec(obj, mode=mode)
+    if not getattr(of.fs, "local_file", False):
+        raise ValueError("FileSystem does not have attribute .local_file=True")
+    with of as f:
+        return f.name
+
+
 def fsopen(
     fs: AbstractFileSystem,
     path: [str, os.PathLike],
