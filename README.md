@@ -14,7 +14,7 @@ unintuitive, slow or if its documentation is confusing, it's a bug in
 `pado`. Feel free to report any issues or feature requests in the issue
 tracker!
 
-Development 
+Development
 [happens on github](https://github.com/Bayer-Group/pado)
 :octocat:
 
