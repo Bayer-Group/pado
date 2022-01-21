@@ -1,15 +1,17 @@
+"""pado: the pragmatic pathology dataset library"""
+from typing import TYPE_CHECKING
 
 try:
     from ._version import version as __version__
 except ImportError:
     __version__ = "not-installed"
 
-# noinspection PyUnresolvedReferences
+if TYPE_CHECKING:
+    from pado.dataset import PadoDataset
+
 __all__ = [
     "PadoDataset",
-    "PadoDatasetChain",
 ]
-
 
 # allow importing items in __all__
 def __getattr__(name):
