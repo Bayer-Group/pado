@@ -23,7 +23,6 @@ from typing import Union
 
 import fsspec
 from fsspec import AbstractFileSystem
-from fsspec import get_filesystem_class
 from fsspec.core import OpenFile
 from fsspec.core import strip_protocol
 
@@ -36,6 +35,18 @@ if sys.version_info[:2] >= (3, 10):
 else:
     from typing_extensions import TypeGuard
 
+__all__ = [
+    "find_files",
+    "is_fsspec_open_file_like",
+    "urlpathlike_to_string",
+    "urlpathlike_to_fsspec",
+    "urlpathlike_to_fs_and_path",
+    "urlpathlike_to_path_parts",
+    "urlpathlike_to_localpath",
+    "fsopen",
+    "uncompressed",
+]
+
 
 _PADO_FSSPEC_PICKLE_PROTOCOL = 4
 
@@ -45,9 +56,14 @@ class _OpenFileAndParts(NamedTuple):
     parts: Tuple[str, ...]
 
 
-def find_files(urlpath: UrlpathLike, *, glob: str = "**/*") -> Iterable[_OpenFileAndParts]:
+def find_files(
+    urlpath: UrlpathLike,
+    *,
+    glob: str = "**/*",
+    **storage_options: Any
+) -> Iterable[_OpenFileAndParts]:
     """iterate over the files with matching at all paths"""
-    ofile = urlpathlike_to_fsspec(urlpath)
+    ofile = urlpathlike_to_fsspec(urlpath, **storage_options)
     fs = ofile.fs
     pth = ofile.path
     if not fs.isdir(pth):
@@ -106,7 +122,12 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
         raise TypeError(f"can't stringify: {urlpath!r} of type {type(urlpath)!r}")
 
 
-def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> OpenFileLike:
+def urlpathlike_to_fsspec(
+    obj: UrlpathLike,
+    *,
+    mode: FsspecIOMode = 'rb',
+    **storage_options: Any
+) -> OpenFileLike:
     """use an urlpath-like object and return an fsspec.core.OpenFile"""
     if is_fsspec_open_file_like(obj):
         return obj
@@ -118,18 +139,27 @@ def urlpathlike_to_fsspec(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> Ope
             obj = os.fspath(obj)
         if not isinstance(obj, str):
             raise TypeError(f"got {obj!r} of type {type(obj)!r}")
-        return fsspec.open(obj, mode=mode)
+        return fsspec.open(obj, mode=mode, **storage_options)
     else:
         if not isinstance(json_obj, dict):
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
         try:
-            fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+            _fs = json.loads(json_obj["fs"])
         except json.JSONDecodeError:
+            # json_obj["fs"] is not json ...
+            if storage_options:
+                raise NotImplementedError("pickled filesystems can't change storage_options")
             fs = pickle.loads(literal_eval(json_obj["fs"]))
+        else:
+            # json_obj["fs"] is json
+            if not isinstance(_fs, dict):
+                raise TypeError(f"expected dict, got {_fs!r}")
+            _fs.update(**storage_options)
+            fs = fsspec.AbstractFileSystem.from_json(json.dumps(_fs))
         return fsopen(fs, json_obj["path"], mode=mode)
 
 
-def urlpathlike_to_fs_and_path(obj: UrlpathLike) -> Tuple[AbstractFileSystem, str]:
+def urlpathlike_to_fs_and_path(obj: UrlpathLike, **storage_options) -> Tuple[AbstractFileSystem, str]:
     """use an urlpath-like object and return an fsspec.AbstractFileSystem and a path"""
     if is_fsspec_open_file_like(obj):
         return obj.fs, obj.path
@@ -141,15 +171,24 @@ def urlpathlike_to_fs_and_path(obj: UrlpathLike) -> Tuple[AbstractFileSystem, st
             obj = os.fspath(obj)
         if not isinstance(obj, str):
             raise TypeError(f"got {obj!r} of type {type(obj)!r}")
-        fs, _, (path,) = fsspec.get_fs_token_paths(obj)
+        fs, _, (path,) = fsspec.get_fs_token_paths(obj, storage_options=storage_options)
         return fs, path
     else:
         if not isinstance(json_obj, dict):
             raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
         try:
-            fs = fsspec.AbstractFileSystem.from_json(json_obj["fs"])
+            _fs = json.loads(json_obj["fs"])
         except json.JSONDecodeError:
+            # json_obj["fs"] is not json ...
+            if storage_options:
+                raise NotImplementedError("pickled filesystems can't change storage_options")
             fs = pickle.loads(literal_eval(json_obj["fs"]))
+        else:
+            # json_obj["fs"] is json
+            if not isinstance(_fs, dict):
+                raise TypeError(f"expected dict, got {_fs!r}")
+            _fs.update(**storage_options)
+            fs = fsspec.AbstractFileSystem.from_json(json.dumps(_fs))
         return fs, json_obj["path"]
 
 
@@ -177,11 +216,16 @@ def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
     return PurePath(path).parts
 
 
-def urlpathlike_to_localpath(obj: UrlpathLike, *, mode: FsspecIOMode = 'rb') -> str:
+def urlpathlike_to_localpath(
+    obj: UrlpathLike,
+    *,
+    mode: FsspecIOMode = 'rb',
+    **storage_options: Any
+) -> str:
     """take an urlpathlike object and return a local path"""
     if "r" not in mode:
         raise ValueError("urlpathlike_to_localpath only works for read modes")
-    of = urlpathlike_to_fsspec(obj, mode=mode)
+    of = urlpathlike_to_fsspec(obj, mode=mode, **storage_options)
     if not getattr(of.fs, "local_file", False):
         raise ValueError("FileSystem does not have attribute .local_file=True")
     with of as f:
