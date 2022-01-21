@@ -2,7 +2,6 @@
 import fnmatch
 import os.path
 from operator import itemgetter
-from pathlib import PurePath
 from typing import Optional
 from typing import Sequence
 from typing import Set
@@ -14,8 +13,12 @@ from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_path_parts
 from pado.io.files import urlpathlike_to_string
-from pado.types import OpenFileLike
 from pado.types import UrlpathLike
+
+__all__ = [
+    "get_root_dir",
+    "match_partial_paths_reversed",
+]
 
 
 def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> UrlpathLike:
