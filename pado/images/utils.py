@@ -6,8 +6,8 @@ from typing import Tuple
 from typing import Type
 from typing import TypeVar
 
-from pydantic import PositiveFloat
 from pydantic import NonNegativeFloat
+from pydantic import PositiveFloat
 from pydantic import StrictInt
 from pydantic import conint
 from pydantic.dataclasses import dataclass

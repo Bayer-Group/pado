@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import glob
 import os
 import shutil
@@ -8,9 +10,9 @@ import pandas as pd
 import pytest
 
 from pado.dataset import PadoDataset
+from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
-from pado.images import Image
 from pado.metadata import MetadataProvider
 
 

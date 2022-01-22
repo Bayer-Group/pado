@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import pytest
 
-from pado.mock import mock_dataset
 from pado.dataset import PadoDataset
+from pado.mock import mock_dataset
 
 
 @pytest.fixture(scope="function")

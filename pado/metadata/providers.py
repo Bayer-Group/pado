@@ -23,7 +23,6 @@ from pado.io.store import Store
 from pado.io.store import StoreType
 from pado.types import UrlpathLike
 
-
 # === storage =================================================================
 
 class MetadataStore(Store):

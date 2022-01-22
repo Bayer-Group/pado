@@ -70,7 +70,7 @@ class _DatasetRegistry:
             self.FILENAME,
         )
         try:
-            with open(fn, "r") as f:
+            with open(fn) as f:
                 self._data = json.load(f)
         except FileNotFoundError:
             self._data = {}

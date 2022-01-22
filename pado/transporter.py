@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import functools
 import json
@@ -11,20 +13,21 @@ from collections import defaultdict
 from pathlib import Path
 from textwrap import dedent
 
-from appdirs import user_config_dir
 import toml
+from appdirs import user_config_dir
 
-from pado._cli import argument, subcommand
+from pado._cli import argument
+from pado._cli import subcommand
 
 # argument parsing objects
 parser = argparse.ArgumentParser(
     prog="python -m pado.transporter" if Path(sys.argv[0]).name == __file__ else None,
     description=r"""#### PADO.TRANSPORTER ####
-   _                                              _               
- _| |_  ____ _____ ____   ___ ____   ___   ____ _| |_ _____  ____ 
+   _                                              _
+ _| |_  ____ _____ ____   ___ ____   ___   ____ _| |_ _____  ____
 (_   _)/ ___|____ |  _ \ /___)  _ \ / _ \ / ___|_   _) ___ |/ ___)
-  | |_| |   / ___ | | | |___ | |_| | |_| | |     | |_| ____| |    
-   \__)_|   \_____|_| |_(___/|  __/ \___/|_|      \__)_____)_|    
+  | |_| |   / ___ | | | |___ | |_| | |_| | |     | |_| ____| |
+   \__)_|   \_____|_| |_(___/|  __/ \___/|_|      \__)_____)_|
                              |_|                               """,
     epilog="#### [PA]thological [D]ata [O]bsession ####",
     formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -352,7 +355,7 @@ def ls(args, subparser):
     """list files on remote"""
     image_id_json = None
     if args.select_image_id_json:
-        with open(args.select_image_id_json, "r") as f:
+        with open(args.select_image_id_json) as f:
             image_id_json = json.load(f)
 
     list_files_on_remote(

@@ -1,19 +1,19 @@
 """tile classes for pado images"""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Iterator
 from typing import Optional
-from typing import TYPE_CHECKING
 
 import numpy as np
 from shapely.geometry import Polygon
 
 from pado._compat import cached_property
+from pado.images.utils import MPP
 from pado.images.utils import Bounds
 from pado.images.utils import Geometry
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
-from pado.images.utils import MPP
 
 if TYPE_CHECKING:
     from pado.images.image import Image

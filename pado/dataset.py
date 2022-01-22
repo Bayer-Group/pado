@@ -441,9 +441,9 @@ class PadoDataset:
                 === SUMMARY ===
                 Path to dataset: {path}
                 Number of images: {num_images}
-                
+
                 === IMAGES ===
-                Image Size Distribution (mean, std): 
+                Image Size Distribution (mean, std):
                     - mpp_x ~ ({mean_mpp_x:.3}, {std_mpp_x:.3})
                     - mpp_y ~ ({mean_mpp_y:.3}, {std_mpp_y:.3})
                     - width ~ ({mean_image_width:.3}, {std_image_width:.3})
@@ -451,13 +451,13 @@ class PadoDataset:
                 Image File Size (bytes):
                     - mean image size: {mean_image_size_mb:.3f} MB
                     - total size of all images: {total_size_images_gb:.3f} GB
-                
+
                 === ANNOTATIONS ===
                 Total number of annotations: {total_num_annotations}
                 Mean annotations per image: {mean_annotations_per_image:.3}
                 Five most common classes: {common_classes}
                 Classes sorted by total annotation area (top five): {common_classes_by_annotation_area}
-                
+
                 === METADATA ===
                 Keys available: {metadata_columns}
             """).format(

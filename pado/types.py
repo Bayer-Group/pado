@@ -5,14 +5,14 @@ A collection of useful types and abstract base classes in pado
 from __future__ import annotations
 
 import sys
+from typing import IO
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import AnyStr
 from typing import ContextManager
-from typing import IO
 from typing import Iterator
 from typing import Optional
 from typing import Sequence
-from typing import TYPE_CHECKING
 from typing import Tuple
 from typing import Union
 

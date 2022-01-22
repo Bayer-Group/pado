@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import os
 import pickle
 
 import pytest
 
 from pado.images import ImageId
-
 
 # --- test constructors -----------------------------------------------
 

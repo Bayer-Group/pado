@@ -1,18 +1,17 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional
 
 import typer
 import typer.colors
+from rich.console import Console
+from rich.table import Table
 from typer import Argument
 from typer import Option
 
-from rich.console import Console
-from rich.table import Table
-
-
 from pado._version import version as pado_version
 from pado.dataset import PadoDataset
-
 
 # --- pado command line interface -------------------------------------
 from pado.settings import dataset_registry

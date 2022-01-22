@@ -20,8 +20,8 @@ from shapely.geometry import Polygon
 
 from pado.annotations import Annotation
 from pado.annotations import AnnotationProvider
-from pado.annotations import AnnotationState
 from pado.annotations import Annotations
+from pado.annotations import AnnotationState
 from pado.annotations import Annotator
 from pado.annotations import AnnotatorType
 from pado.annotations.providers import BaseAnnotationProvider

@@ -18,7 +18,6 @@ from shapely.wkt import loads as wkt_loads
 
 from pado.images import ImageId
 
-
 # === PADO annotation model ===
 
 class AnnotationState(enum.IntEnum):

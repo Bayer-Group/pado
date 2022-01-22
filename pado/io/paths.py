@@ -1,4 +1,6 @@
 """helpers for dealing with fsspec OpenFile"""
+from __future__ import annotations
+
 import fnmatch
 import os.path
 from operator import itemgetter
@@ -62,7 +64,7 @@ def match_partial_paths_reversed(
                 return None
             else:
                 raise ValueError(f"ambiguous: {x!r} -> {s!r}")
-        sj = set(sx for sx in s if sx[idx] == xi or xi is None)
+        sj = {sx for sx in s if sx[idx] == xi or xi is None}
         if len(sj) == 1:
             return sj.pop()
         elif len(sj) == 0:

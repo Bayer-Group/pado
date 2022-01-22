@@ -12,13 +12,12 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
-from orjson import JSONDecodeError
-from orjson import OPT_SORT_KEYS
-from orjson import dumps as orjson_dumps
-from orjson import loads as orjson_loads
-
 from itsdangerous import base64_decode
 from itsdangerous import base64_encode
+from orjson import OPT_SORT_KEYS
+from orjson import JSONDecodeError
+from orjson import dumps as orjson_dumps
+from orjson import loads as orjson_loads
 
 from pado.types import OpenFileLike
 
@@ -270,6 +269,7 @@ def image_id_from_parts_without_extension(file: OpenFileLike, parts: Tuple[str, 
 
 def image_id_from_json_file(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
     import json
+
     from pado.io.files import uncompressed
     try:
         with uncompressed(file) as f:
@@ -299,7 +299,7 @@ def match_partial_image_ids_reversed(ids: Iterable[ImageId], image_id: ImageId) 
             xi = x[idx]  # raises index error when out of parts to match
         except IndexError:
             raise ValueError(f"ambiguous: {x!r} -> {s!r}")
-        sj = set(sx for sx in s if sx[idx] == xi or xi is None)
+        sj = {sx for sx in s if sx[idx] == xi or xi is None}
         if len(sj) == 1:
             return sj.pop()
         elif len(sj) == 0:

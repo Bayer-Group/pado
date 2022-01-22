@@ -13,8 +13,8 @@ from pydantic.color import Color
 from shapely.geometry.base import BaseGeometry
 
 from pado.annotations.formats import AnnotationModel
-from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import AnnotationState
+from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import Annotator
 from pado.images import ImageId
 

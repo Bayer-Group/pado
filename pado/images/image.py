@@ -6,11 +6,11 @@ import logging
 import os
 from contextlib import ExitStack
 from datetime import datetime
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TYPE_CHECKING
 from typing import Tuple
 from typing import Union
 
@@ -27,16 +27,16 @@ from pydantic import validator
 from pydantic.color import Color
 from tiffslide import TiffSlide
 
+from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
-from pado.images.utils import MPP
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
-    import PIL
     import numpy as np
+    import PIL
 
 _log = logging.getLogger(__name__)
 

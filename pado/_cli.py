@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import sys
 from argparse import ArgumentTypeError
 from functools import partial
 from pathlib import Path
-
 
 # -- argparse improvements ---------------------------------------------
 
