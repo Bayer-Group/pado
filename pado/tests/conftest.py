@@ -15,7 +15,7 @@ def datasource(tmp_path):
 @pytest.fixture(scope="function")
 def dataset(tmp_path):
     dataset_path = tmp_path / "my_dataset"
-    ds = mock_dataset(tmp_path)
+    ds = mock_dataset(dataset_path)
     yield ds
 
 

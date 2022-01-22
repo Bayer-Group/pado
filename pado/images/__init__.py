@@ -9,11 +9,11 @@ from pado.images.tiles import Tile
 from pado.images.tiles import TileIterator
 
 __all__ = [
-    'ImageId',
-    'Image',
-    'Tile',
-    'TileIterator',
-    'ImageProvider',
-    'FilteredImageProvider',
-    'GroupedImageProvider',
+    "ImageId",
+    "Image",
+    "Tile",
+    "TileIterator",
+    "ImageProvider",
+    "FilteredImageProvider",
+    "GroupedImageProvider",
 ]

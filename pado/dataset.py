@@ -76,7 +76,7 @@ class PadoDataset:
         if urlpath is None:
             # enable in-memory pado datasets and change mode to enable write
             self._urlpath = f"memory://pado-{uuid.uuid4()}"
-            mode = 'r+'
+            mode = "r+"
         else:
             # check provided urlpath and mode
             urlpath = get_root_dir(urlpath, allow_file="pado.dataset.toml")
@@ -91,9 +91,11 @@ class PadoDataset:
 
             # if the dataset files should be there, check them
             fs = self._fs
-            if mode in {'r', 'r+'}:
+            if mode in {"r", "r+"}:
                 if not list(fs.glob(self._get_fspath("*.image.parquet"))):
-                    raise ValueError(f"error: {self._urlpath} not a valid dataset since it has no image parquet file.")
+                    raise ValueError(
+                        f"error: {self._urlpath} not a valid dataset since it has no image parquet file."
+                    )
             else:
                 pass  # fixme
 
@@ -153,7 +155,7 @@ class PadoDataset:
 
             fs = self._fs
             providers = [
-                ImageProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                ImageProvider.from_parquet(fsopen(fs, p, mode="rb"))
                 for p in fs.glob(self._get_fspath("*.image.parquet"))
                 if fs.isfile(p)
             ]
@@ -175,7 +177,7 @@ class PadoDataset:
 
             fs = self._fs
             providers = [
-                AnnotationProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                AnnotationProvider.from_parquet(fsopen(fs, p, mode="rb"))
                 for p in fs.glob(self._get_fspath("*.annotation.parquet"))
                 if fs.isfile(p)
             ]
@@ -197,7 +199,7 @@ class PadoDataset:
 
             fs = self._fs
             providers = [
-                MetadataProvider.from_parquet(fsopen(fs, p, mode='rb'))
+                MetadataProvider.from_parquet(fsopen(fs, p, mode="rb"))
                 for p in fs.glob(self._get_fspath("*.metadata.parquet"))
                 if fs.isfile(p)
             ]
@@ -237,7 +239,7 @@ class PadoDataset:
         self,
         ids_or_func: Sequence[ImageId] | Callable[[PadoItem], bool],
         *,
-        urlpath: Optional[UrlpathLike] = None
+        urlpath: Optional[UrlpathLike] = None,
     ) -> PadoDataset:
         """filter a pado dataset
 
@@ -260,9 +262,15 @@ class PadoDataset:
         if isinstance(ids_or_func, Iterable) and isinstance(ids_or_func, Sized):
             ids = pd.Series(ids_or_func).apply(str.__call__)
             _ip, _ap, _mp = self.images, self.annotations, self.metadata
-            ip = ImageProvider(_ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier)
-            ap = AnnotationProvider(_ap.df.loc[_ap.df.index.intersection(ids), :], identifier=_ap.identifier)
-            mp = MetadataProvider(_mp.df.loc[_mp.df.index.intersection(ids), :], identifier=_mp.identifier)
+            ip = ImageProvider(
+                _ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier
+            )
+            ap = AnnotationProvider(
+                _ap.df.loc[_ap.df.index.intersection(ids), :], identifier=_ap.identifier
+            )
+            mp = MetadataProvider(
+                _mp.df.loc[_mp.df.index.intersection(ids), :], identifier=_mp.identifier
+            )
 
         elif callable(ids_or_func):
             func = ids_or_func
@@ -281,7 +289,9 @@ class PadoDataset:
                     mp[image_id] = item.metadata
 
         else:
-            raise TypeError(f"requires sequence of ImageId or a callable of type FilterFunc, got {ids_or_func!r}")
+            raise TypeError(
+                f"requires sequence of ImageId or a callable of type FilterFunc, got {ids_or_func!r}"
+            )
 
         if len(ip) == 0:
             raise RuntimeError("didn't match any images")
@@ -290,7 +300,9 @@ class PadoDataset:
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
 
         if len(ap) > 0:
-            ds.ingest_obj(AnnotationProvider(ap, identifier=self.annotations.identifier))
+            ds.ingest_obj(
+                AnnotationProvider(ap, identifier=self.annotations.identifier)
+            )
         if len(mp) > 0:
             ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
 
@@ -379,7 +391,9 @@ class PadoDataset:
         else:
             raise TypeError(f"unsupported object type {type(obj).__name__}: {obj!r}")
 
-    def ingest_file(self, urlpath: UrlpathLike, *, identifier: Optional[str] = None) -> None:
+    def ingest_file(
+        self, urlpath: UrlpathLike, *, identifier: Optional[str] = None
+    ) -> None:
         """ingest a file into the dataset"""
         if self.readonly:
             raise RuntimeError(f"{self!r} opened in readonly mode")
@@ -388,10 +402,14 @@ class PadoDataset:
             self.ingest_obj(ImageProvider.from_parquet(urlpath), identifier=identifier)
 
         elif store_type == StoreType.ANNOTATION:
-            self.ingest_obj(AnnotationProvider.from_parquet(urlpath), identifier=identifier)
+            self.ingest_obj(
+                AnnotationProvider.from_parquet(urlpath), identifier=identifier
+            )
 
         elif store_type == StoreType.METADATA:
-            self.ingest_obj(MetadataProvider.from_parquet(urlpath), identifier=identifier)
+            self.ingest_obj(
+                MetadataProvider.from_parquet(urlpath), identifier=identifier
+            )
 
         else:
             raise NotImplementedError("todo: implement more files")
@@ -399,11 +417,16 @@ class PadoDataset:
     # === describe (summarise) dataset ===
 
     @overload
-    def describe(self, output_format: Literal[DescribeFormat.PLAIN_TEXT]) -> str: ...
-    @overload
-    def describe(self, output_format: Literal[DescribeFormat.DICT]) -> dict: ...
+    def describe(self, output_format: Literal[DescribeFormat.PLAIN_TEXT]) -> str:
+        ...
 
-    def describe(self, output_format: DescribeFormat = "plain_text") -> Union[str, dict]:
+    @overload
+    def describe(self, output_format: Literal[DescribeFormat.DICT]) -> dict:
+        ...
+
+    def describe(
+        self, output_format: DescribeFormat = "plain_text"
+    ) -> Union[str, dict]:
         """A 'to string' method for essential PadoDataset information"""
         if output_format not in list(DescribeFormat):
             raise ValueError(f"{output_format!r} is not a valid output format.")
@@ -411,33 +434,42 @@ class PadoDataset:
         # convert annotations df
         idf = self.images.df
         adf = self.annotations.df
-        adf['area'] = adf['geometry'].apply(lambda x: shapely.wkt.loads(x).area)
-        agg_annotations = adf.groupby('classification')['area'].agg(['sum', 'count'])
+        adf["area"] = adf["geometry"].apply(lambda x: shapely.wkt.loads(x).area)
+        agg_annotations = adf.groupby("classification")["area"].agg(["sum", "count"])
         data = {
-            'path': self.urlpath,
-            'num_images': len(self.images),
-            'mean_mpp_x': idf['mpp_x'].mean(),
-            'mean_mpp_y': idf['mpp_y'].mean(),
-            'mean_image_width': idf['width'].mean(),
-            'mean_image_height': idf['height'].mean(),
-            'mean_image_size': idf['size_bytes'].mean(),
-            'mean_annotations_per_image': adf.groupby('image_id')['geometry'].count().mean(),
-            'metadata_columns': self.metadata.df.columns.to_list(),
-            'std_mpp_x': idf['mpp_x'].std(),
-            'std_mpp_y': idf['mpp_y'].std(),
-            'std_image_width': idf['width'].std(),
-            'std_image_height': idf['height'].std(),
-            'total_size_images': idf['size_bytes'].sum(),
-            'total_num_annotations': sum(len(x) for x in list(self.annotations.values())),
-            'common_classes': list(agg_annotations['count'].sort_values(ascending=False)[:5].items()),
-            'common_classes_by_annotation_area': list(agg_annotations['sum'].sort_values(ascending=False)[:5].items()),
+            "path": self.urlpath,
+            "num_images": len(self.images),
+            "mean_mpp_x": idf["mpp_x"].mean(),
+            "mean_mpp_y": idf["mpp_y"].mean(),
+            "mean_image_width": idf["width"].mean(),
+            "mean_image_height": idf["height"].mean(),
+            "mean_image_size": idf["size_bytes"].mean(),
+            "mean_annotations_per_image": adf.groupby("image_id")["geometry"]
+            .count()
+            .mean(),
+            "metadata_columns": self.metadata.df.columns.to_list(),
+            "std_mpp_x": idf["mpp_x"].std(),
+            "std_mpp_y": idf["mpp_y"].std(),
+            "std_image_width": idf["width"].std(),
+            "std_image_height": idf["height"].std(),
+            "total_size_images": idf["size_bytes"].sum(),
+            "total_num_annotations": sum(
+                len(x) for x in list(self.annotations.values())
+            ),
+            "common_classes": list(
+                agg_annotations["count"].sort_values(ascending=False)[:5].items()
+            ),
+            "common_classes_by_annotation_area": list(
+                agg_annotations["sum"].sort_values(ascending=False)[:5].items()
+            ),
         }
 
         if output_format in {DescribeFormat.DICT, DescribeFormat.JSON}:
             return data
 
         elif output_format == DescribeFormat.PLAIN_TEXT:
-            return textwrap.dedent("""\
+            return textwrap.dedent(
+                """\
                 === SUMMARY ===
                 Path to dataset: {path}
                 Number of images: {num_images}
@@ -460,10 +492,11 @@ class PadoDataset:
 
                 === METADATA ===
                 Keys available: {metadata_columns}
-            """).format(
-                mean_image_size_mb=data['mean_image_size'] / 1e6,
-                total_size_images_gb=data['total_size_images'] / 1e9,
-                **data
+            """
+            ).format(
+                mean_image_size_mb=data["mean_image_size"] / 1e6,
+                total_size_images_gb=data["total_size_images"] / 1e9,
+                **data,
             )
 
         else:
@@ -485,8 +518,10 @@ class PadoDataset:
 
 # === helpers and utils =======================================================
 
+
 class PadoItem(NamedTuple):
     """A 'row' of a dataset as returned by PadoDataset.get_by_* methods"""
+
     id: Optional[ImageId]
     image: Optional[Image]
     annotations: Optional[Annotations]
@@ -495,12 +530,14 @@ class PadoItem(NamedTuple):
 
 class Split(NamedTuple):
     """train test tuple as returned by PadoDataset.partition method"""
+
     train: PadoDataset
     test: PadoDataset
 
 
 class DescribeFormat(str, Enum):
     """supported formats for PadoDataset.describe"""
+
     PLAIN_TEXT = "plain_text"
     DICT = "dict"
     JSON = "json"

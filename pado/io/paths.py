@@ -50,13 +50,15 @@ def match_partial_paths_reversed(
     for _idx, urlpathlike in enumerate(current_urlpaths):
         parts = urlpathlike_to_path_parts(urlpathlike)
         current_path_parts[parts] = {
-            'index': _idx,
-            'cur': urlpathlike,
-            'new': None,
+            "index": _idx,
+            "cur": urlpathlike,
+            "new": None,
         }
     parts = set(current_path_parts)
 
-    def match(x: Tuple[str, ...], s: Set[Tuple[str, ...]], idx: int) -> Optional[Tuple[str, ...]]:
+    def match(
+        x: Tuple[str, ...], s: Set[Tuple[str, ...]], idx: int
+    ) -> Optional[Tuple[str, ...]]:
         try:
             xi = x[idx]  # raises index error when out of parts to match
         except IndexError:
@@ -79,9 +81,9 @@ def match_partial_paths_reversed(
         new_parts = urlpathlike_to_path_parts(new_up)
         m = match(new_parts, parts, -1)
         if m:
-            current_path_parts[m]['new'] = new_up
+            current_path_parts[m]["new"] = new_up
 
     return [
-        x['new'] or x['cur']
-        for x in sorted(current_path_parts.values(), key=itemgetter('index'))
+        x["new"] or x["cur"]
+        for x in sorted(current_path_parts.values(), key=itemgetter("index"))
     ]

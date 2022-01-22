@@ -43,8 +43,10 @@ _log = logging.getLogger(__name__)
 
 # --- metadata and info models ---
 
+
 class ImageMetadata(BaseModel):
     """the common image metadata"""
+
     # essentials
     width: int
     height: int
@@ -64,7 +66,7 @@ class ImageMetadata(BaseModel):
     # extra
     extra_json: Optional[str] = None
 
-    @validator('downsamples', pre=True)
+    @validator("downsamples", pre=True)
     def downsamples_as_list(cls, v):
         # this is stored as array in parquet
         return list(v)
@@ -72,6 +74,7 @@ class ImageMetadata(BaseModel):
 
 class FileInfo(BaseModel):
     """information related to the file on disk"""
+
     size_bytes: ByteSize
     md5_computed: Optional[str] = None
     time_last_access: Optional[datetime] = None
@@ -81,6 +84,7 @@ class FileInfo(BaseModel):
 
 class PadoInfo(BaseModel):
     """information regarding the file loading"""
+
     urlpath: str
     pado_image_backend: str
     pado_image_backend_version: str
@@ -93,18 +97,23 @@ class _SerializedImage(ImageMetadata, FileInfo, PadoInfo):
 
 class Image:
     """pado.img.Image is a wrapper around whole slide image data"""
+
     __slots__ = (
-        'urlpath', '_metadata', '_file_info', '_ctx', '_slide'
+        "urlpath",
+        "_metadata",
+        "_file_info",
+        "_ctx",
+        "_slide",
     )  # prevent attribute errors during refactor
     __fields__ = _SerializedImage.__fields__
 
     def __init__(
-            self,
-            urlpath: UrlpathLike,
-            *,
-            load_metadata: bool = False,
-            load_file_info: bool = False,
-            checksum: bool = False,
+        self,
+        urlpath: UrlpathLike,
+        *,
+        load_metadata: bool = False,
+        load_file_info: bool = False,
+        checksum: bool = False,
     ):
         """instantiate an image from an urlpath"""
         self.urlpath = urlpath
@@ -140,17 +149,19 @@ class Image:
         return inst
 
     def to_record(self) -> dict:
-        """return a record for serializing """
+        """return a record for serializing"""
         pado_info = PadoInfo(
             urlpath=urlpathlike_to_string(self.urlpath),
             pado_image_backend=TiffSlide.__class__.__qualname__,
             pado_image_backend_version=tiffslide.__version__,
         )
-        return _SerializedImage.parse_obj({
-            **pado_info.dict(),
-            **self.metadata.dict(),
-            **self.file_info.dict(),
-        }).dict()
+        return _SerializedImage.parse_obj(
+            {
+                **pado_info.dict(),
+                **self.metadata.dict(),
+                **self.file_info.dict(),
+            }
+        ).dict()
 
     def __enter__(self) -> Image:
         return self.open()
@@ -224,15 +235,20 @@ class Image:
                 bounds_y=pget(tiffslide.PROPERTY_NAME_BOUNDS_Y),
                 bounds_width=pget(tiffslide.PROPERTY_NAME_BOUNDS_WIDTH),
                 bounds_height=pget(tiffslide.PROPERTY_NAME_BOUNDS_HEIGHT),
-                extra_json=json.dumps({
-                    key: value for key, value in sorted(props.items())
-                    if key not in _used_keys
-                })
+                extra_json=json.dumps(
+                    {
+                        key: value
+                        for key, value in sorted(props.items())
+                        if key not in _used_keys
+                    }
+                ),
             )
         else:
             return self._metadata
 
-    def _load_file_info(self, *, force: bool = False, checksum: bool = False) -> FileInfo:
+    def _load_file_info(
+        self, *, force: bool = False, checksum: bool = False
+    ) -> FileInfo:
         """load the file information from the file"""
         if self._file_info is None or force:
             if self._slide is None:
@@ -246,7 +262,9 @@ class Image:
             elif isinstance(self.urlpath, os.PathLike):
                 fs, _, [path] = get_fs_token_paths(os.fspath(self.urlpath))
             else:
-                raise NotImplementedError(f"todo: {self.urlpath!r} of type {type(self.urlpath)!r}")
+                raise NotImplementedError(
+                    f"todo: {self.urlpath!r} of type {type(self.urlpath)!r}"
+                )
 
             if checksum:
                 _checksum = fs.checksum(path)
@@ -255,11 +273,11 @@ class Image:
 
             info = fs.info(path)
             return FileInfo(
-                size_bytes=info['size'],
+                size_bytes=info["size"],
                 md5_computed=_checksum,
-                time_last_access=info.get('atime'),
-                time_last_modified=info.get('mtime'),
-                time_status_changed=info.get('created'),
+                time_last_access=info.get("atime"),
+                time_last_modified=info.get("mtime"),
+                time_status_changed=info.get("created"),
             )
         else:
             return self._file_info
@@ -331,16 +349,18 @@ class Image:
         elif isinstance(size, IntSize):
             size = size.as_tuple()
         else:
-            raise TypeError(f"expected tuple or IntSize, got {size!r} of cls {type(size).__name__}")
+            raise TypeError(
+                f"expected tuple or IntSize, got {size!r} of cls {type(size).__name__}"
+            )
         return self._slide.get_thumbnail(size=size, use_embedded=True)
 
     def get_array(
-            self,
-            location: IntPoint,
-            region: IntSize,
-            level: int,
-            *,
-            runtime_type_checks: bool = True
+        self,
+        location: IntPoint,
+        region: IntSize,
+        level: int,
+        *,
+        runtime_type_checks: bool = True,
     ) -> np.ndarray:
         """return array from a defined level"""
         if runtime_type_checks:
@@ -355,9 +375,11 @@ class Image:
             elif location.mpp is not None and location.mpp != self.mpp:
                 _guess = next(  # improve error for user
                     (idx for idx, mpp in self.level_mpp.items() if mpp == location.mpp),
-                    'level-not-in-image'
+                    "level-not-in-image",
                 )
-                raise ValueError(f"location not at level 0, got {location!r} at {_guess}")
+                raise ValueError(
+                    f"location not at level 0, got {location!r} at {_guess}"
+                )
 
             # level (indirectly)
             try:
@@ -373,9 +395,11 @@ class Image:
             elif region.mpp is not None and region.mpp != level_mpp:
                 _guess = next(  # improve error for user
                     (idx for idx, mpp in self.level_mpp.items() if mpp == region.mpp),
-                    'level-not-in-image'
+                    "level-not-in-image",
                 )
-                raise ValueError(f"region not at level {level}, got {region!r} at {_guess}")
+                raise ValueError(
+                    f"region not at level {level}, got {region!r} at {_guess}"
+                )
 
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
@@ -385,18 +409,19 @@ class Image:
         )
 
     def get_array_at_mpp(
-            self,
-            location: IntPoint,
-            region: IntSize,
-            target_mpp: MPP
+        self, location: IntPoint, region: IntSize, target_mpp: MPP
     ) -> np.ndarray:
         """return array from a defined mpp and a position (in the target mpp)"""
 
-        def _scale_xy(to_transform: Union[IntPoint, IntSize], mpp_current: MPP, mpp_target: MPP):
+        def _scale_xy(
+            to_transform: Union[IntPoint, IntSize], mpp_current: MPP, mpp_target: MPP
+        ):
             pos_x, pos_y = to_transform.as_tuple()
             mpp_x_current, mpp_y_current = mpp_current.as_tuple()
             mpp_x_target, mpp_y_target = mpp_target.as_tuple()
-            return int(round(pos_x * mpp_x_current / mpp_x_target)), int(round(pos_y * mpp_y_current / mpp_y_target))
+            return int(round(pos_x * mpp_x_current / mpp_x_target)), int(
+                round(pos_y * mpp_y_current / mpp_y_target)
+            )
 
         assert location.mpp.as_tuple() == target_mpp.as_tuple()
 
@@ -411,26 +436,22 @@ class Image:
             if mpp_xy[0] >= mpp_best.as_tuple()[0]:
                 break
         else:
-            raise NotImplementedError(f"requesting a smaller mpp {mpp_xy!r} "
-                                      f"than provided in the image {self.level_mpp.items()!r}")
+            raise NotImplementedError(
+                f"requesting a smaller mpp {mpp_xy!r} "
+                f"than provided in the image {self.level_mpp.items()!r}"
+            )
 
         if mpp_xy == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                location=lvl0_xy,
-                level=lvl_best,
-                size=region.as_tuple(),
-                as_array=True
+                location=lvl0_xy, level=lvl_best, size=region.as_tuple(), as_array=True
             )
         else:
             # we need to rescale to the target_mpp
             region_best = _scale_xy(region, mpp_current=target_mpp, mpp_target=mpp_best)
 
             array = self._slide.read_region(
-                location=lvl0_xy,
-                level=lvl_best,
-                size=region_best,
-                as_array=True
+                location=lvl0_xy, level=lvl_best, size=region_best, as_array=True
             )
         return array
 
@@ -446,4 +467,6 @@ class Image:
         elif isinstance(zgrp, zarr.hierarchy.Group):
             return zgrp[str(level)]
         else:
-            raise NotImplementedError(f"unexpected instance {zgrp!r} of type {type(zgrp).__name__}")
+            raise NotImplementedError(
+                f"unexpected instance {zgrp!r} of type {type(zgrp).__name__}"
+            )

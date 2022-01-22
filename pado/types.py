@@ -35,23 +35,30 @@ if TYPE_CHECKING:
 
 # --- types ---
 
+
 @runtime_checkable
 class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
     """minimal fsspec open file type"""
+
     fs: AbstractFileSystem
     path: str
-    def __enter__(self) -> IO[AnyStr]: ...
-    def __exit__(self, exc_type, exc_val, exc_tb): ...
+
+    def __enter__(self) -> IO[AnyStr]:
+        ...
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        ...
 
 
 UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
-IOMode = Literal['r', 'r+', 'w', 'a', 'x']
-FsspecIOMode = Literal['r', 'rb', 'w', 'wb', 'a', 'ab', 'x', 'xb']
+IOMode = Literal["r", "r+", "w", "a", "x"]
+FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
 
 
 @runtime_checkable
 class DatasetSplitter(Protocol):
     """splitter classes from sklearn.model_selection"""
+
     def split(
         self,
         X: Sequence[Any],

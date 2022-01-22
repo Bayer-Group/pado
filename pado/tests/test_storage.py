@@ -12,7 +12,7 @@ from pado.io.store import StoreType
 from pado.metadata.providers import MetadataStore
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def urlpath():
     # the fsspec memory filesystem is shared,
     # so provide a new path for each invocation
@@ -20,15 +20,15 @@ def urlpath():
     yield f"memory://{unique}"
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def parquet_path(urlpath):
     yield os.path.join(urlpath, "test.parquet")
 
 
 def test_meta_store_roundtrip(parquet_path):
-    df = pd.DataFrame({'A': [1, 2, 3]})
-    identifier = 'test-identifier'
-    meta = {'abc': 1}
+    df = pd.DataFrame({"A": [1, 2, 3]})
+    identifier = "test-identifier"
+    meta = {"abc": 1}
 
     store = MetadataStore()
     store.to_urlpath(df, parquet_path, identifier=identifier, **meta)
@@ -38,11 +38,16 @@ def test_meta_store_roundtrip(parquet_path):
     assert meta2.pop(MetadataStore.METADATA_KEY_PADO_VERSION) == _pado_version
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_VERSION) == 1
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_TYPE) == StoreType.METADATA
-    assert meta2.pop(MetadataStore.METADATA_KEY_DATASET_VERSION) == MetadataStore.DATASET_VERSION
+    assert (
+        meta2.pop(MetadataStore.METADATA_KEY_DATASET_VERSION)
+        == MetadataStore.DATASET_VERSION
+    )
     assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_AT) is not None
     assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_BY) is not None
 
     # ensure round trip
-    assert_frame_equal(df, df2, check_column_type=True, check_index_type=True, check_exact=True)
+    assert_frame_equal(
+        df, df2, check_column_type=True, check_index_type=True, check_exact=True
+    )
     assert identifier == identifier2
     assert meta == meta2

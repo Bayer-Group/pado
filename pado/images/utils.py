@@ -20,7 +20,7 @@ __all__ = [
     "IntSize",
     "MPP",
     "Bounds",
-    "Geometry"
+    "Geometry",
 ]
 
 # NOTE:
@@ -35,6 +35,7 @@ from shapely.geometry.base import BaseGeometry
 @dataclass(frozen=True)
 class MPP:
     """micrometer per pixel scaling common in pathological images"""
+
     x: PositiveFloat
     y: PositiveFloat
 
@@ -63,6 +64,7 @@ _G = TypeVar("_G", bound="Geometry")
 @dataclass(frozen=True)
 class Point:
     """a 2D point that can optionally come with a MPP for scaling"""
+
     x: float
     y: float
     mpp: Optional[MPP] = None
@@ -94,6 +96,7 @@ class Point:
 @dataclass(frozen=True)
 class IntPoint(Point):
     """an integer 2D point"""
+
     x: StrictInt
     y: StrictInt
 
@@ -107,6 +110,7 @@ class IntPoint(Point):
 @dataclass(frozen=True)
 class Size:
     """a general 2D size that can optionally come with a MPP for scaling"""
+
     x: PositiveFloat
     y: PositiveFloat
     mpp: Optional[MPP] = None
@@ -146,6 +150,7 @@ class Size:
 @dataclass(frozen=True)
 class IntSize(Size):
     """an integer 2D size"""
+
     x: conint(gt=0, strict=True)  # type: ignore
     y: conint(gt=0, strict=True)  # type: ignore
 
@@ -162,6 +167,7 @@ class Bounds:
     A general 4D size that aims at representing rectangular shapes.
     It optionally comes with a MPP for scaling
     """
+
     x_left: NonNegativeFloat
     y_left: NonNegativeFloat
     x_right: NonNegativeFloat
@@ -169,7 +175,13 @@ class Bounds:
     mpp: Optional[MPP] = None
 
     def round(self) -> Bounds:
-        return Bounds(round(self.x_left), round(self.y_left), round(self.x_right), round(self.y_right), self.mpp)
+        return Bounds(
+            round(self.x_left),
+            round(self.y_left),
+            round(self.x_right),
+            round(self.y_right),
+            self.mpp,
+        )
 
     def scale(self, mpp: MPP) -> Bounds:
         """scale bounds to a new mpp"""
@@ -201,19 +213,24 @@ class Bounds:
         return IntSize(x=int(self.width), y=int(self.height), mpp=self.mpp)
 
     @classmethod
-    def from_tuple(cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP) -> _B:
+    def from_tuple(
+        cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP
+    ) -> _B:
         x_left, y_left, x_right, y_right = xyxy
-        return cls(x_left=x_left, y_left=y_left, x_right=x_right, y_right=y_right, mpp=mpp)
+        return cls(
+            x_left=x_left, y_left=y_left, x_right=x_right, y_right=y_right, mpp=mpp
+        )
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
         return self.x_left, self.y_left, self.x_right, self.y_right
 
 
-@dataclass(config=type('', (), {'arbitrary_types_allowed': True}))
+@dataclass(config=type("", (), {"arbitrary_types_allowed": True}))
 class Geometry:
     """
     A general class for dealing with BaseGeometries at various MPPs.
     """
+
     geometry: BaseGeometry
     mpp: Optional[MPP] = None
 
@@ -227,7 +244,9 @@ class Geometry:
         factor_y = self.mpp.y / mpp.y
 
         return Geometry(
-            geometry=shapely_scale(self.geometry, xfact=factor_x, yfact=factor_y, origin=(0, 0)),
+            geometry=shapely_scale(
+                self.geometry, xfact=factor_x, yfact=factor_y, origin=(0, 0)
+            ),
             mpp=mpp,
         )
 

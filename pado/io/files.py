@@ -59,10 +59,7 @@ class _OpenFileAndParts(NamedTuple):
 
 
 def find_files(
-    urlpath: UrlpathLike,
-    *,
-    glob: str = "**/*",
-    **storage_options: Any
+    urlpath: UrlpathLike, *, glob: str = "**/*", **storage_options: Any
 ) -> Iterable[_OpenFileAndParts]:
     """iterate over the files with matching at all paths"""
     ofile = urlpathlike_to_fsspec(urlpath, **storage_options)
@@ -104,16 +101,15 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
         try:
             serialized_fs = fs.to_json()
         except NotImplementedError:
-            serialized_fs = repr(pickle.dumps(fs, protocol=_PADO_FSSPEC_PICKLE_PROTOCOL))
-        return json.dumps({
-            "fs": serialized_fs,
-            "path": path
-        })
+            serialized_fs = repr(
+                pickle.dumps(fs, protocol=_PADO_FSSPEC_PICKLE_PROTOCOL)
+            )
+        return json.dumps({"fs": serialized_fs, "path": path})
 
     if isinstance(urlpath, os.PathLike):
         urlpath = os.fspath(urlpath)
 
-    if '~' in urlpath:
+    if "~" in urlpath:
         urlpath = os.path.expanduser(urlpath)
 
     if isinstance(urlpath, bytes):
@@ -125,10 +121,7 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
 
 
 def urlpathlike_to_fsspec(
-    obj: UrlpathLike,
-    *,
-    mode: FsspecIOMode = 'rb',
-    **storage_options: Any
+    obj: UrlpathLike, *, mode: FsspecIOMode = "rb", **storage_options: Any
 ) -> OpenFileLike:
     """use an urlpath-like object and return an fsspec.core.OpenFile"""
     if is_fsspec_open_file_like(obj):
@@ -150,7 +143,9 @@ def urlpathlike_to_fsspec(
         except json.JSONDecodeError:
             # json_obj["fs"] is not json ...
             if storage_options:
-                raise NotImplementedError("pickled filesystems can't change storage_options")
+                raise NotImplementedError(
+                    "pickled filesystems can't change storage_options"
+                )
             fs = pickle.loads(literal_eval(json_obj["fs"]))
         else:
             # json_obj["fs"] is json
@@ -161,7 +156,9 @@ def urlpathlike_to_fsspec(
         return fsopen(fs, json_obj["path"], mode=mode)
 
 
-def urlpathlike_to_fs_and_path(obj: UrlpathLike, **storage_options) -> Tuple[AbstractFileSystem, str]:
+def urlpathlike_to_fs_and_path(
+    obj: UrlpathLike, **storage_options
+) -> Tuple[AbstractFileSystem, str]:
     """use an urlpath-like object and return an fsspec.AbstractFileSystem and a path"""
     if is_fsspec_open_file_like(obj):
         return obj.fs, obj.path
@@ -183,7 +180,9 @@ def urlpathlike_to_fs_and_path(obj: UrlpathLike, **storage_options) -> Tuple[Abs
         except json.JSONDecodeError:
             # json_obj["fs"] is not json ...
             if storage_options:
-                raise NotImplementedError("pickled filesystems can't change storage_options")
+                raise NotImplementedError(
+                    "pickled filesystems can't change storage_options"
+                )
             fs = pickle.loads(literal_eval(json_obj["fs"]))
         else:
             # json_obj["fs"] is json
@@ -214,15 +213,12 @@ def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
         else:
             if not isinstance(json_obj, dict):
                 raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
-            path = json_obj['path']
+            path = json_obj["path"]
     return PurePath(path).parts
 
 
 def urlpathlike_to_localpath(
-    obj: UrlpathLike,
-    *,
-    mode: FsspecIOMode = 'rb',
-    **storage_options: Any
+    obj: UrlpathLike, *, mode: FsspecIOMode = "rb", **storage_options: Any
 ) -> str:
     """take an urlpathlike object and return a local path"""
     if "r" not in mode:
@@ -238,16 +234,16 @@ def fsopen(
     fs: AbstractFileSystem,
     path: [str, os.PathLike],
     *,
-    mode: FsspecIOMode = 'rb',
+    mode: FsspecIOMode = "rb",
 ) -> OpenFileLike:
     """small helper to support mode 'x' for fsspec filesystems"""
     if mode not in typing.get_args(FsspecIOMode):
         raise ValueError("fsspec only supports a subset of IOModes")
-    if 'x' in mode:
+    if "x" in mode:
         if fs.exists(path):
             raise FileExistsError(f"{path!r} at {fs!r}")
         else:
-            mode = mode.replace('x', 'w')
+            mode = mode.replace("x", "w")
     return OpenFile(fs, path, mode=mode)
 
 
@@ -274,7 +270,7 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
             fileobj.seek(_pos)
 
     with ExitStack() as stack:
-        if not (hasattr(file, 'read') and hasattr(file, 'seek')):
+        if not (hasattr(file, "read") and hasattr(file, "seek")):
             file = stack.enter_context(file)
 
         pos = file.tell()
@@ -304,7 +300,7 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
             members = ftar.getmembers()
             if len(members) != 1:
                 raise RuntimeError(
-                    f"tar must contain exactly one file: won't auto uncompress"
+                    "tar must contain exactly one file: won't auto uncompress"
                 )
             ftarred = stack.enter_context(ftar.extractfile(members[0]))
             yield stack.enter_context(uncompressed(ftarred))

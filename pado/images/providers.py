@@ -40,29 +40,39 @@ from pado.types import UrlpathLike
 
 # === storage =================================================================
 
+
 class ImageProviderStore(Store):
     """stores the image provider in a single file with metadata"""
+
     METADATA_KEY_PROVIDER_VERSION = "image_provider_version"
     PROVIDER_VERSION = 1
 
     def __init__(self):
         super().__init__(version=1, store_type=StoreType.IMAGE)
 
-    def __metadata_set_hook__(self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]) -> None:
+    def __metadata_set_hook__(
+        self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
+    ) -> None:
         setter(dct, self.METADATA_KEY_PROVIDER_VERSION, self.PROVIDER_VERSION)
 
-    def __metadata_get_hook__(self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]) -> Optional[dict]:
+    def __metadata_get_hook__(
+        self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
+    ) -> Optional[dict]:
         image_provider_version = getter(dct, self.METADATA_KEY_PROVIDER_VERSION, None)
-        if image_provider_version is None or image_provider_version < self.PROVIDER_VERSION:
+        if (
+            image_provider_version is None
+            or image_provider_version < self.PROVIDER_VERSION
+        ):
             raise RuntimeError("Please migrate ImageProvider to newer version.")
         elif image_provider_version > self.PROVIDER_VERSION:
-            raise RuntimeError("ImageProvider is newer. Please upgrade pado to newer version.")
-        return {
-            self.METADATA_KEY_PROVIDER_VERSION: image_provider_version
-        }
+            raise RuntimeError(
+                "ImageProvider is newer. Please upgrade pado to newer version."
+            )
+        return {self.METADATA_KEY_PROVIDER_VERSION: image_provider_version}
 
 
 # === providers ===============================================================
+
 
 class BaseImageProvider(MutableMapping[ImageId, Image], ABC):
     """base class for image providers"""
@@ -76,7 +86,12 @@ class ImageProvider(BaseImageProvider):
     df: pd.DataFrame
     identifier: str
 
-    def __init__(self, provider: BaseImageProvider | pd.DataFrame | dict | None = None, *, identifier: Optional[str] = None):
+    def __init__(
+        self,
+        provider: BaseImageProvider | pd.DataFrame | dict | None = None,
+        *,
+        identifier: Optional[str] = None,
+    ):
         if provider is None:
             provider = {}
 
@@ -101,25 +116,35 @@ class ImageProvider(BaseImageProvider):
                 )
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:
-            raise TypeError(f"expected `BaseImageProvider`, got: {type(provider).__name__!r}")
+            raise TypeError(
+                f"expected `BaseImageProvider`, got: {type(provider).__name__!r}"
+            )
 
     def __getitem__(self, image_id: ImageId) -> Image:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         row = self.df.loc[image_id.to_str()]
         return Image.from_obj(row)
 
     def __setitem__(self, image_id: ImageId, image: Image) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         if not isinstance(image, Image):
-            raise TypeError(f"values must be Image instances, got {type(image).__name__!r}")
+            raise TypeError(
+                f"values must be Image instances, got {type(image).__name__!r}"
+            )
         dct = image.to_record()
         self.df.loc[image_id.to_str()] = pd.Series(dct)
 
     def __delitem__(self, image_id: ImageId) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         self.df.drop(image_id.to_str(), inplace=True)
 
     def __len__(self) -> int:
@@ -129,14 +154,14 @@ class ImageProvider(BaseImageProvider):
         return iter(map(ImageId.from_str, self.df.index))
 
     def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        for row in self.df.itertuples(index=True, name='ImageAsRow'):
+        for row in self.df.itertuples(index=True, name="ImageAsRow"):
             # noinspection PyProtectedMember
             x = row._asdict()
             i = x.pop("Index")
             yield ImageId.from_str(i), Image.from_obj(x)
 
     def __repr__(self):
-        return f'{type(self).__name__}({self.identifier!r})'
+        return f"{type(self).__name__}({self.identifier!r})"
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         store = ImageProviderStore()
@@ -161,7 +186,6 @@ class ImageProvider(BaseImageProvider):
 
 
 class GroupedImageProvider(ImageProvider):
-
     def __init__(self, *providers: BaseImageProvider):
         super().__init__()
         self.providers = []
@@ -219,15 +243,19 @@ class GroupedImageProvider(ImageProvider):
 
 
 class FilteredImageProvider(ImageProvider):
-
-    def __init__(self, provider: BaseImageProvider, *, valid_keys: Optional[Iterable[ImageId]] = None):
+    def __init__(
+        self,
+        provider: BaseImageProvider,
+        *,
+        valid_keys: Optional[Iterable[ImageId]] = None,
+    ):
         super().__init__()
         self._provider = ImageProvider(provider)
         self._vk = set(self._provider) if valid_keys is None else set(valid_keys)
 
     @cached_property
     def df(self):
-        return self._provider.df.filter(items=self._vk, axis='index')
+        return self._provider.df.filter(items=self._vk, axis="index")
 
     @property
     def valid_keys(self) -> Set[ImageId]:
@@ -254,7 +282,7 @@ class FilteredImageProvider(ImageProvider):
         return super().items()
 
     def __repr__(self):
-        return f'{type(self).__name__}({self._provider!r})'
+        return f"{type(self).__name__}({self._provider!r})"
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         super().to_parquet(urlpath)
@@ -294,7 +322,7 @@ class LocallyCachedImageProvider(ImageProvider):
         return image
 
     def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        for row in self.df.itertuples(index=True, name='ImageAsRow'):
+        for row in self.df.itertuples(index=True, name="ImageAsRow"):
             # noinspection PyProtectedMember
             x = row._asdict()
             i = x.pop("Index")
@@ -309,7 +337,7 @@ class LocallyCachedImageProvider(ImageProvider):
         raise NotImplementedError(f"can't delete from {type(self).__name__}")
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
-        raise NotImplementedError(f"")
+        raise NotImplementedError
 
 
 def image_is_cached_or_local(image: Image) -> bool:
@@ -348,6 +376,7 @@ def image_cached_percentage(image: Image) -> float:
 
 # === manipulation ============================================================
 
+
 def create_image_provider(
     search_urlpath: UrlpathLike,
     search_glob: str,
@@ -384,7 +413,9 @@ def create_image_provider(
             else:
                 chk = checksum
             try:
-                image = Image(fp.file, load_metadata=True, load_file_info=True, checksum=chk)
+                image = Image(
+                    fp.file, load_metadata=True, load_file_info=True, checksum=chk
+                )
             except KeyboardInterrupt:
                 raise
             except BaseException as e:
@@ -424,7 +455,7 @@ def update_image_provider_urlpaths(
     )
 
     old = ip.df.urlpath.copy()
-    ip.df.loc[:, 'urlpath'] = [urlpathlike_to_string(p) for p in new_urlpaths]
+    ip.df.loc[:, "urlpath"] = [urlpathlike_to_string(p) for p in new_urlpaths]
 
     if progress:
         print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
@@ -441,12 +472,14 @@ def copy_image(
     *,
     update_provider: bool = True,
     progress: bool = False,
-    chunk_size: int = 2**20,
-    **update_kwargs
+    chunk_size: int = 2 ** 20,
+    **update_kwargs,
 ) -> None:
     """copy image data to a new location"""
     if not isinstance(provider, ImageProvider):
-        raise TypeError(f"expected ImageProvider instance, got {type(provider).__name__}")
+        raise TypeError(
+            f"expected ImageProvider instance, got {type(provider).__name__}"
+        )
 
     # prepare image ids
     if isinstance(image_id, ImageId):
@@ -494,8 +527,5 @@ def copy_image(
 
     if update_provider:
         update_image_provider_urlpaths(
-            dest, "**/*.svs",
-            provider=provider,
-            progress=progress,
-            **update_kwargs
+            dest, "**/*.svs", provider=provider, progress=progress, **update_kwargs
         )

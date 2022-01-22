@@ -20,6 +20,7 @@ from pado.images import ImageId
 
 # === PADO annotation model ===
 
+
 class AnnotationState(enum.IntEnum):
     NOT_SET = -1
     PLANNED = 0
@@ -95,6 +96,7 @@ class AnnotationModel(BaseModel):
 
 class QPPathObjectId(str, enum.Enum):
     """these have been used as `.id` in legacy qupath<0.3"""
+
     ANNOTATION = "PathAnnotationObject"
     CELL = "PathCellObject"
     DETECTION = "PathDetectionObject"
@@ -105,6 +107,7 @@ class QPPathObjectId(str, enum.Enum):
 
 class QPPathObjectType(str, enum.Enum):
     """these are used in `.properties.object_type` qupath>=0.3"""
+
     ANNOTATION = "annotation"
     CELL = "cell"
     DETECTION = "detection"
@@ -115,19 +118,21 @@ class QPPathObjectType(str, enum.Enum):
 
 class QPClassification(BaseModel):
     """qupath classifications with colors"""
+
     name: str
     colorRGB: Color
 
     @validator("colorRGB", pre=True)
     def qupath_color_to_rgba(cls, v):
         """convert a qupath color to a pydantic Color"""
-        assert isinstance(v, int) and -2**31 <= v <= 2**31 - 1
+        assert isinstance(v, int) and -(2 ** 31) <= v <= 2 ** 31 - 1
         alpha, red, blue, green = struct.pack(">i", v)
         return Color((red, blue, green, alpha / 255.0))
 
 
 class QPProperties(BaseModel):
     """qupath properties"""
+
     classification: QPClassification
     isLocked: bool
     measurements: Optional[List]  # todo: add measurement type?
@@ -138,12 +143,13 @@ class QPProperties(BaseModel):
 
 class QuPathAnnotation(Feature[Geometry, QPProperties]):
     """model for qupath annotations"""
+
     id: QPPathObjectId = None
 
     @validator("geometry", pre=True)
     def parse_geometry_type(cls, v):
         if isinstance(v, dict):
-            if 'type' in v and v['type'] == "Polygon":
+            if "type" in v and v["type"] == "Polygon":
                 # workaround for Polygons that do not adhere to geojson RFC 7946
                 # fixme: I'm not sure if this should not be handled here...
                 v = shape(v).__geo_interface__

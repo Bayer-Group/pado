@@ -21,6 +21,7 @@ from pado.images import ImageId
 
 class Annotation:
     """Annotation class"""
+
     image_id: Optional[ImageId]
     identifier: Optional[str]
     project: Optional[str]
@@ -40,7 +41,7 @@ class Annotation:
         self._readonly = True
 
     def __setattr__(self, key, value):
-        if getattr(self, '_readonly', False):
+        if getattr(self, "_readonly", False):
             raise AttributeError(f"{key} is readonly")
         super().__setattr__(key, value)
 
@@ -52,7 +53,8 @@ class Annotation:
             return False
         return all(
             self.__dict__[k] == other.__dict__[k]
-            for k in self.__dict__ if k not in {'_model', 'color'}
+            for k in self.__dict__
+            if k not in {"_model", "color"}
         )
 
     @classmethod
@@ -61,13 +63,15 @@ class Annotation:
         return cls(AnnotationModel.parse_obj(obj))
 
     def to_record(self, image_id: Optional[ImageId] = None) -> dict:
-        """return a record for serializing """
+        """return a record for serializing"""
         m = self._model
-        dct = m.dict(exclude={'image_id', 'color', 'geometry'})
+        dct = m.dict(exclude={"image_id", "color", "geometry"})
 
         if m.image_id is not None and image_id is not None:
             if m.image_id != image_id:
-                raise ValueError(f"Annotation has different image_id: has {m.image_id} requested {image_id}")
+                raise ValueError(
+                    f"Annotation has different image_id: has {m.image_id} requested {image_id}"
+                )
 
         _id = m.image_id or image_id
         dct["image_id"] = _id.to_str() if _id is not None else None
@@ -83,7 +87,9 @@ _r.maxlist = 3
 class Annotations(MutableSequence[Annotation]):
     df: pd.DataFrame
 
-    def __init__(self, df: Optional[pd.DataFrame] = None, *, image_id: Optional[ImageId] = None) -> None:
+    def __init__(
+        self, df: Optional[pd.DataFrame] = None, *, image_id: Optional[ImageId] = None
+    ) -> None:
         if df is None:
             self.df = pd.DataFrame(columns=AnnotationModel.__fields__)
         elif isinstance(df, pd.DataFrame):
@@ -122,14 +128,19 @@ class Annotations(MutableSequence[Annotation]):
     @image_id.setter
     def image_id(self, value: ImageId):
         if not isinstance(value, ImageId):
-            raise TypeError(f"{value!r} not of type ImageId, got {type(value).__name__}")
+            raise TypeError(
+                f"{value!r} not of type ImageId, got {type(value).__name__}"
+            )
         self._update_df_image_id(image_id=value)
         self._image_id = value
 
     @overload
-    def __getitem__(self, index: int) -> Annotation: ...
+    def __getitem__(self, index: int) -> Annotation:
+        ...
+
     @overload
-    def __getitem__(self, index: slice) -> Annotations: ...
+    def __getitem__(self, index: slice) -> Annotations:
+        ...
 
     def __getitem__(self, index: Union[int, slice]) -> Union[Annotation, Annotations]:
         if isinstance(index, int):
@@ -137,20 +148,34 @@ class Annotations(MutableSequence[Annotation]):
         elif isinstance(index, slice):
             return Annotations(self.df.loc[index, :], image_id=self.image_id)
         else:
-            raise TypeError(f"Annotations: indices must be integers or slices, not {type(index).__name__}")
+            raise TypeError(
+                f"Annotations: indices must be integers or slices, not {type(index).__name__}"
+            )
 
     @overload
-    def __setitem__(self, index: int, value: Annotation) -> None: ...
-    @overload
-    def __setitem__(self, index: slice, value: Iterable[Annotation]) -> None: ...
+    def __setitem__(self, index: int, value: Annotation) -> None:
+        ...
 
-    def __setitem__(self, index: Union[int, slice], value: Union[Annotation, Iterable[Annotation]]) -> None:
+    @overload
+    def __setitem__(self, index: slice, value: Iterable[Annotation]) -> None:
+        ...
+
+    def __setitem__(
+        self, index: Union[int, slice], value: Union[Annotation, Iterable[Annotation]]
+    ) -> None:
         if isinstance(index, int):
-            self.df.iloc[index, :] = pd.DataFrame([value.to_record(self._image_id)], columns=AnnotationModel.__fields__)
+            self.df.iloc[index, :] = pd.DataFrame(
+                [value.to_record(self._image_id)], columns=AnnotationModel.__fields__
+            )
         elif isinstance(index, slice):
-            self.df.iloc[index, :] = pd.DataFrame([x.to_record(self._image_id) for x in value], columns=AnnotationModel.__fields__)
+            self.df.iloc[index, :] = pd.DataFrame(
+                [x.to_record(self._image_id) for x in value],
+                columns=AnnotationModel.__fields__,
+            )
         else:
-            raise TypeError(f"Annotations: indices must be integers or slices, not {type(index).__name__}")
+            raise TypeError(
+                f"Annotations: indices must be integers or slices, not {type(index).__name__}"
+            )
 
     def __delitem__(self, index: Union[int, slice]) -> None:
         if isinstance(index, int):
@@ -158,13 +183,19 @@ class Annotations(MutableSequence[Annotation]):
         elif isinstance(index, slice):
             self.df.drop(labels=self.df.index[index], axis=0, inplace=True)
         else:
-            raise TypeError(f"Annotations: indices must be integers or slices, not {type(index).__name__}")
+            raise TypeError(
+                f"Annotations: indices must be integers or slices, not {type(index).__name__}"
+            )
 
     def insert(self, index: int, value: Annotation) -> None:
         if not isinstance(value, Annotation):
-            raise TypeError(f"can only insert type Annotation, got {type(value).__name__!r}")
+            raise TypeError(
+                f"can only insert type Annotation, got {type(value).__name__!r}"
+            )
         df_a = self.df.iloc[:index, :]
-        df_i = pd.DataFrame([value.to_record(self._image_id)], columns=AnnotationModel.__fields__)
+        df_i = pd.DataFrame(
+            [value.to_record(self._image_id)], columns=AnnotationModel.__fields__
+        )
         df_b = self.df.iloc[index:, :]
         self.df = pd.concat([df_a, df_i, df_b])
 
@@ -172,6 +203,8 @@ class Annotations(MutableSequence[Annotation]):
         return len(self.df)
 
     @classmethod
-    def from_records(cls, annotation_records: Iterable[dict], *, image_id: Optional[ImageId] = None) -> Annotations:
+    def from_records(
+        cls, annotation_records: Iterable[dict], *, image_id: Optional[ImageId] = None
+    ) -> Annotations:
         df = pd.DataFrame(list(annotation_records), columns=AnnotationModel.__fields__)
         return Annotations(df, image_id=image_id)

@@ -51,11 +51,14 @@ def qupath_geojson_annotations_loader(
     errors = defaultdict(list)
     for feature in data:
         try:
-            _id = feature.pop("id")
+            _ = feature.pop("id")
             a_qp = QuPathAnnotation(**feature)
         except BaseException as e:
-            geom = feature.get('geometry', {})
-            if geom.get('type') == "Polygon" and len(geom.get('coordinates', [[]])[0]) < 3:
+            geom = feature.get("geometry", {})
+            if (
+                geom.get("type") == "Polygon"
+                and len(geom.get("coordinates", [[]])[0]) < 3
+            ):
                 # FIXME: this should be handled somewhere else...
                 pass  # skip
             else:
@@ -79,12 +82,14 @@ def qupath_geojson_annotations_loader(
     if errors:
         msg = ["PYDANTIC PARSING ERROR"]
         for (err_type, err_msg), features in errors.items():
-            msg.extend([
-                f"# {len(features)} OF ERROR {err_type}:",
-                f"{textwrap.indent(err_msg, prefix='# >>> ')}",
-                f"# EXAMPLE:",
-                f"{textwrap.indent(json.dumps(features[0], indent=2), prefix='  ')}",
-            ])
+            msg.extend(
+                [
+                    f"# {len(features)} OF ERROR {err_type}:",
+                    f"{textwrap.indent(err_msg, prefix='# >>> ')}",
+                    "# EXAMPLE:",
+                    f"{textwrap.indent(json.dumps(features[0], indent=2), prefix='  ')}",
+                ]
+            )
         msg.append(f"# encountered {sum(map(len, errors.values()))} parsing errors")
         raise ValueError("\n".join(msg))
 

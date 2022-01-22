@@ -29,29 +29,39 @@ from pado.types import UrlpathLike
 
 # === storage =================================================================
 
+
 class AnnotationProviderStore(Store):
     """stores the annotation provider in a single file with metadata"""
+
     METADATA_KEY_ANNOTATION_VERSION = "annotation_version"
     ANNOTATION_VERSION = 1
 
     def __init__(self):
         super().__init__(version=1, store_type=StoreType.ANNOTATION)
 
-    def __metadata_set_hook__(self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]) -> None:
+    def __metadata_set_hook__(
+        self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
+    ) -> None:
         setter(dct, self.METADATA_KEY_ANNOTATION_VERSION, self.ANNOTATION_VERSION)
 
-    def __metadata_get_hook__(self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]) -> Optional[dict]:
+    def __metadata_get_hook__(
+        self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
+    ) -> Optional[dict]:
         image_provider_version = getter(dct, self.METADATA_KEY_ANNOTATION_VERSION, None)
-        if image_provider_version is None or image_provider_version < self.ANNOTATION_VERSION:
+        if (
+            image_provider_version is None
+            or image_provider_version < self.ANNOTATION_VERSION
+        ):
             raise RuntimeError("Please migrate AnnotationProvider to newer version.")
         elif image_provider_version > self.ANNOTATION_VERSION:
-            raise RuntimeError("AnnotationProvider is newer. Please upgrade pado to newer version.")
-        return {
-            self.METADATA_KEY_ANNOTATION_VERSION: image_provider_version
-        }
+            raise RuntimeError(
+                "AnnotationProvider is newer. Please upgrade pado to newer version."
+            )
+        return {self.METADATA_KEY_ANNOTATION_VERSION: image_provider_version}
 
 
 # === providers ===============================================================
+
 
 class BaseAnnotationProvider(MutableMapping[ImageId, Annotations], ABC):
     """base class for annotation providers"""
@@ -61,7 +71,12 @@ class AnnotationProvider(BaseAnnotationProvider):
     df: pd.DataFrame
     identifier: str
 
-    def __init__(self, provider: BaseAnnotationProvider | pd.DataFrame | dict | None = None, *, identifier: Optional[str] = None):
+    def __init__(
+        self,
+        provider: BaseAnnotationProvider | pd.DataFrame | dict | None = None,
+        *,
+        identifier: Optional[str] = None,
+    ):
         if provider is None:
             provider = {}
 
@@ -93,24 +108,32 @@ class AnnotationProvider(BaseAnnotationProvider):
                 )
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:
-            raise TypeError(f"expected `BaseAnnotationProvider`, got: {type(provider).__name__!r}")
+            raise TypeError(
+                f"expected `BaseAnnotationProvider`, got: {type(provider).__name__!r}"
+            )
 
         self._store = {}
 
     def __getitem__(self, image_id: ImageId) -> Annotations:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         try:
             return self._store[image_id]
         except KeyError:
-            df = self.df.loc[[image_id.to_str()], :]  # list: return DataFrame even if length == 1
+            df = self.df.loc[
+                [image_id.to_str()], :
+            ]  # list: return DataFrame even if length == 1
             df = df.reset_index(drop=True)
             a = self._store[image_id] = Annotations(df, image_id=image_id)
             return a
 
     def __setitem__(self, image_id: ImageId, v: Annotations) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         if not isinstance(v, Annotations):
             raise TypeError(f"requires Annotations, got {type(v).__name__}")
         if v.image_id is None:
@@ -121,7 +144,9 @@ class AnnotationProvider(BaseAnnotationProvider):
 
     def __delitem__(self, image_id: ImageId) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         try:
             del self._store[image_id]
         except KeyError:
@@ -141,10 +166,12 @@ class AnnotationProvider(BaseAnnotationProvider):
         return self.df.index.nunique()
 
     def __iter__(self) -> Iterator[ImageId]:
-        return iter(set(map(ImageId.from_str, self.df.index.unique())).union(self._store))
+        return iter(
+            set(map(ImageId.from_str, self.df.index.unique())).union(self._store)
+        )
 
     def __repr__(self):
-        return f'{type(self).__name__}({self.identifier!r})'
+        return f"{type(self).__name__}({self.identifier!r})"
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         store = AnnotationProviderStore()
@@ -228,6 +255,7 @@ class GroupedAnnotationProvider(AnnotationProvider):
 
 # === manipulation ============================================================
 
+
 def create_annotation_provider(
     search_urlpath: UrlpathLike,
     search_glob: str,
@@ -259,7 +287,9 @@ def create_annotation_provider(
             if valid_image_ids is not None:
                 if image_id not in valid_image_ids:
                     # try matching partially
-                    image_id = match_partial_image_ids_reversed(valid_image_ids, image_id)
+                    image_id = match_partial_image_ids_reversed(
+                        valid_image_ids, image_id
+                    )
                     if image_id is None:
                         continue  # skip if image_id not in image_id_filter
             if resume and image_id in ap:

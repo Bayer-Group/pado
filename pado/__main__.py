@@ -31,7 +31,9 @@ def version():
 @cli.command("info")
 def info(
     name: Optional[str] = Option(...),
-    path: Optional[Path] = Argument(None, exists=True, file_okay=False, dir_okay=True, readable=True),
+    path: Optional[Path] = Argument(
+        None, exists=True, file_okay=False, dir_okay=True, readable=True
+    ),
 ):
     """return info regarding the pado dataset"""
     if name is not None and path is not None:

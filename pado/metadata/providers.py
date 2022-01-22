@@ -13,7 +13,6 @@ from typing import Dict
 from typing import Iterator
 from typing import MutableMapping
 from typing import Optional
-from typing import Union
 
 import pandas as pd
 
@@ -25,29 +24,36 @@ from pado.types import UrlpathLike
 
 # === storage =================================================================
 
+
 class MetadataStore(Store):
     """stores the metadata in a single file with per store metadata"""
+
     METADATA_KEY_DATASET_VERSION = "dataset_version"
     DATASET_VERSION = 1
 
     def __init__(self):
         super().__init__(version=1, store_type=StoreType.METADATA)
 
-    def __metadata_set_hook__(self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]) -> None:
+    def __metadata_set_hook__(
+        self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
+    ) -> None:
         setter(dct, self.METADATA_KEY_DATASET_VERSION, self.DATASET_VERSION)
 
-    def __metadata_get_hook__(self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]) -> Optional[dict]:
+    def __metadata_get_hook__(
+        self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
+    ) -> Optional[dict]:
         dataset_version = getter(dct, self.METADATA_KEY_DATASET_VERSION, None)
         if dataset_version is None or dataset_version < self.DATASET_VERSION:
             raise RuntimeError("Please migrate MetadataStore to newer version.")
         elif dataset_version > self.DATASET_VERSION:
-            raise RuntimeError("MetadataStore is newer. Please upgrade pado to newer version.")
-        return {
-            self.METADATA_KEY_DATASET_VERSION: dataset_version
-        }
+            raise RuntimeError(
+                "MetadataStore is newer. Please upgrade pado to newer version."
+            )
+        return {self.METADATA_KEY_DATASET_VERSION: dataset_version}
 
 
 # === provider ================================================================
+
 
 class BaseMetadataProvider(MutableMapping[ImageId, pd.DataFrame], ABC):
     """base class for metadata providers"""
@@ -97,34 +103,46 @@ class MetadataProvider(BaseMetadataProvider):
                         raise AssertionError(f"{image_id_str} with Index: {ids!r}")
                     dfs.append(df)
                     columns.add(frozenset(df.columns))
-                assert len(columns) == 1, f"dataframe columns in provider don't match {columns!r}"
+                assert (
+                    len(columns) == 1
+                ), f"dataframe columns in provider don't match {columns!r}"
                 self.df = pd.concat(dfs)
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:
-            raise TypeError(f"expected `BaseMetadataProvider`, got: {type(provider).__name__!r}")
+            raise TypeError(
+                f"expected `BaseMetadataProvider`, got: {type(provider).__name__!r}"
+            )
 
     def __getitem__(self, image_id: ImageId) -> pd.DataFrame:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         return self.df.loc[[image_id.to_str()]]
 
     def __setitem__(self, image_id: ImageId, value: pd.DataFrame) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         if not value.columns == self.df.columns:
             raise ValueError("dataframe columns do not match")
-        self.df = pd.concat([
-            self.df.drop(image_id.to_str()),
-            value.set_index(pd.Index([image_id.to_str()] * len(value))),
-        ])
+        self.df = pd.concat(
+            [
+                self.df.drop(image_id.to_str()),
+                value.set_index(pd.Index([image_id.to_str()] * len(value))),
+            ]
+        )
 
     def __delitem__(self, image_id: ImageId) -> None:
         if not isinstance(image_id, ImageId):
-            raise TypeError(f"keys must be ImageId instances, got {type(image_id).__name__!r}")
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
         self.df.drop(image_id.to_str(), inplace=True)
 
     def __repr__(self):
-        return f'{type(self).__name__}({self.identifier!r})'
+        return f"{type(self).__name__}({self.identifier!r})"
 
     def __len__(self) -> int:
         return self.df.index.nunique(dropna=True)
@@ -141,13 +159,13 @@ class MetadataProvider(BaseMetadataProvider):
         store = MetadataStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
         assert {
-                   store.METADATA_KEY_STORE_TYPE,
-                   store.METADATA_KEY_STORE_VERSION,
-                   store.METADATA_KEY_PADO_VERSION,
-                   store.METADATA_KEY_DATASET_VERSION,
-                   store.METADATA_KEY_CREATED_AT,
-                   store.METADATA_KEY_CREATED_BY,
-               } == set(user_metadata), f"currently unused {user_metadata!r}"
+            store.METADATA_KEY_STORE_TYPE,
+            store.METADATA_KEY_STORE_VERSION,
+            store.METADATA_KEY_PADO_VERSION,
+            store.METADATA_KEY_DATASET_VERSION,
+            store.METADATA_KEY_CREATED_AT,
+            store.METADATA_KEY_CREATED_BY,
+        } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls.__new__(cls)
         inst.df = df
         inst.identifier = identifier
@@ -171,7 +189,9 @@ class GroupedMetadataProvider(MetadataProvider):
 
     def df(self):
         if not self.is_standardized:
-            raise RuntimeError("can't access a combined pd.DataFrame on a non standardized ")
+            raise RuntimeError(
+                "can't access a combined pd.DataFrame on a non standardized "
+            )
         return pd.concat([p.df for p in self.providers])
 
     def __getitem__(self, image_id: ImageId) -> pd.DataFrame:

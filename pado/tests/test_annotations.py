@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import os
-
-import fsspec
 import pytest
 
 from pado.annotations import AnnotationProvider
-from pado.annotations.formats import AnnotationModel
 from pado.images import ImageId
 
 
@@ -32,11 +28,15 @@ def test_annotation_serialization_roundtrip(annotations, tmp_path):
     new_annotations = AnnotationProvider.from_parquet(p)
 
     assert annotations is not new_annotations
-    assert set(annotations) == set(new_annotations) == {
-        ImageId("mock_image_0.svs", site="mock"),
-        ImageId("mock_image_1.svs", site="mock"),
-        ImageId("mock_image_2.svs", site="mock"),
-    }
+    assert (
+        set(annotations)
+        == set(new_annotations)
+        == {
+            ImageId("mock_image_0.svs", site="mock"),
+            ImageId("mock_image_1.svs", site="mock"),
+            ImageId("mock_image_2.svs", site="mock"),
+        }
+    )
     iid = ImageId("mock_image_0.svs", site="mock")
 
     a0 = annotations[iid][0]

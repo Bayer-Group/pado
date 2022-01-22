@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import glob
-import os
-import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -18,10 +15,13 @@ from pado.metadata import MetadataProvider
 
 def count_images(ds: PadoDataset):
     """helper to count images in a pado dataset"""
-    return len([
-        f for f in ds.filesystem.glob(f"{ds.path}/images/**")
-        if ds.filesystem.isfile(f) and not f.endswith(".parquet")
-    ])
+    return len(
+        [
+            f
+            for f in ds.filesystem.glob(f"{ds.path}/images/**")
+            if ds.filesystem.isfile(f) and not f.endswith(".parquet")
+        ]
+    )
 
 
 def test_pado_test_datasource_usage(datasource):
@@ -38,17 +38,16 @@ def test_pado_test_datasource_usage(datasource):
 
 
 def test_pado_test_datasource_image_ids(datasource):
-    assert set(
-        datasource.images
-    ) == set(
-        datasource.metadata
-    ) == set(
-        datasource.annotations
-    ) == {
-        ImageId('mock_image_0.svs', site='mock'),
-        ImageId('mock_image_1.svs', site='mock'),
-        ImageId('mock_image_2.svs', site='mock'),
-    }
+    assert (
+        set(datasource.images)
+        == set(datasource.metadata)
+        == set(datasource.annotations)
+        == {
+            ImageId("mock_image_0.svs", site="mock"),
+            ImageId("mock_image_1.svs", site="mock"),
+            ImageId("mock_image_2.svs", site="mock"),
+        }
+    )
 
 
 @pytest.mark.xfail
@@ -160,6 +159,6 @@ def test_ingested_dataset_attribute_retrieval(datasource):
     ds.ingest_obj(datasource)
 
     image_id = next(iter(ds.images))
-    a = ds.annotations[image_id]
-    m = ds.metadata[image_id]
-    i = ds.images[image_id]
+    _ = ds.annotations[image_id]
+    _ = ds.metadata[image_id]
+    _ = ds.images[image_id]

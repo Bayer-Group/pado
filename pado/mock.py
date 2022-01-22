@@ -70,7 +70,9 @@ def temporary_mock_svs(stem, size=(100, 100)) -> Iterator[Path]:
         yield img_fn
 
 
-def mock_image_ids(number: int, *, fmt="mock_image_{:d}.svs", site="mock") -> List[ImageId]:
+def mock_image_ids(
+    number: int, *, fmt="mock_image_{:d}.svs", site="mock"
+) -> List[ImageId]:
     """create mock image_ids"""
     return [ImageId(fmt.format(idx), site=site) for idx in range(number)]
 
@@ -86,7 +88,7 @@ def mock_dataset(
 
     if images_urlpath is None:
         fs, path = urlpathlike_to_fs_and_path(ds.urlpath)
-        _p = os.path.join(path, '_mocked_images')
+        _p = os.path.join(path, "_mocked_images")
         fs.mkdir(_p)
         images_urlpath = OpenFile(path=_p, fs=fs)
 
@@ -105,7 +107,7 @@ def mock_annotations(
     image_ids: Union[int, List[ImageId]],
     *,
     num_annotations: Iterable[int] = (1, 3, 5),
-    base: bool = False
+    base: bool = False,
 ) -> BaseAnnotationProvider:
     """return an annotation provider for testing"""
     # noinspection PyTypeChecker
@@ -115,21 +117,23 @@ def mock_annotations(
 
     for image_id, num_anno in zip(image_ids, cycle(num_annotations)):
         ap[image_id] = Annotations.from_records(
-            Annotation.from_obj(dict(
-                image_id=None,
-                identifier=None,
-                project="mock-project",
-                annotator=Annotator(
-                    type=AnnotatorType.HUMAN,
-                    name="Mock Mockington",
-                ),
-                state=AnnotationState.DONE,
-                classification="mocked-class",
-                color="#ff00ff",
-                description="mocked description",
-                comment="none",
-                geometry=Polygon.from_bounds(0, 0, 10, 10)
-            )).to_record(image_id=image_id)
+            Annotation.from_obj(
+                dict(
+                    image_id=None,
+                    identifier=None,
+                    project="mock-project",
+                    annotator=Annotator(
+                        type=AnnotatorType.HUMAN,
+                        name="Mock Mockington",
+                    ),
+                    state=AnnotationState.DONE,
+                    classification="mocked-class",
+                    color="#ff00ff",
+                    description="mocked description",
+                    comment="none",
+                    geometry=Polygon.from_bounds(0, 0, 10, 10),
+                )
+            ).to_record(image_id=image_id)
             for _ in range(num_anno)
         )
 
@@ -143,7 +147,7 @@ def mock_metadata(
     image_ids: Union[int, List[ImageId]],
     *,
     num_findings: Iterable[int] = (1, 3, 5),
-    base: bool = False
+    base: bool = False,
 ) -> BaseMetadataProvider:
     """return a metadata provider for testing"""
     # noinspection PyTypeChecker
@@ -153,12 +157,15 @@ def mock_metadata(
 
     for image_id, num_f in zip(image_ids, cycle(num_findings)):
         # todo: provide richer metadata for testing
-        mp[image_id] = pd.DataFrame({
-            'A': ['a'] * num_f,
-            'B': [2] * num_f,
-            'C': ['c'] * num_f,
-            'D': [4] * num_f,
-        }, index=pd.Index([image_id.to_str()] * num_f))
+        mp[image_id] = pd.DataFrame(
+            {
+                "A": ["a"] * num_f,
+                "B": [2] * num_f,
+                "C": ["c"] * num_f,
+                "D": [4] * num_f,
+            },
+            index=pd.Index([image_id.to_str()] * num_f),
+        )
 
     if base:
         return mp
@@ -166,7 +173,9 @@ def mock_metadata(
         return MetadataProvider(mp)
 
 
-def mock_images(target: UrlpathLike, number: int, *, base: bool = False) -> BaseImageProvider:
+def mock_images(
+    target: UrlpathLike, number: int, *, base: bool = False
+) -> BaseImageProvider:
     """return an image provider for testing"""
     of = urlpathlike_to_fsspec(target)
     if not of.fs.isdir(of.path):
@@ -182,10 +191,12 @@ def mock_images(target: UrlpathLike, number: int, *, base: bool = False) -> Base
             img_data = fn.read_bytes()
             img_path = os.path.join(path, f"{stem}.svs")
 
-            with fsopen(fs, img_path, mode='xb') as f:
+            with fsopen(fs, img_path, mode="xb") as f:
                 f.write(img_data)
 
-        image = Image(fsopen(fs, img_path), load_metadata=True, load_file_info=True, checksum=True)
+        image = Image(
+            fsopen(fs, img_path), load_metadata=True, load_file_info=True, checksum=True
+        )
         ip[image_id] = image
 
     if base:

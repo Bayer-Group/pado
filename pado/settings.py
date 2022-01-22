@@ -20,19 +20,19 @@ from platformdirs import user_cache_path
 from platformdirs import user_config_path
 
 __all__ = [
-    'pado_cache_path',
-    'pado_config_path',
-    'dataset_registry',
+    "pado_cache_path",
+    "pado_config_path",
+    "dataset_registry",
 ]
 
 settings = Dynaconf(
     envvar_prefix="PADO",
     settings_file=[".pado.toml"],
     root_path=Path.home(),
-    core_loaders=['TOML'],
+    core_loaders=["TOML"],
     validators=[
-        Validator('config_path', cast=Path, default=user_config_path('pado')),
-        Validator('cache_path', cast=Path, default=user_cache_path('pado')),
+        Validator("config_path", cast=Path, default=user_config_path("pado")),
+        Validator("cache_path", cast=Path, default=user_cache_path("pado")),
     ],
 )
 
@@ -59,7 +59,9 @@ def pado_cache_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path
 
 class _DatasetRegistry:
     """a simple json file based key value store"""
+
     FILENAME = ".pado_dataset_registry.json"
+
     def __init__(self):
         self._cm: Optional[ExitStack] = None
         self._data: Optional[dict] = None
@@ -103,14 +105,18 @@ class _DatasetRegistry:
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
-            raise TypeError(f"name must be a string, got {name!r} of {type(name).__name__}")
+            raise TypeError(
+                f"name must be a string, got {name!r} of {type(name).__name__}"
+            )
         return self._data[name]
 
     def __setitem__(self, name: str, path):
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
-            raise TypeError(f"name must be a string, got {name!r} of {type(name).__name__}")
+            raise TypeError(
+                f"name must be a string, got {name!r} of {type(name).__name__}"
+            )
         self._data[name] = path
 
     def __delitem__(self, name: str):

@@ -34,11 +34,11 @@ parser = argparse.ArgumentParser(
 )
 subparsers = parser.add_subparsers(dest="cmd", title="pado.transporter command")
 subcommand = functools.partial(subcommand, parent=subparsers)
-parser.add_argument('--version', action='store_true', help="print version")
-parser.add_argument('-v', '--verbose', action='store_true', help="print more info")
-parser.add_argument('--target', metavar=('remote',), default=None, help="target remote")
-parser.add_argument('--tunnel', metavar=('tunnel',), default=None, help="tunnel remote")
-parser.add_argument('--root', action='store_true', help="reference from '/' on remote")
+parser.add_argument("--version", action="store_true", help="print version")
+parser.add_argument("-v", "--verbose", action="store_true", help="print more info")
+parser.add_argument("--target", metavar=("remote",), default=None, help="target remote")
+parser.add_argument("--tunnel", metavar=("tunnel",), default=None, help="tunnel remote")
+parser.add_argument("--root", action="store_true", help="reference from '/' on remote")
 
 # logging objects
 logger = logging.getLogger(__name__)
@@ -73,8 +73,10 @@ def _make_ssh_command(remote, *cmd):
         raise ValueError("command required")
     cmd_list = [
         SSH_EXECUTABLE,
-        "-o", "PasswordAuthentication=no",
-        "-o", "BatchMode=yes",
+        "-o",
+        "PasswordAuthentication=no",
+        "-o",
+        "BatchMode=yes",
         remote,
         "--",
     ]
@@ -103,17 +105,21 @@ def cli_check_ssh_no_password(target, tunnel):
         print(f"connection to '{target}' established via '{tunnel}'")
 
     elif check_ssh_no_password(target=tunnel):
-        msg = dedent("""\
+        msg = dedent(
+            """\
             SSH ERROR: Could not access the requested host '{target}' without password via '{tunnel}'
             SUGGESTED FIX: add your public ssh key from '{tunnel}' to your remote machine '{target}'
-        """)
+        """
+        )
         print(msg.format(target=target, tunnel=tunnel))
 
     else:
-        msg = dedent("""\
+        msg = dedent(
+            """\
             SSH ERROR: Could not access the requested host '{target}' without password
             SUGGESTED FIX: add your public ssh key to your remote machine '{target}'
-        """)
+        """
+        )
         print(msg.format(target=tunnel))
 
 
@@ -130,7 +136,9 @@ class _CommandIter:
 
     def __iter__(self):
         logger.info(f"rsync: {subprocess.list2cmdline(self.command)}")
-        process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
+        process = subprocess.Popen(
+            self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ
+        )
         process_running = True
         try:
             while process_running:
@@ -156,14 +164,16 @@ def _make_rsync_cmd(*options, remote_shell=None):
     cmd = [RSYNC_EXECUTABLE]
     if remote_shell:
         assert '"' not in remote_shell, "double quote character in the remote_shell?"
-        cmd.extend(['-e', remote_shell])
+        cmd.extend(["-e", remote_shell])
     for option in options:
         assert option.startswith("-"), f"option '{option}' does not start with '-'"
         cmd.append(option)
     return cmd
 
 
-def _make_remote_shell_option(target, local_ssh_cmd=SSH_EXECUTABLE, tunnel_ssh_cmd="ssh"):
+def _make_remote_shell_option(
+    target, local_ssh_cmd=SSH_EXECUTABLE, tunnel_ssh_cmd="ssh"
+):
     return f"{local_ssh_cmd} -A {target} {tunnel_ssh_cmd}"
 
 
@@ -171,7 +181,16 @@ def _make_remote_path(remote, path):
     return f'{remote}:"{os.fspath(path)}"'
 
 
-def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=False, regex=None, image_id_json=None):
+def list_files_on_remote(
+    path,
+    *,
+    target,
+    tunnel=None,
+    recursive=True,
+    long=False,
+    regex=None,
+    image_id_json=None,
+):
     """list files on the remote"""
 
     options = ["-avz", "--list-only"]
@@ -200,7 +219,9 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
         line0 = next(it)
     except StopIteration:
         print(cmd_iter.stderr, file=sys.stderr)
-        raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
+        raise RuntimeError(
+            "rsync command failed with return_code:", cmd_iter.return_code
+        )
 
     status_msgs = {"receiving file list ... done", "receiving incremental file list"}
     assert line0 in status_msgs, f"received: '{line0!r}'"
@@ -231,7 +252,9 @@ def list_files_on_remote(path, *, target, tunnel=None, recursive=True, long=Fals
     _, _ = it  # ignore the two summary lines for now
 
     if cmd_iter.return_code != 0:
-        raise RuntimeError("rsync command failed with return_code:", cmd_iter.return_code)
+        raise RuntimeError(
+            "rsync command failed with return_code:", cmd_iter.return_code
+        )
 
 
 def _make_path(path, *, base):
@@ -243,7 +266,13 @@ def _make_path(path, *, base):
 def pull_files_from_remote(*, local_path, remote_base_path, files, target, tunnel=None):
     """pull files from the remote"""
 
-    options = ["-avz", "--ignore-existing", "--partial", "--progress", f"--files-from={files}"]
+    options = [
+        "-avz",
+        "--ignore-existing",
+        "--partial",
+        "--progress",
+        f"--files-from={files}",
+    ]
 
     remote_shell = _make_remote_shell_option(tunnel) if tunnel else None
     remote_location = _make_remote_path(target, remote_base_path)
@@ -258,6 +287,7 @@ def pull_files_from_remote(*, local_path, remote_base_path, files, target, tunne
 
 # -- commands ---------------------------------------------------------
 
+
 def main(argv=None):
     global parser
     args = parser.parse_args(argv)
@@ -266,6 +296,7 @@ def main(argv=None):
         if args.version:
             # noinspection PyProtectedMember
             from pado import __version__
+
             print(f"{__version__}")
         else:
             parser.print_help()
@@ -296,7 +327,9 @@ def main(argv=None):
             cfg = _get_default_config()
             args.base_path = cfg["base_path"]
         except (FileNotFoundError, KeyError):
-            print("ERROR: please configure base_path via `config` subcommand or allow root")
+            print(
+                "ERROR: please configure base_path via `config` subcommand or allow root"
+            )
             return -1
 
     return args.cmd_func(args)
@@ -329,13 +362,13 @@ def config(args, subparser):
 
     new_config = _config.copy()
     if args.target:
-        new_config['target'] = args.target
+        new_config["target"] = args.target
     if args.tunnel:
-        new_config['tunnel'] = args.tunnel
+        new_config["tunnel"] = args.tunnel
     if args.base_path:
         if not os.path.isabs(args.base_path):
             logger.warn("--base-path requires an absolute path. please verify")
-        new_config['base_path'] = os.path.abspath(args.base_path)
+        new_config["base_path"] = os.path.abspath(args.base_path)
 
     if new_config != _config:
         _set_default_config(new_config)
@@ -349,7 +382,7 @@ def config(args, subparser):
     argument("-l", "--long", action="store_true", help="list details"),
     argument("--match", help="match regex"),
     argument("--select-image-id-json", help="matches defined in json file"),
-    argument("path", help="base directory to start ls")
+    argument("path", help="base directory to start ls"),
 )
 def ls(args, subparser):
     """list files on remote"""

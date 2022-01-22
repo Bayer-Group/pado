@@ -27,6 +27,7 @@ else:
                 val = cache[self.attrname] = self.fget(obj)
             return val
 
+
 __all__ = [
     "cached_property",
 ]

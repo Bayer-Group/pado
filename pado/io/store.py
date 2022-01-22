@@ -31,13 +31,13 @@ class StoreType(str, enum.Enum):
 
 class Store(ABC):
     METADATA_PREFIX = "pado.store.parquet"
-    METADATA_KEY_PADO_VERSION = 'pado_version'
-    METADATA_KEY_STORE_VERSION = 'store_version'
-    METADATA_KEY_STORE_TYPE = 'store_type'
-    METADATA_KEY_IDENTIFIER = 'identifier'
-    METADATA_KEY_CREATED_AT = 'created_at'
-    METADATA_KEY_CREATED_BY = 'created_by'
-    METADATA_KEY_USER_METADATA = 'user_metadata'
+    METADATA_KEY_PADO_VERSION = "pado_version"
+    METADATA_KEY_STORE_VERSION = "store_version"
+    METADATA_KEY_STORE_TYPE = "store_type"
+    METADATA_KEY_IDENTIFIER = "identifier"
+    METADATA_KEY_CREATED_AT = "created_at"
+    METADATA_KEY_CREATED_BY = "created_by"
+    METADATA_KEY_USER_METADATA = "user_metadata"
 
     USE_NULLABLE_DTYPES = False  # todo: switch to True?
     COMPRESSION = "GZIP"
@@ -47,22 +47,35 @@ class Store(ABC):
         self.type = store_type
 
     def _md_set(self, dct: MutableMapping[bytes, bytes], key: str, value: Any) -> None:
-        k = f'{self.METADATA_PREFIX}.{key}'.encode()  # parquet requires bytes keys
+        k = f"{self.METADATA_PREFIX}.{key}".encode()  # parquet requires bytes keys
         dct[k] = json.dumps(value).encode()  # string encode value
 
-    def _md_get(self, dct: MutableMapping[bytes, bytes], key: str, default: Any) -> Any:  # require providing a default
-        k = f'{self.METADATA_PREFIX}.{key}'.encode()
+    def _md_get(
+        self, dct: MutableMapping[bytes, bytes], key: str, default: Any
+    ) -> Any:  # require providing a default
+        k = f"{self.METADATA_PREFIX}.{key}".encode()
         if k not in dct:
             return default
         return json.loads(dct[k])
 
-    def __metadata_set_hook__(self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]) -> None:
+    def __metadata_set_hook__(
+        self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
+    ) -> None:
         """allows setting more metadata in subclasses"""
 
-    def __metadata_get_hook__(self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]) -> Optional[dict]:
+    def __metadata_get_hook__(
+        self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
+    ) -> Optional[dict]:
         """allows getting more metadata in subclass or validate versioning"""
 
-    def to_urlpath(self, df: pd.DataFrame, urlpath: UrlpathLike, *, identifier: Optional[str] = None, **user_metadata):
+    def to_urlpath(
+        self,
+        df: pd.DataFrame,
+        urlpath: UrlpathLike,
+        *,
+        identifier: Optional[str] = None,
+        **user_metadata,
+    ):
         """store a pandas dataframe with an identifier and user metadata"""
         open_file = urlpathlike_to_fsspec(urlpath, mode="wb")
 
@@ -92,10 +105,14 @@ class Store(ABC):
         with open_file as f:
             # write to single output file
             pyarrow.parquet.write_table(
-                table, f, compression=self.COMPRESSION,
+                table,
+                f,
+                compression=self.COMPRESSION,
             )
 
-    def from_urlpath(self, urlpath: UrlpathLike) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
+    def from_urlpath(
+        self, urlpath: UrlpathLike
+    ) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
         """load dataframe and info from urlpath"""
         open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
 
@@ -115,14 +132,16 @@ class Store(ABC):
             }
             to_pandas_kwargs["types_mapper"] = mapping.get
 
-        table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
+        table = pyarrow.parquet.read_table(
+            open_file.path, use_pandas_metadata=True, filesystem=open_file.fs
+        )
 
         # retrieve the additional metadata stored in the parquet
         _md = table.schema.metadata
         identifier = self._md_get(_md, self.METADATA_KEY_IDENTIFIER, None)
         store_version = self._md_get(_md, self.METADATA_KEY_STORE_VERSION, 0)
         store_type = self._md_get(_md, self.METADATA_KEY_STORE_TYPE, None)
-        pado_version = self._md_get(_md, self.METADATA_KEY_PADO_VERSION, '0.0.0')
+        pado_version = self._md_get(_md, self.METADATA_KEY_PADO_VERSION, "0.0.0")
         created_at = self._md_get(_md, self.METADATA_KEY_CREATED_AT, None)
         created_by = self._md_get(_md, self.METADATA_KEY_CREATED_BY, None)
         user_metadata = self._md_get(_md, self.METADATA_KEY_USER_METADATA, {})
@@ -160,8 +179,10 @@ class Store(ABC):
 def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
     """return the store type from an urlpath"""
     open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
-    table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
-    key_store_type = f'{Store.METADATA_PREFIX}.{Store.METADATA_KEY_STORE_TYPE}'.encode()
+    table = pyarrow.parquet.read_table(
+        open_file.path, use_pandas_metadata=True, filesystem=open_file.fs
+    )
+    key_store_type = f"{Store.METADATA_PREFIX}.{Store.METADATA_KEY_STORE_TYPE}".encode()
     try:
         store_type = json.loads(table.schema.metadata[key_store_type])
     except (KeyError, json.JSONDecodeError):
@@ -172,14 +193,16 @@ def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
 def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
     """return the store metadata from an urlpath"""
     open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
-    table = pyarrow.parquet.read_table(open_file.path, use_pandas_metadata=True, filesystem=open_file.fs)
+    table = pyarrow.parquet.read_table(
+        open_file.path, use_pandas_metadata=True, filesystem=open_file.fs
+    )
     md = {}
     for k, v in dict(table.schema.metadata).items():
         k = k.decode()
         if not k.startswith(Store.METADATA_PREFIX):
             continue
         else:
-            k = k[len(Store.METADATA_PREFIX) + 1:]
+            k = k[len(Store.METADATA_PREFIX) + 1 :]
         try:
             v = json.loads(v)
         except json.JSONDecodeError as err:
@@ -190,6 +213,7 @@ def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
 
 def _get_user_host() -> Optional[str]:
     import pado.settings
+
     try:
         return pado.settings.settings.override_user_host
     except AttributeError:

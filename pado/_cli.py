@@ -7,10 +7,12 @@ from pathlib import Path
 
 # -- argparse improvements ---------------------------------------------
 
+
 def subcommand(*arguments, parent):
     """decorator helper for commandline"""
+
     def decorator(func):
-        fn = func.__name__.rstrip('_')
+        fn = func.__name__.rstrip("_")
         started_via_m = Path(sys.argv[0]).name == "__main__.py"
         subparser = parent.add_parser(
             name=fn,
@@ -21,6 +23,7 @@ def subcommand(*arguments, parent):
             subparser.add_argument(*args, **kwargs)
         subparser.set_defaults(cmd_func=partial(func, subparser=subparser))
         return func
+
     return decorator
 
 
@@ -31,6 +34,7 @@ def argument(*args, **kwargs):
 
 class DirectoryType:
     """Directory parsing for argparse"""
+
     def __call__(self, cmd_input: str):
         p = Path(cmd_input)
         if p.is_dir():

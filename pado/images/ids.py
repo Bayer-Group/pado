@@ -12,7 +12,6 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 
-from itsdangerous import base64_decode
 from itsdangerous import base64_encode
 from orjson import OPT_SORT_KEYS
 from orjson import JSONDecodeError
@@ -25,9 +24,12 @@ from pado.types import OpenFileLike
 # noinspection PyMethodMayBeStatic
 class FilenamePartsMapper:
     """a plain mapper for ImageId instances based on filename only"""
+
     # Used as a fallback when site is None and we only know the filename
-    id_field_names = ('filename',)
-    def fs_parts(self, parts: Tuple[str, ...]): return parts
+    id_field_names = ("filename",)
+
+    def fs_parts(self, parts: Tuple[str, ...]):
+        return parts
 
 
 def register_filename_mapper(site, mapper):
@@ -58,15 +60,23 @@ class ImageId(Tuple[Optional[str], ...]):
 
         if any(not isinstance(x, str) for x in parts):
             if not more_parts and isinstance(part, Iterable):
-                raise ValueError(f"all parts must be of type str. Did you mean `{cls.__name__}.make({part!r})`?")
+                raise ValueError(
+                    f"all parts must be of type str. Did you mean `{cls.__name__}.make({part!r})`?"
+                )
             else:
                 item_types = [type(x).__name__ for x in parts]
-                raise ValueError(f"all parts must be of type str. Received: {item_types!r}")
+                raise ValueError(
+                    f"all parts must be of type str. Received: {item_types!r}"
+                )
 
         if part.startswith(cls._prefix) and part.endswith(cls._suffix):
-            raise ValueError(f"use {cls.__name__}.from_str() to convert a serialized object")
+            raise ValueError(
+                f"use {cls.__name__}.from_str() to convert a serialized object"
+            )
         elif part[0] == "{" and part[-1] == "}" and '"image_id":' in part:
-            raise ValueError(f"use {cls.__name__}.from_json() to convert a serialized json object")
+            raise ValueError(
+                f"use {cls.__name__}.from_json() to convert a serialized json object"
+            )
 
         return super().__new__(cls, [site, *parts])  # type: ignore
 
@@ -96,7 +106,9 @@ class ImageId(Tuple[Optional[str], ...]):
 
     # note PyCharm doesn't recognize these: https://youtrack.jetbrains.com/issue/PY-47192
     site: Optional[str] = property(itemgetter(0), doc="return site of the image id")
-    parts: Tuple[str, ...] = property(itemgetter(slice(1, None)), doc="return the parts of the image id")
+    parts: Tuple[str, ...] = property(
+        itemgetter(slice(1, None)), doc="return the parts of the image id"
+    )
     last: str = property(itemgetter(-1), doc="return the last part of the image id")
 
     # --- string serialization methods --------------------------------
@@ -120,11 +132,17 @@ class ImageId(Tuple[Optional[str], ...]):
 
         """
         if not isinstance(image_id_str, str):
-            raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_str)}'")
+            raise TypeError(
+                f"image_id must be of type 'str', got: '{type(image_id_str)}'"
+            )
 
         # let's verify the input a tiny little bit
-        if not (image_id_str.startswith(cls._prefix) and image_id_str.endswith(cls._suffix)):
-            raise ValueError(f"provided image_id str is not an ImageId(), got: '{image_id_str}'")
+        if not (
+            image_id_str.startswith(cls._prefix) and image_id_str.endswith(cls._suffix)
+        ):
+            raise ValueError(
+                f"provided image_id str is not an ImageId(), got: '{image_id_str}'"
+            )
 
         try:
             # ... i know it's bad, but it's the easiest way right now to support
@@ -144,9 +162,9 @@ class ImageId(Tuple[Optional[str], ...]):
 
     def to_json(self):
         """Serialize the ImageId instance to a json object"""
-        d = {'image_id': tuple(self[1:])}
+        d = {"image_id": tuple(self[1:])}
         if self[0] is not None:
-            d['site'] = self[0]
+            d["site"] = self[0]
         return orjson_dumps(d, option=OPT_SORT_KEYS).decode()
 
     @classmethod
@@ -168,15 +186,19 @@ class ImageId(Tuple[Optional[str], ...]):
             data = orjson_loads(image_id_json)
         except (ValueError, TypeError, JSONDecodeError):
             if not isinstance(image_id_json, str):
-                raise TypeError(f"image_id must be of type 'str', got: '{type(image_id_json)}'")
+                raise TypeError(
+                    f"image_id must be of type 'str', got: '{type(image_id_json)}'"
+                )
             else:
-                raise ValueError(f"provided image_id is not parsable: '{image_id_json}'")
+                raise ValueError(
+                    f"provided image_id is not parsable: '{image_id_json}'"
+                )
 
-        image_id_list = data['image_id']
+        image_id_list = data["image_id"]
         if isinstance(image_id_list, str):
             raise ValueError("Incorrectly formatted json: `image_id` not a List[str]")
 
-        return cls(*image_id_list, site=data.get('site'))
+        return cls(*image_id_list, site=data.get("site"))
 
     # --- hashing and comparison methods ------------------------------
 
@@ -226,7 +248,9 @@ class ImageId(Tuple[Optional[str], ...]):
         try:
             id_field_names = self.site_mapper[self.site].id_field_names
         except KeyError:
-            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+            raise KeyError(
+                f"site '{self.site}' has no registered ImageProvider instance"
+            )
         return tuple(["site", *id_field_names])
 
     # noinspection PyPropertyAccess
@@ -235,7 +259,9 @@ class ImageId(Tuple[Optional[str], ...]):
         try:
             fs_parts = self.site_mapper[self.site].fs_parts(self.parts)
         except KeyError:
-            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+            raise KeyError(
+                f"site '{self.site}' has no registered ImageProvider instance"
+            )
         return op.join(*fs_parts)
 
     # noinspection PyPropertyAccess
@@ -244,7 +270,9 @@ class ImageId(Tuple[Optional[str], ...]):
         try:
             fs_parts = self.site_mapper[self.site].fs_parts(self.parts)
         except KeyError:
-            raise KeyError(f"site '{self.site}' has no registered ImageProvider instance")
+            raise KeyError(
+                f"site '{self.site}' has no registered ImageProvider instance"
+            )
         return PurePath(*fs_parts)
 
 
@@ -255,22 +283,31 @@ def _hash_str(string: str, hasher=hashlib.sha256) -> str:
 
 # === image id helpers ===
 
-GetImageIdFunc = Callable[[OpenFileLike, Tuple[str, ...], Optional[str]], Optional[ImageId]]
+GetImageIdFunc = Callable[
+    [OpenFileLike, Tuple[str, ...], Optional[str]], Optional[ImageId]
+]
 
 
-def image_id_from_parts(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
+def image_id_from_parts(
+    file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]
+) -> Optional[ImageId]:
     return ImageId(*parts, site=identifier)
 
 
-def image_id_from_parts_without_extension(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
-    parts = PurePath(*parts).with_suffix('').parts
+def image_id_from_parts_without_extension(
+    file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]
+) -> Optional[ImageId]:
+    parts = PurePath(*parts).with_suffix("").parts
     return ImageId(*parts, site=identifier)
 
 
-def image_id_from_json_file(file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]) -> Optional[ImageId]:
+def image_id_from_json_file(
+    file: OpenFileLike, parts: Tuple[str, ...], identifier: Optional[str]
+) -> Optional[ImageId]:
     import json
 
     from pado.io.files import uncompressed
+
     try:
         with uncompressed(file) as f:
             data = json.load(f)
@@ -285,7 +322,9 @@ def image_id_from_json_file(file: OpenFileLike, parts: Tuple[str, ...], identifi
         return ImageId(sd, fn)
 
 
-def match_partial_image_ids_reversed(ids: Iterable[ImageId], image_id: ImageId) -> Optional[ImageId]:
+def match_partial_image_ids_reversed(
+    ids: Iterable[ImageId], image_id: ImageId
+) -> Optional[ImageId]:
     """match image_ids from back to front
 
     returns None if no match

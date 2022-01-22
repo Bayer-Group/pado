@@ -26,7 +26,8 @@ def test_no_args():
 
 def test_version():
     from pado import __version__
-    assert run(cli, ['--version']) == (0, __version__)
+
+    assert run(cli, ["--version"]) == (0, __version__)
 
 
 def test_info_cmd(tmpdir):
