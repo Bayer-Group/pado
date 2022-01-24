@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import inspect
 import json
 import lzma
 import os
@@ -15,7 +16,9 @@ from contextlib import ExitStack
 from contextlib import contextmanager
 from pathlib import PurePath
 from typing import Any
+from typing import AnyStr
 from typing import BinaryIO
+from typing import Collection
 from typing import ContextManager
 from typing import Iterable
 from typing import Iterator
@@ -45,6 +48,7 @@ __all__ = [
     "urlpathlike_to_fs_and_path",
     "urlpathlike_to_path_parts",
     "urlpathlike_to_localpath",
+    "urlpathlike_to_uri",
     "fsopen",
     "uncompressed",
 ]
@@ -93,6 +97,104 @@ def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
     )
 
 
+def _get_constructor_default_options(cls: type) -> dict[str, Any]:
+    """return the default options of the class constructor"""
+    arg_spec = inspect.getfullargspec(cls.__init__)
+    default_options = {}
+    for name, value in zip(
+        reversed(arg_spec.args),
+        reversed(arg_spec.defaults or ()),
+    ):
+        default_options[name] = value
+    if arg_spec.kwonlydefaults:
+        default_options.update(arg_spec.kwonlydefaults)
+    return default_options
+
+
+def _remove_duplicate_items(d0: dict[str, Any], d1: dict[str, Any]) -> dict[str, Any]:
+    """performs d0 - d1 for all items only if d0[k] == d1[k]"""
+    return {k: v for k, v in d0.items() if not (k in d1 and d1[k] == v)}
+
+
+def _pathlike_to_string(pathlike: os.PathLike[AnyStr]) -> str:
+    """stringify a pathlike object"""
+    if isinstance(pathlike, os.PathLike):
+        pathlike = os.fspath(pathlike)
+
+    if "~" in pathlike:
+        pathlike = os.path.expanduser(pathlike)
+
+    if isinstance(pathlike, bytes):
+        return pathlike.decode()
+    elif isinstance(pathlike, str):
+        return pathlike
+    else:
+        raise TypeError(f"can't stringify: {pathlike!r} of type {type(pathlike)!r}")
+
+
+def urlpathlike_to_uri(
+    urlpath: UrlpathLike,
+    *,
+    repr_fallback: bool = False,
+    ignore_options: Collection = (),
+) -> str:
+    """convert an urlpath-like object to an fsspec URI
+
+    Parameters
+    ----------
+    urlpath :
+        an urlpath-like object
+    repr_fallback :
+        allow falling back to a repr like representation if encoding to a uri
+        is impossible due to `storage_args` or `storage_options`
+    ignore_options :
+        a set of options that should be omitted from the uri representation
+
+    Returns
+    -------
+    uri :
+        a URI string representation of the urlpath-like
+
+    """
+    if is_fsspec_open_file_like(urlpath):
+        fs = urlpath.fs
+        pth = urlpath.path
+
+        cls = type(fs)
+        custom_args = fs.storage_args
+        default_options = _get_constructor_default_options(cls)
+        custom_options = _remove_duplicate_items(fs.storage_options, default_options)
+
+        if ignore_options:
+            for key in ignore_options:
+                if key in custom_options:
+                    del custom_options[key]
+
+        if not custom_args and not custom_options:
+            proto = fs.protocol
+            if isinstance(proto, (list, tuple)):
+                proto = proto[0]
+            return f"{proto}://{pth}"
+
+        elif not custom_args:
+            # todo: ... can prettify some file systems
+            pass
+
+        if not repr_fallback:
+            raise ValueError("can't serialize urlpath to a pure uri")
+
+        # provide a repr like string
+        cls_name = f"{cls.__module__}.{cls.__name__}"
+        fs_params = [
+            *custom_args,
+            *(f"{k}={v!r}" for k, v in custom_options.items()),
+        ]
+        return f"{cls_name}({', '.join(fs_params)}).open({pth!r})"
+
+    else:
+        return _pathlike_to_string(urlpath)
+
+
 def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
     """convert an urlpath-like object and stringify it"""
     if is_fsspec_open_file_like(urlpath):
@@ -106,18 +208,8 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
             )
         return json.dumps({"fs": serialized_fs, "path": path})
 
-    if isinstance(urlpath, os.PathLike):
-        urlpath = os.fspath(urlpath)
-
-    if "~" in urlpath:
-        urlpath = os.path.expanduser(urlpath)
-
-    if isinstance(urlpath, bytes):
-        return urlpath.decode()
-    elif isinstance(urlpath, str):
-        return urlpath
     else:
-        raise TypeError(f"can't stringify: {urlpath!r} of type {type(urlpath)!r}")
+        return _pathlike_to_string(urlpath)
 
 
 def urlpathlike_to_fsspec(
