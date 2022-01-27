@@ -57,7 +57,13 @@ __all__ = [
 class PadoDataset:
     __version__ = 2
 
-    def __init__(self, urlpath: UrlpathLike | None, mode: IOMode = "r"):
+    def __init__(
+        self,
+        urlpath: UrlpathLike | None,
+        mode: IOMode = "r",
+        *,
+        storage_options: dict[str, Any] | None = None,
+    ) -> None:
         """open or create a new PadoDataset
 
         Parameters
@@ -71,8 +77,12 @@ class PadoDataset:
             'a' --> read/write, create if not there, append if there
             'w' --> read/write, create if not there, truncate if there
             'x' --> read/write, create if not there, error if there
+        storage_options:
+            a optional dictionary with options passed to fsspec for opening the urlpath
 
         """
+        self._storage_options: dict[str, Any] = storage_options or {}
+
         if urlpath is None:
             # enable in-memory pado datasets and change mode to enable write
             self._urlpath = f"memory://pado-{uuid.uuid4()}"
@@ -119,7 +129,7 @@ class PadoDataset:
 
     @property
     def _fs(self) -> fsspec.AbstractFileSystem:
-        fs, _ = urlpathlike_to_fs_and_path(self._urlpath)
+        fs, _ = urlpathlike_to_fs_and_path(self._urlpath, **self._storage_options)
         return fs
 
     @property
