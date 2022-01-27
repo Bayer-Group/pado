@@ -102,7 +102,16 @@ class PadoDataset:
             # if the dataset files should be there, check them
             fs = self._fs
             if mode in {"r", "r+"}:
-                if not list(fs.glob(self._get_fspath("*.image.parquet"))):
+                try:
+                    _image_parquet_files = fs.glob(self._get_fspath("*.image.parquet"))
+                except OSError as err:
+                    if err.args and self._storage_options:
+                        msg, *remaining_args = err.args
+                        err.args = tuple(
+                            (f"{msg!r}, possibly outdated credentials", *remaining_args)
+                        )
+                    raise
+                if not any(_image_parquet_files):
                     raise ValueError(
                         f"error: {self._urlpath} not a valid dataset since it has no image parquet file."
                     )
