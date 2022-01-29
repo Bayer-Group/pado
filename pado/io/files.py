@@ -63,9 +63,15 @@ class _OpenFileAndParts(NamedTuple):
 
 
 def find_files(
-    urlpath: UrlpathLike, *, glob: str = "**/*", **storage_options: Any
+    urlpath: UrlpathLike,
+    *,
+    glob: str = "**/*",
+    storage_options: dict[str, Any] | None = None,
 ) -> Iterable[_OpenFileAndParts]:
     """iterate over the files with matching at all paths"""
+    if storage_options is None:
+        storage_options = {}
+
     ofile = urlpathlike_to_fsspec(urlpath, **storage_options)
     fs = ofile.fs
     pth = ofile.path
@@ -213,11 +219,17 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
 
 
 def urlpathlike_to_fsspec(
-    obj: UrlpathLike, *, mode: FsspecIOMode = "rb", **storage_options: Any
+    obj: UrlpathLike,
+    *,
+    mode: FsspecIOMode = "rb",
+    storage_options: dict[str, Any] | None = None,
 ) -> OpenFileLike:
     """use an urlpath-like object and return an fsspec.core.OpenFile"""
     if is_fsspec_open_file_like(obj):
         return obj
+
+    if storage_options is None:
+        storage_options = {}
 
     try:
         json_obj = json.loads(obj)  # type: ignore
@@ -249,11 +261,16 @@ def urlpathlike_to_fsspec(
 
 
 def urlpathlike_to_fs_and_path(
-    obj: UrlpathLike, **storage_options
+    obj: UrlpathLike,
+    *,
+    storage_options: dict[str, Any] | None = None,
 ) -> Tuple[AbstractFileSystem, str]:
     """use an urlpath-like object and return an fsspec.AbstractFileSystem and a path"""
     if is_fsspec_open_file_like(obj):
         return obj.fs, obj.path
+
+    if storage_options is None:
+        storage_options = {}
 
     try:
         json_obj = json.loads(obj)  # type: ignore
@@ -310,12 +327,15 @@ def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
 
 
 def urlpathlike_to_localpath(
-    obj: UrlpathLike, *, mode: FsspecIOMode = "rb", **storage_options: Any
+    obj: UrlpathLike,
+    *,
+    mode: FsspecIOMode = "rb",
+    storage_options: dict[str, Any] | None = None,
 ) -> str:
     """take an urlpathlike object and return a local path"""
     if "r" not in mode:
         raise ValueError("urlpathlike_to_localpath only works for read modes")
-    of = urlpathlike_to_fsspec(obj, mode=mode, **storage_options)
+    of = urlpathlike_to_fsspec(obj, mode=mode, storage_options=storage_options)
     if not getattr(of.fs, "local_file", False):
         raise ValueError("FileSystem does not have attribute .local_file=True")
     with of as f:

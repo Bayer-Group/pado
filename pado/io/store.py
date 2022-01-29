@@ -75,10 +75,13 @@ class Store(ABC):
         urlpath: UrlpathLike,
         *,
         identifier: Optional[str] = None,
+        storage_options: dict[str, Any] | None = None,
         **user_metadata,
     ):
         """store a pandas dataframe with an identifier and user metadata"""
-        open_file = urlpathlike_to_fsspec(urlpath, mode="wb")
+        open_file = urlpathlike_to_fsspec(
+            urlpath, mode="wb", storage_options=storage_options
+        )
 
         BaseImpl.validate_dataframe(df)
 
@@ -112,10 +115,12 @@ class Store(ABC):
             )
 
     def from_urlpath(
-        self, urlpath: UrlpathLike
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
     ) -> Tuple[pd.DataFrame, str, Dict[str, Any]]:
         """load dataframe and info from urlpath"""
-        open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
+        open_file = urlpathlike_to_fsspec(
+            urlpath, mode="rb", storage_options=storage_options
+        )
 
         to_pandas_kwargs = {}
         if self.USE_NULLABLE_DTYPES:
@@ -177,9 +182,13 @@ class Store(ABC):
         return df, identifier, user_metadata
 
 
-def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
+def get_store_type(
+    urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+) -> Optional[StoreType]:
     """return the store type from an urlpath"""
-    open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
+    open_file = urlpathlike_to_fsspec(
+        urlpath, mode="rb", storage_options=storage_options
+    )
     table = pyarrow.parquet.read_table(
         open_file.path, use_pandas_metadata=True, filesystem=open_file.fs
     )
@@ -191,9 +200,13 @@ def get_store_type(urlpath: UrlpathLike) -> Optional[StoreType]:
     return StoreType(store_type)
 
 
-def get_store_metadata(urlpath: UrlpathLike) -> Dict[str, Any]:
+def get_store_metadata(
+    urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """return the store metadata from an urlpath"""
-    open_file = urlpathlike_to_fsspec(urlpath, mode="rb")
+    open_file = urlpathlike_to_fsspec(
+        urlpath, mode="rb", storage_options=storage_options
+    )
     table = pyarrow.parquet.read_table(
         open_file.path, use_pandas_metadata=True, filesystem=open_file.fs
     )
