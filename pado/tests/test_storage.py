@@ -8,7 +8,12 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from pado._version import version as _pado_version
+from pado.io.store import DataVersionTuple
+from pado.io.store import StoreInfo
+from pado.io.store import StoreMigrationInfo
 from pado.io.store import StoreType
+from pado.io.store import StoreVersionTuple
+from pado.io.store import find_migration_path
 from pado.metadata.providers import MetadataStore
 
 
@@ -51,3 +56,35 @@ def test_meta_store_roundtrip(parquet_path):
     )
     assert identifier == identifier2
     assert meta == meta2
+
+
+def test_migration_can_migrate():
+    so = StoreInfo(
+        StoreType.IMAGE, StoreVersionTuple(0, 0), DataVersionTuple("test", 0)
+    )
+    m = StoreMigrationInfo.create(StoreType.IMAGE, None, (0, 0, None), (0, 1, None))
+    assert m.can_migrate(so)
+
+
+def test_migration_resolution():
+
+    store_info = StoreInfo(
+        StoreType.IMAGE, StoreVersionTuple(0, 0), DataVersionTuple("test", 0)
+    )
+
+    migrations = list(
+        map(
+            lambda args: StoreMigrationInfo.create(*args),
+            [
+                (StoreType.IMAGE, None, (0, 0, None), (0, 1, None)),
+                (StoreType.IMAGE, "test", (0, 1, 0), (0, 1, 1)),
+                (StoreType.IMAGE, "test", (0, 1, 1), (0, 1, 2)),
+                (StoreType.ANNOTATION, "test", (0, 1, 0), (0, 1, 1)),
+                (StoreType.IMAGE, None, (0, 1, None), (0, 2, None)),
+                (StoreType.IMAGE, "test", (0, 2, 2), (0, 2, 3)),
+            ],
+        )
+    )
+
+    ms = find_migration_path(store_info, migrations)
+    assert len(ms) == 5
