@@ -31,8 +31,9 @@ class MetadataStore(Store):
     METADATA_KEY_DATASET_VERSION = "dataset_version"
     DATASET_VERSION = 1
 
-    def __init__(self):
-        super().__init__(version=1, store_type=StoreType.METADATA)
+    def __init__(self, version: int = 1, store_type: StoreType = StoreType.METADATA):
+        assert store_type == StoreType.METADATA
+        super().__init__(version=version, store_type=store_type)
 
     def __metadata_set_hook__(
         self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]

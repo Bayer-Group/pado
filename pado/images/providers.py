@@ -47,8 +47,9 @@ class ImageProviderStore(Store):
     METADATA_KEY_PROVIDER_VERSION = "image_provider_version"
     PROVIDER_VERSION = 1
 
-    def __init__(self):
-        super().__init__(version=1, store_type=StoreType.IMAGE)
+    def __init__(self, version: int = 1, store_type: StoreType = StoreType.IMAGE):
+        assert store_type == StoreType.IMAGE
+        super().__init__(version=version, store_type=store_type)
 
     def __metadata_set_hook__(
         self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]

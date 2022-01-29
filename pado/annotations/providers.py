@@ -36,8 +36,9 @@ class AnnotationProviderStore(Store):
     METADATA_KEY_ANNOTATION_VERSION = "annotation_version"
     ANNOTATION_VERSION = 1
 
-    def __init__(self):
-        super().__init__(version=1, store_type=StoreType.ANNOTATION)
+    def __init__(self, version: int = 1, store_type: StoreType = StoreType.ANNOTATION):
+        assert store_type == StoreType.ANNOTATION
+        super().__init__(version=version, store_type=store_type)
 
     def __metadata_set_hook__(
         self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
