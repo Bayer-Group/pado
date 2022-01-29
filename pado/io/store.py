@@ -38,6 +38,7 @@ class Store(ABC):
     METADATA_KEY_CREATED_AT = "created_at"
     METADATA_KEY_CREATED_BY = "created_by"
     METADATA_KEY_USER_METADATA = "user_metadata"
+    METADATA_KEY_PROVIDER_VERSION: str | None = None
 
     USE_NULLABLE_DTYPES = False  # todo: switch to True?
     COMPRESSION = "GZIP"

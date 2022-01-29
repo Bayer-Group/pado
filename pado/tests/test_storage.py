@@ -39,7 +39,7 @@ def test_meta_store_roundtrip(parquet_path):
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_VERSION) == 1
     assert meta2.pop(MetadataStore.METADATA_KEY_STORE_TYPE) == StoreType.METADATA
     assert (
-        meta2.pop(MetadataStore.METADATA_KEY_DATASET_VERSION)
+        meta2.pop(MetadataStore.METADATA_KEY_PROVIDER_VERSION)
         == MetadataStore.DATASET_VERSION
     )
     assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_AT) is not None

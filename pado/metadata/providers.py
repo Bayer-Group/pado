@@ -28,7 +28,7 @@ from pado.types import UrlpathLike
 class MetadataStore(Store):
     """stores the metadata in a single file with per store metadata"""
 
-    METADATA_KEY_DATASET_VERSION = "dataset_version"
+    METADATA_KEY_PROVIDER_VERSION = "dataset_version"
     DATASET_VERSION = 1
 
     def __init__(self, version: int = 1, store_type: StoreType = StoreType.METADATA):
@@ -38,19 +38,19 @@ class MetadataStore(Store):
     def __metadata_set_hook__(
         self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
     ) -> None:
-        setter(dct, self.METADATA_KEY_DATASET_VERSION, self.DATASET_VERSION)
+        setter(dct, self.METADATA_KEY_PROVIDER_VERSION, self.DATASET_VERSION)
 
     def __metadata_get_hook__(
         self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
     ) -> Optional[dict]:
-        dataset_version = getter(dct, self.METADATA_KEY_DATASET_VERSION, None)
+        dataset_version = getter(dct, self.METADATA_KEY_PROVIDER_VERSION, None)
         if dataset_version is None or dataset_version < self.DATASET_VERSION:
             raise RuntimeError("Please migrate MetadataStore to newer version.")
         elif dataset_version > self.DATASET_VERSION:
             raise RuntimeError(
                 "MetadataStore is newer. Please upgrade pado to newer version."
             )
-        return {self.METADATA_KEY_DATASET_VERSION: dataset_version}
+        return {self.METADATA_KEY_PROVIDER_VERSION: dataset_version}
 
 
 # === provider ================================================================
@@ -163,7 +163,7 @@ class MetadataProvider(BaseMetadataProvider):
             store.METADATA_KEY_STORE_TYPE,
             store.METADATA_KEY_STORE_VERSION,
             store.METADATA_KEY_PADO_VERSION,
-            store.METADATA_KEY_DATASET_VERSION,
+            store.METADATA_KEY_PROVIDER_VERSION,
             store.METADATA_KEY_CREATED_AT,
             store.METADATA_KEY_CREATED_BY,
         } == set(user_metadata), f"currently unused {user_metadata!r}"

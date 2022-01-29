@@ -33,7 +33,7 @@ from pado.types import UrlpathLike
 class AnnotationProviderStore(Store):
     """stores the annotation provider in a single file with metadata"""
 
-    METADATA_KEY_ANNOTATION_VERSION = "annotation_version"
+    METADATA_KEY_PROVIDER_VERSION = "annotation_version"
     ANNOTATION_VERSION = 1
 
     def __init__(self, version: int = 1, store_type: StoreType = StoreType.ANNOTATION):
@@ -43,12 +43,12 @@ class AnnotationProviderStore(Store):
     def __metadata_set_hook__(
         self, dct: Dict[bytes, bytes], setter: Callable[[dict, str, Any], None]
     ) -> None:
-        setter(dct, self.METADATA_KEY_ANNOTATION_VERSION, self.ANNOTATION_VERSION)
+        setter(dct, self.METADATA_KEY_PROVIDER_VERSION, self.ANNOTATION_VERSION)
 
     def __metadata_get_hook__(
         self, dct: Dict[bytes, bytes], getter: Callable[[dict, str, Any], Any]
     ) -> Optional[dict]:
-        image_provider_version = getter(dct, self.METADATA_KEY_ANNOTATION_VERSION, None)
+        image_provider_version = getter(dct, self.METADATA_KEY_PROVIDER_VERSION, None)
         if (
             image_provider_version is None
             or image_provider_version < self.ANNOTATION_VERSION
@@ -58,7 +58,7 @@ class AnnotationProviderStore(Store):
             raise RuntimeError(
                 "AnnotationProvider is newer. Please upgrade pado to newer version."
             )
-        return {self.METADATA_KEY_ANNOTATION_VERSION: image_provider_version}
+        return {self.METADATA_KEY_PROVIDER_VERSION: image_provider_version}
 
 
 # === providers ===============================================================
@@ -195,7 +195,7 @@ class AnnotationProvider(BaseAnnotationProvider):
             store.METADATA_KEY_PADO_VERSION,
             store.METADATA_KEY_CREATED_AT,
             store.METADATA_KEY_CREATED_BY,
-            store.METADATA_KEY_ANNOTATION_VERSION,
+            store.METADATA_KEY_PROVIDER_VERSION,
         } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls(identifier=identifier)
         inst.df = df
