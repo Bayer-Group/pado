@@ -138,7 +138,9 @@ class PadoDataset:
 
     @property
     def _fs(self) -> fsspec.AbstractFileSystem:
-        fs, _ = urlpathlike_to_fs_and_path(self._urlpath, **self._storage_options)
+        fs, _ = urlpathlike_to_fs_and_path(
+            self._urlpath, storage_options=self._storage_options
+        )
         return fs
 
     @property
