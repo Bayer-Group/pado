@@ -7,6 +7,7 @@ import platform
 from abc import ABC
 from datetime import datetime
 from getpass import getuser
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -17,6 +18,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 from typing import Type
+from typing import TypeVar
 
 import pandas as pd
 import pyarrow
@@ -24,9 +26,13 @@ import pyarrow.parquet
 from pandas.io.parquet import BaseImpl
 
 from pado._version import version as _pado_version
+from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_fsspec
 from pado.types import UrlpathLike
+
+if TYPE_CHECKING:
+    from pado.dataset import PadoDataset
 
 
 class StoreType(str, enum.Enum):
@@ -441,24 +447,30 @@ def find_migration_path(
     return pth
 
 
-def migrate_store(
+S = TypeVar("S", bound=Store)
+
+
+def _get_store_subclass(store_type: StoreType) -> Type[S]:
+    """return the corresponding Store subclass"""
+    # get the corresponding store class
+    _module, _clsname = {
+        StoreType.IMAGE: ("pado.images.providers", "ImageProviderStore"),
+        StoreType.METADATA: ("pado.metadata.providers", "MetadataProviderStore"),
+        StoreType.ANNOTATION: ("pado.annotations.providers", "AnnotationProviderStore"),
+    }[store_type]
+    store_cls: Type[Store] = getattr(importlib.import_module(_module), _clsname)
+    return store_cls
+
+
+def get_store_info(
     urlpath: UrlpathLike,
     *,
     storage_options: dict[str, Any] | None = None,
-    dry_run: bool = True,
-) -> tuple[bool, StoreInfo, UrlpathLike]:
-    """try migrating a store to a newer version"""
-
+) -> StoreInfo:
+    """return the store information for a pado store"""
     md = get_store_metadata(urlpath, storage_options=storage_options)
     store_type = StoreType(md["store_type"])
-
-    # get the corresponding store class
-    _module, _clsname = {
-        StoreType.IMAGE: ("pado.image.providers", "ImageProviderStore"),
-        StoreType.METADATA: ("pado.metadata.providers", "MetadataProviderStore"),
-        StoreType.ANNOTATION: ("pado.annotation.providers", "AnnotationProviderStore"),
-    }[store_type]
-    store_cls: Type[Store] = getattr(importlib.import_module(_module), _clsname)
+    store_cls = _get_store_subclass(store_type)
 
     # get all versions
     store_version = int(md.get(store_cls.METADATA_KEY_STORE_VERSION, 0))
@@ -466,14 +478,26 @@ def migrate_store(
     data_version = int(md.get(store_cls.METADATA_KEY_DATA_VERSION, 0))
     data_identifier = md[store_cls.METADATA_KEY_IDENTIFIER]
 
-    _up = urlpath
-    _so = storage_options
-
-    store_info = StoreInfo(
+    return StoreInfo(
         store_type=store_type,
         store_version=StoreVersionTuple(store_version, provider_version),
         data_version=DataVersionTuple(data_identifier, data_version),
     )
+
+
+def migrate_store(
+    urlpath: UrlpathLike,
+    *,
+    storage_options: dict[str, Any] | None = None,
+    dry_run: bool = True,
+) -> tuple[bool, StoreInfo, UrlpathLike]:
+    """try migrating a store to a newer version"""
+    store_info = get_store_info(urlpath, storage_options=storage_options)
+    store_type = store_info.store_type
+    store_cls = _get_store_subclass(store_type)
+
+    _up = urlpath
+    _so = storage_options
 
     migrations = find_migration_path(store_info, _STORE_MIGRATION_REGISTRY)
     if not migrations:
@@ -483,16 +507,24 @@ def migrate_store(
         m_func = _STORE_MIGRATION_REGISTRY[info]
 
         # we need to load the data with the correct store_version
-        _md = get_store_metadata(urlpath, storage_options=storage_options)
-        current_store_version = int(_md.get(store_cls.METADATA_KEY_STORE_VERSION, 0))
-        load_store = store_cls(version=current_store_version, store_type=store_type)
+        current_store_info = get_store_info(_up, storage_options=storage_options)
+        target_store_info = info.can_migrate(current_store_info)
+        assert (
+            target_store_info is not None
+        ), "can_migrate should not have returned None"
+        load_store = store_cls(
+            version=current_store_info.store_version.store, store_type=store_type
+        )
 
         # load and migrate
         df, identifier, user_md = load_store.from_urlpath(_up, storage_options=_so)
         df, identifier, user_md = m_func(df, identifier, user_md)
 
         # we need to store the data with the correct store_version
-        if info.target_store_version is None:
+        if (
+            current_store_info.store_version.store
+            == target_store_info.store_version.store
+        ):
             save_store = load_store
         else:
             save_store = store_cls(
@@ -500,7 +532,7 @@ def migrate_store(
             )
 
         # store temporary
-        _up = f"memory://migrating-{store_type.value}-{store_version}-{provider_version}-{data_version}"
+        _up = f"memory://migrated-{target_store_info.to_string()}"
         _so = None
         save_store.to_urlpath(
             df,
@@ -528,3 +560,14 @@ def migrate_store(
                 for chunk in iter(lambda: m_f.read(2 ** 20), ""):
                     f.write(chunk)
         return urlpath
+
+
+def get_dataset_store_infos(ds: PadoDataset) -> dict[str, StoreInfo]:
+    """gather store information for all stores in dataset"""
+    # noinspection PyProtectedMember
+    fs, get_fspath = ds._fs, ds._get_fspath
+
+    return {
+        path: get_store_info(fsopen(fs, path))
+        for path in fs.glob(get_fspath("*.parquet"))
+    }
