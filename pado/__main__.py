@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os.path
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,7 @@ from typer import Option
 
 from pado._version import version as pado_version
 from pado.dataset import PadoDataset
+from pado.io.store import get_dataset_store_infos
 
 # --- pado command line interface -------------------------------------
 from pado.settings import dataset_registry
@@ -49,6 +51,54 @@ def info(
 
     out = PadoDataset(path, mode="r").describe()
     typer.echo(out)
+
+
+@cli.command("info-stores")
+def info_stores(
+    name: Optional[str] = Option(...),
+    path: Optional[Path] = Argument(
+        None, exists=True, file_okay=False, dir_okay=True, readable=True
+    ),
+):
+    """return versions of all dataset providers"""
+    if name is not None and path is not None:
+        typer.echo("Can't specify both name and path", err=True)
+        raise typer.Exit(1)
+    elif name is None and path is None:
+        typer.echo("Specify --name or path", err=True)
+        raise typer.Exit(1)
+
+    if name is not None:
+        with dataset_registry() as registry:
+            try:
+                path = registry[name]
+            except KeyError:
+                typer.secho(f"Name {name!r} not registered", err=True)
+                raise typer.Exit(1)
+
+    ds = PadoDataset(path, mode="r")
+    store_infos = get_dataset_store_infos(ds)
+
+    table = Table(title="Dataset Store Version")
+    table.add_column("Filename", justify="right")
+    table.add_column("Type", justify="left")
+    table.add_column("Store", justify="left", no_wrap=True)
+    table.add_column("Provider", justify="left", no_wrap=True)
+    table.add_column("Identifier", justify="left")
+    table.add_column("Data", justify="left")
+
+    for pth, si in store_infos.items():
+        sv, pv = (0, 0) if si.store_version is None else si.store_version
+        di, dv = ("-", 0) if si.data_version is None else si.data_version
+        table.add_row(
+            os.path.basename(pth),
+            si.store_type.value,
+            str(sv),
+            str(pv),
+            di,
+            str(dv),
+        )
+    Console().print(table)
 
 
 # --- pado dataset info -----------------------------------------------
