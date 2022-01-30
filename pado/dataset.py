@@ -438,6 +438,10 @@ class PadoDataset:
     # === describe (summarise) dataset ===
 
     @overload
+    def describe(self) -> str:
+        ...
+
+    @overload
     def describe(self, output_format: Literal[DescribeFormat.PLAIN_TEXT]) -> str:
         ...
 
