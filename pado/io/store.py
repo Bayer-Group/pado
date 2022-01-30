@@ -273,6 +273,12 @@ class StoreInfo(NamedTuple):
         """provides all version information explicitly"""
         return self.store_version is not None and self.data_version is not None
 
+    def to_string(self):
+        """provide a short version-like string"""
+        s, p = (0, 0) if self.store_version is None else self.store_version
+        id_, d = ("no-data", "?") if self.data_version is None else self.data_version
+        return f"{self.store_type.value}-s{s}p{p}-{id_}@{d}"
+
 
 class StoreMigrationInfo(NamedTuple):
     """upgrade migration information for stores"""
