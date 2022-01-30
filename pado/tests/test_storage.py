@@ -14,7 +14,7 @@ from pado.io.store import StoreMigrationInfo
 from pado.io.store import StoreType
 from pado.io.store import StoreVersionTuple
 from pado.io.store import find_migration_path
-from pado.metadata.providers import MetadataStore
+from pado.metadata.providers import MetadataProviderStore
 
 
 @pytest.fixture(scope="function")
@@ -35,20 +35,22 @@ def test_meta_store_roundtrip(parquet_path):
     identifier = "test-identifier"
     meta = {"abc": 1}
 
-    store = MetadataStore()
+    store = MetadataProviderStore()
     store.to_urlpath(df, parquet_path, identifier=identifier, **meta)
     df2, identifier2, meta2 = store.from_urlpath(parquet_path)
 
     # ensure version info is there
-    assert meta2.pop(MetadataStore.METADATA_KEY_PADO_VERSION) == _pado_version
-    assert meta2.pop(MetadataStore.METADATA_KEY_STORE_VERSION) == 1
-    assert meta2.pop(MetadataStore.METADATA_KEY_STORE_TYPE) == StoreType.METADATA
+    assert meta2.pop(MetadataProviderStore.METADATA_KEY_PADO_VERSION) == _pado_version
+    assert meta2.pop(MetadataProviderStore.METADATA_KEY_STORE_VERSION) == 1
     assert (
-        meta2.pop(MetadataStore.METADATA_KEY_PROVIDER_VERSION)
-        == MetadataStore.DATASET_VERSION
+        meta2.pop(MetadataProviderStore.METADATA_KEY_STORE_TYPE) == StoreType.METADATA
     )
-    assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_AT) is not None
-    assert meta2.pop(MetadataStore.METADATA_KEY_CREATED_BY) is not None
+    assert (
+        meta2.pop(MetadataProviderStore.METADATA_KEY_PROVIDER_VERSION)
+        == MetadataProviderStore.DATASET_VERSION
+    )
+    assert meta2.pop(MetadataProviderStore.METADATA_KEY_CREATED_AT) is not None
+    assert meta2.pop(MetadataProviderStore.METADATA_KEY_CREATED_BY) is not None
 
     # ensure round trip
     assert_frame_equal(

@@ -25,7 +25,7 @@ from pado.types import UrlpathLike
 # === storage =================================================================
 
 
-class MetadataStore(Store):
+class MetadataProviderStore(Store):
     """stores the metadata in a single file with per store metadata"""
 
     METADATA_KEY_PROVIDER_VERSION = "dataset_version"
@@ -45,10 +45,10 @@ class MetadataStore(Store):
     ) -> Optional[dict]:
         dataset_version = getter(dct, self.METADATA_KEY_PROVIDER_VERSION, None)
         if dataset_version is None or dataset_version < self.DATASET_VERSION:
-            raise RuntimeError("Please migrate MetadataStore to newer version.")
+            raise RuntimeError("Please migrate MetadataProviderStore to newer version.")
         elif dataset_version > self.DATASET_VERSION:
             raise RuntimeError(
-                "MetadataStore is newer. Please upgrade pado to newer version."
+                "MetadataProviderStore is newer. Please upgrade pado to newer version."
             )
         return {self.METADATA_KEY_PROVIDER_VERSION: dataset_version}
 
@@ -152,12 +152,12 @@ class MetadataProvider(BaseMetadataProvider):
         return map(ImageId.from_str, self.df.index.unique())
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
-        store = MetadataStore()
+        store = MetadataProviderStore()
         store.to_urlpath(self.df, urlpath, identifier=self.identifier)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> MetadataProvider:
-        store = MetadataStore()
+        store = MetadataProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
         assert {
             store.METADATA_KEY_STORE_TYPE,
