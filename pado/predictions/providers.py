@@ -72,7 +72,9 @@ class ImagePrediction:
             "prediction_type": self.prediction_type.value,
             "bounds": json.dumps(self.bounds.as_record()),
             "extra_metadata": json.dumps(self.extra_metadata),
-            **self.image.to_record(),
+            **self.image.to_record(
+                urlpath_ignore_options=("profile",)  # fixme: expose
+            ),
         }
 
 
