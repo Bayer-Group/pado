@@ -12,6 +12,7 @@ from pydantic import StrictInt
 from pydantic import conint
 from pydantic.dataclasses import dataclass
 from shapely.affinity import scale as shapely_scale
+from shapely.geometry.base import BaseGeometry
 
 __all__ = [
     "Point",
@@ -29,7 +30,6 @@ __all__ = [
 #  where downsample levels in svs files are slightly off due to integer sizes
 #  of the pyramidal layers.
 #  Anyways, this is just a reminder in case we run into problems in the future.
-from shapely.geometry.base import BaseGeometry
 
 
 @dataclass(frozen=True)
@@ -223,6 +223,30 @@ class Bounds:
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
         return self.x_left, self.y_left, self.x_right, self.y_right
+
+    def as_record(self) -> dict[str, float | None]:
+        assert self.mpp is not None
+        return {
+            "x0": self.x_left,
+            "y0": self.y_left,
+            "x1": self.x_right,
+            "y1": self.y_right,
+            "mpp_x": self.mpp.x,
+            "mpp_y": self.mpp.y,
+        }
+
+    @classmethod
+    def from_record(cls, record) -> Bounds:
+        return Bounds(
+            record["x0"],
+            record["y0"],
+            record["x1"],
+            record["y1"],
+            mpp=MPP(
+                record["mpp_x"],
+                record["mpp_y"],
+            ),
+        )
 
 
 @dataclass(config=type("", (), {"arbitrary_types_allowed": True}))
