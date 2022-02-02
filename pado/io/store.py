@@ -39,6 +39,7 @@ class StoreType(str, enum.Enum):
     ANNOTATION = "annotation"
     IMAGE = "image"
     METADATA = "metadata"
+    IMAGE_PREDICTIONS = "image_predictions"
 
 
 class Store(ABC):
@@ -457,6 +458,10 @@ def _get_store_subclass(store_type: StoreType) -> Type[S]:
         StoreType.IMAGE: ("pado.images.providers", "ImageProviderStore"),
         StoreType.METADATA: ("pado.metadata.providers", "MetadataProviderStore"),
         StoreType.ANNOTATION: ("pado.annotations.providers", "AnnotationProviderStore"),
+        StoreType.IMAGE_PREDICTIONS: (
+            "pado.predictions.providers",
+            "ImagePredictionProviderStore",
+        ),
     }[store_type]
     store_cls: Type[Store] = getattr(importlib.import_module(_module), _clsname)
     return store_cls
