@@ -10,14 +10,22 @@ import json
 import os.path
 import shutil
 import warnings
+from collections.abc import MutableMapping
 from contextlib import ExitStack
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import Any
 from typing import Optional
 
 from dynaconf import Dynaconf
 from dynaconf import Validator
 from platformdirs import user_cache_path
 from platformdirs import user_config_path
+
+from pado.types import IOMode
+
+if TYPE_CHECKING:
+    from pado import PadoDataset
 
 __all__ = [
     "pado_cache_path",
@@ -57,7 +65,7 @@ def pado_cache_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path
     return pth
 
 
-class _DatasetRegistry:
+class _DatasetRegistry(MutableMapping):
     """a simple json file based key value store"""
 
     FILENAME = ".pado_dataset_registry.json"
@@ -101,6 +109,11 @@ class _DatasetRegistry:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         return iter(self._data)
 
+    def __len__(self):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        return len(self._data)
+
     def __getitem__(self, name: str):
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
@@ -132,3 +145,16 @@ class _DatasetRegistry:
 def dataset_registry():
     """return the dataset registry instance"""
     return _DatasetRegistry()
+
+
+def open_registered_dataset(
+    name: str,
+    *,
+    mode: IOMode = "r",
+    storage_options: dict[str, Any] | None = None,
+) -> PadoDataset:
+    """helper function to open a registered PadoDataset"""
+    from pado.dataset import PadoDataset
+
+    with dataset_registry() as dct:
+        return PadoDataset(dct[name], mode=mode, storage_options=storage_options)
