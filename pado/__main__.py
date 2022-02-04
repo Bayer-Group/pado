@@ -49,7 +49,7 @@ def info(
         with dataset_registry() as registry:
             path = registry[name]
 
-    out = PadoDataset(path, mode="r").describe()
+    out = PadoDataset(path, mode="r").describe(output_format="plain_text")
     typer.echo(out)
 
 

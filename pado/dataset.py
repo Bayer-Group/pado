@@ -439,7 +439,7 @@ class PadoDataset:
     # === describe (summarise) dataset ===
 
     @overload
-    def describe(self) -> str:
+    def describe(self) -> dict:
         ...
 
     @overload
