@@ -16,6 +16,7 @@ from typing import Optional
 from typing import Protocol
 from typing import Type
 from typing import TypeVar
+from typing import cast
 from typing import overload
 from typing import runtime_checkable
 
@@ -83,7 +84,8 @@ class PadoMutableSequence(MutableSequence[PI]):
             self._update_df_image_id(image_id)
 
     def __repr__(self):
-        return f"{type(self).__name__}({_r.repr_list(self, 0)}, image_id={self._image_id!r})"
+        v = _r.repr_list(cast(list, self), 0)
+        return f"{type(self).__name__}({v}, image_id={self._image_id!r})"
 
     def __eq__(self, other):
         if not isinstance(other, self.__item_class__):
