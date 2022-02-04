@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import textwrap
+import warnings
 from collections import defaultdict
 from typing import Callable
 from typing import Optional
@@ -49,6 +50,7 @@ def qupath_geojson_annotations_loader(
 
     records = []
     errors = defaultdict(list)
+    missing_classifications = 0
     for feature in data:
         try:
             _ = feature.pop("id")
@@ -61,6 +63,8 @@ def qupath_geojson_annotations_loader(
             ):
                 # FIXME: this should be handled somewhere else...
                 pass  # skip
+            elif 'classification' not in feature['properties']:
+                missing_classifications += 1
             else:
                 errors[(type(e).__name__, str(e))].append(feature)
             continue
@@ -79,6 +83,11 @@ def qupath_geojson_annotations_loader(
         )
         records.append(Annotation(a_pd).to_record())
 
+    if missing_classifications > 0:
+        warnings.warn(
+            f'File at {urlpath} contained {missing_classifications} missing classifications.',
+            RuntimeWarning
+        )
     if errors:
         msg = ["PYDANTIC PARSING ERROR"]
         for (err_type, err_msg), features in errors.items():
