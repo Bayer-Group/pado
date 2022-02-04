@@ -4,11 +4,9 @@ import collections.abc
 import os
 import pathlib
 import sys
-import textwrap
 import uuid
 from collections.abc import Iterable
 from collections.abc import Sized
-from enum import Enum
 from typing import Any
 from typing import Callable
 from typing import List
@@ -28,6 +26,9 @@ import fsspec
 import pandas as pd
 import shapely.wkt
 
+from pado._repr import DescribeFormat
+from pado._repr import describe_format_plain_text
+from pado._repr import number
 from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
 from pado.annotations import GroupedAnnotationProvider
@@ -446,7 +447,7 @@ class PadoDataset:
     # === describe (summarise) dataset ===
 
     @overload
-    def describe(self) -> str:
+    def describe(self) -> dict:
         ...
 
     @overload
@@ -469,68 +470,41 @@ class PadoDataset:
         adf = self.annotations.df
         adf["area"] = adf["geometry"].apply(lambda x: shapely.wkt.loads(x).area)
         agg_annotations = adf.groupby("classification")["area"].agg(["sum", "count"])
+
         data = {
             "path": self.urlpath,
             "num_images": len(self.images),
-            "mean_mpp_x": idf["mpp_x"].mean(),
-            "mean_mpp_y": idf["mpp_y"].mean(),
-            "mean_image_width": idf["width"].mean(),
-            "mean_image_height": idf["height"].mean(),
-            "mean_image_size": idf["size_bytes"].mean(),
-            "mean_annotations_per_image": adf.groupby("image_id")["geometry"]
-            .count()
-            .mean(),
+            "num_mpps": [
+                {"mpp": k, "num": v}
+                for k, v in idf[["mpp_x", "mpp_y"]].value_counts().items()
+            ],
+            "avg_image_width": number(idf["width"], agg="avg", unit="px"),
+            "avg_image_height": number(idf["height"], agg="avg", unit="px"),
+            "avg_image_size": number(idf["size_bytes"], agg="avg", unit="b"),
+            "avg_annotations_per_image": number(
+                adf.groupby("image_id")["geometry"].count(), agg="avg"
+            ),
             "metadata_columns": self.metadata.df.columns.to_list(),
-            "std_mpp_x": idf["mpp_x"].std(),
-            "std_mpp_y": idf["mpp_y"].std(),
-            "std_image_width": idf["width"].std(),
-            "std_image_height": idf["height"].std(),
-            "total_size_images": idf["size_bytes"].sum(),
+            "total_size_images": number(idf["size_bytes"], agg="sum", unit="b"),
             "total_num_annotations": sum(
                 len(x) for x in list(self.annotations.values())
             ),
-            "common_classes": list(
+            "common_classes_count": dict(
                 agg_annotations["count"].sort_values(ascending=False)[:5].items()
             ),
-            "common_classes_by_annotation_area": list(
-                agg_annotations["sum"].sort_values(ascending=False)[:5].items()
-            ),
+            "common_classes_area": {
+                k: number(v, cast=float, unit="px")
+                for k, v in agg_annotations["sum"]
+                .sort_values(ascending=False)[:5]
+                .items()
+            },
         }
 
         if output_format in {DescribeFormat.DICT, DescribeFormat.JSON}:
             return data
 
         elif output_format == DescribeFormat.PLAIN_TEXT:
-            return textwrap.dedent(
-                """\
-                === SUMMARY ===
-                Path to dataset: {path}
-                Number of images: {num_images}
-
-                === IMAGES ===
-                Image Size Distribution (mean, std):
-                    - mpp_x ~ ({mean_mpp_x:.3}, {std_mpp_x:.3})
-                    - mpp_y ~ ({mean_mpp_y:.3}, {std_mpp_y:.3})
-                    - width ~ ({mean_image_width:.3}, {std_image_width:.3})
-                    - height ~ ({mean_image_height:.3}, {std_image_height:.3})
-                Image File Size (bytes):
-                    - mean image size: {mean_image_size_mb:.3f} MB
-                    - total size of all images: {total_size_images_gb:.3f} GB
-
-                === ANNOTATIONS ===
-                Total number of annotations: {total_num_annotations}
-                Mean annotations per image: {mean_annotations_per_image:.3}
-                Five most common classes: {common_classes}
-                Classes sorted by total annotation area (top five): {common_classes_by_annotation_area}
-
-                === METADATA ===
-                Keys available: {metadata_columns}
-            """
-            ).format(
-                mean_image_size_mb=data["mean_image_size"] / 1e6,
-                total_size_images_gb=data["total_size_images"] / 1e9,
-                **data,
-            )
+            return describe_format_plain_text(data)
 
         else:
             raise NotImplementedError(f'Format "{output_format}" is not allowed.')
@@ -566,11 +540,3 @@ class Split(NamedTuple):
 
     train: PadoDataset
     test: PadoDataset
-
-
-class DescribeFormat(str, Enum):
-    """supported formats for PadoDataset.describe"""
-
-    PLAIN_TEXT = "plain_text"
-    DICT = "dict"
-    JSON = "json"
