@@ -10,6 +10,7 @@ import pickle
 import sys
 import tarfile
 import typing
+import warnings
 import zipfile
 from ast import literal_eval
 from contextlib import ExitStack
@@ -142,7 +143,7 @@ def urlpathlike_to_uri(
     urlpath: UrlpathLike,
     *,
     repr_fallback: bool = False,
-    ignore_options: Collection = (),
+    ignore_options: Collection[str] = (),
 ) -> str:
     """convert an urlpath-like object to an fsspec URI
 
@@ -201,7 +202,11 @@ def urlpathlike_to_uri(
         return _pathlike_to_string(urlpath)
 
 
-def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
+def urlpathlike_to_string(
+    urlpath: UrlpathLike,
+    *,
+    ignore_options: Collection[str] = (),
+) -> str:
     """convert an urlpath-like object and stringify it"""
     if is_fsspec_open_file_like(urlpath):
         fs: fsspec.AbstractFileSystem = urlpath.fs
@@ -209,12 +214,29 @@ def urlpathlike_to_string(urlpath: UrlpathLike) -> str:
         try:
             serialized_fs = fs.to_json()
         except NotImplementedError:
+            if ignore_options:
+                warnings.warn(
+                    "ignore_options are not handled for FS that don't support to_json",
+                    stacklevel=2,
+                )
             serialized_fs = repr(
                 pickle.dumps(fs, protocol=_PADO_FSSPEC_PICKLE_PROTOCOL)
             )
+        else:
+            if ignore_options:
+                d = json.loads(serialized_fs)
+                for opt in ignore_options:
+                    d.pop(opt, None)
+                serialized_fs = json.dumps(d)
+
         return json.dumps({"fs": serialized_fs, "path": path})
 
     else:
+        if ignore_options:
+            warnings.warn(
+                "ignore_options are not handled for stringified UrlpathLike",
+                stacklevel=2,
+            )
         return _pathlike_to_string(urlpath)
 
 

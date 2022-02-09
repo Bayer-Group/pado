@@ -44,6 +44,7 @@ from pado.io.store import StoreType
 from pado.io.store import get_store_type
 from pado.metadata import GroupedMetadataProvider
 from pado.metadata import MetadataProvider
+from pado.predictions.proxy import PredictionProxy
 from pado.types import DatasetSplitter
 from pado.types import IOMode
 from pado.types import UrlpathLike
@@ -131,6 +132,7 @@ class PadoDataset:
         self._cached_image_provider = None
         self._cached_annotation_provider = None
         self._cached_metadata_provider = None
+        self._cached_predictions_proxy = None
 
     @property
     def urlpath(self) -> str:
@@ -235,6 +237,12 @@ class PadoDataset:
 
             self._cached_metadata_provider = metadata_provider
         return self._cached_metadata_provider
+
+    @property
+    def predictions(self) -> PredictionProxy:
+        if self._cached_predictions_proxy is None:
+            self._cached_predictions_proxy = PredictionProxy(self)
+        return self._cached_predictions_proxy
 
     # === access ===
 

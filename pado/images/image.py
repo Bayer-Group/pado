@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Collection
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -148,10 +149,12 @@ class Image:
         # pado_info ...
         return inst
 
-    def to_record(self) -> dict:
+    def to_record(self, *, urlpath_ignore_options: Collection[str] = ()) -> dict:
         """return a record for serializing"""
         pado_info = PadoInfo(
-            urlpath=urlpathlike_to_string(self.urlpath),
+            urlpath=urlpathlike_to_string(
+                self.urlpath, ignore_options=urlpath_ignore_options
+            ),
             pado_image_backend=TiffSlide.__class__.__qualname__,
             pado_image_backend_version=tiffslide.__version__,
         )
