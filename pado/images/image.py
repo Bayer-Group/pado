@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from contextlib import ExitStack
 from datetime import datetime
 from typing import TYPE_CHECKING
 from typing import Any
@@ -103,7 +102,6 @@ class Image:
         "urlpath",
         "_metadata",
         "_file_info",
-        "_ctx",
         "_slide",
     )  # prevent attribute errors during refactor
     __fields__ = _SerializedImage.__fields__
@@ -122,7 +120,6 @@ class Image:
         self._file_info: Optional[FileInfo] = None
 
         # file handles
-        self._ctx: Optional[ExitStack] = None
         self._slide: Optional[TiffSlide] = None
 
         # optional load on init
@@ -174,13 +171,10 @@ class Image:
 
     def open(self) -> Image:
         """open an image instance"""
-        if not self._ctx:
-            self._ctx = ctx = ExitStack()
+        if not self._slide:
+            of = urlpathlike_to_fsspec(self.urlpath)
             try:
-                open_file = urlpathlike_to_fsspec(self.urlpath)
-                file_obj = ctx.enter_context(open_file)
-                # noinspection PyTypeChecker
-                self._slide = ctx.enter_context(TiffSlide(file_obj))
+                self._slide = TiffSlide(of)
             except Exception as e:
                 _log.error(f"{self.urlpath!r} with error {e!r}")
                 self.close()
@@ -189,10 +183,9 @@ class Image:
 
     def close(self):
         """close and image instance"""
-        if self._ctx:
-            self._ctx.close()
+        if self._slide:
+            self._slide.close()
             self._slide = None
-            self._ctx = None
 
     def __repr__(self):
         return f"{type(self).__name__}({self.urlpath!r})"
