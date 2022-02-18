@@ -36,7 +36,7 @@ from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     import numpy as np
-    import PIL
+    import PIL.Image
 
 _log = logging.getLogger(__name__)
 
