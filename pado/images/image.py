@@ -451,11 +451,23 @@ class Image:
             )
         return array
 
-    def get_zarr(self, level: int) -> zarr.core.Array:
+    def get_zarr(
+        self,
+        level: int,
+        *,
+        chunkmode: int = 0,
+        zattrs: dict[str, Any] | None = None,
+    ) -> zarr.core.Array:
         """return the entire level as zarr"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
-        zgrp = self._slide.ts_zarr_grp
+        zgrp = self._slide.ts_tifffile.aszarr(
+            key=None,
+            series=None,
+            level=level,
+            chunkmode=chunkmode,
+            zattrs=zattrs,
+        )
         if isinstance(zgrp, zarr.core.Array):
             if level != 0:
                 raise IndexError(f"level {level} not available")
