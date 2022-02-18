@@ -63,7 +63,7 @@ def qupath_geojson_annotations_loader(
             ):
                 # FIXME: this should be handled somewhere else...
                 pass  # skip
-            elif 'classification' not in feature['properties']:
+            elif "classification" not in feature["properties"]:
                 missing_classifications += 1
             else:
                 errors[(type(e).__name__, str(e))].append(feature)
@@ -85,8 +85,8 @@ def qupath_geojson_annotations_loader(
 
     if missing_classifications > 0:
         warnings.warn(
-            f'File at {urlpath} contained {missing_classifications} missing classifications.',
-            RuntimeWarning
+            f"File at {urlpath} contained {missing_classifications} missing classifications.",
+            RuntimeWarning,
         )
     if errors:
         msg = ["PYDANTIC PARSING ERROR"]
