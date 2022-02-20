@@ -15,7 +15,6 @@ from typing import Tuple
 from typing import Union
 
 import tiffslide
-import zarr.core
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
 from pydantic import BaseModel
@@ -25,6 +24,7 @@ from pydantic import PositiveFloat
 from pydantic import PositiveInt
 from pydantic import validator
 from pydantic.color import Color
+from tifffile import ZarrTiffStore
 from tiffslide import TiffSlide
 
 from pado.images.utils import MPP
@@ -451,30 +451,20 @@ class Image:
             )
         return array
 
-    def get_zarr(
+    def get_zarr_store(
         self,
         level: int,
         *,
         chunkmode: int = 0,
         zattrs: dict[str, Any] | None = None,
-    ) -> zarr.core.Array:
-        """return the entire level as zarr"""
+    ) -> ZarrTiffStore:
+        """return the entire level as a zarr store"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
-        zgrp = self._slide.ts_tifffile.aszarr(
+        return self._slide.ts_tifffile.aszarr(
             key=None,
             series=None,
             level=level,
             chunkmode=chunkmode,
             zattrs=zattrs,
         )
-        if isinstance(zgrp, zarr.core.Array):
-            if level != 0:
-                raise IndexError(f"level {level} not available")
-            return zgrp
-        elif isinstance(zgrp, zarr.hierarchy.Group):
-            return zgrp[str(level)]
-        else:
-            raise NotImplementedError(
-                f"unexpected instance {zgrp!r} of type {type(zgrp).__name__}"
-            )

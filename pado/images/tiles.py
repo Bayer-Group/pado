@@ -6,6 +6,7 @@ from typing import Iterator
 from typing import Optional
 
 import numpy as np
+import zarr
 from shapely.geometry import Polygon
 
 from pado._compat import cached_property
@@ -126,15 +127,18 @@ class TileIterator:
         )
 
         mpp_xy = self.image.level_mpp[self.level]
-        z_array = self.image.get_zarr(self.level)
+        store = self.image.get_zarr_store(self.level)
 
-        return (
-            Tile(
-                mpp=mpp_xy,
-                lvl0_mpp=self.level0_mpp_xy,
-                bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
-                data=z_array[y0:y1, x0:x1],
-                parent=img,
-            )
-            for x0, x1, y0, y1 in bounds
-        )
+        def _yield_tiles(s):
+            with s:
+                z_array = zarr.open_array(s, mode="r")
+                for x0, x1, y0, y1 in bounds:
+                    yield Tile(
+                        mpp=mpp_xy,
+                        lvl0_mpp=self.level0_mpp_xy,
+                        bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
+                        data=z_array[y0:y1, x0:x1],
+                        parent=img,
+                    )
+
+        yield from _yield_tiles(store)
