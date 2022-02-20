@@ -31,6 +31,7 @@ __all__ = [
     "pado_cache_path",
     "pado_config_path",
     "dataset_registry",
+    "open_registered_dataset",
 ]
 
 settings = Dynaconf(
