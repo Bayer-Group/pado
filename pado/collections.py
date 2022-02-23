@@ -13,17 +13,16 @@ from typing import Mapping
 from typing import MutableMapping
 from typing import MutableSequence
 from typing import Optional
-from typing import Protocol
 from typing import Type
 from typing import TypeVar
 from typing import cast
 from typing import overload
-from typing import runtime_checkable
 
 import pandas as pd
 
 from pado.images import ImageId
 from pado.io.store import Store
+from pado.types import SerializableItem
 from pado.types import UrlpathLike
 
 __all__ = [
@@ -35,21 +34,8 @@ __all__ = [
 
 # === collections =============================================================
 
-PI = TypeVar("PI", bound="SerializableItem")
-PS = TypeVar("PS", bound="PadoMutableSequence")
-
-
-@runtime_checkable
-class SerializableItem(Protocol):
-    __fields__: tuple[str, ...]
-
-    @classmethod
-    def from_obj(cls: Type[PI], obj: Any) -> PI:
-        ...
-
-    def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
-        ...
-
+PI = TypeVar("PI", bound=SerializableItem)
+PS = TypeVar("PS", bound="PadoMutableSequence")  # todo: use typing.Self
 
 _r = Repr()
 _r.maxlist = 3

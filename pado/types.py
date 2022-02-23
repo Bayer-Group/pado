@@ -14,6 +14,8 @@ from typing import Iterator
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import Type
+from typing import TypeVar
 from typing import Union
 
 if sys.version_info >= (3, 8):
@@ -31,6 +33,8 @@ if TYPE_CHECKING:
 
     import numpy.typing as npt
     from fsspec import AbstractFileSystem
+
+    from pado.images import ImageId
 
 
 # --- types ---
@@ -65,4 +69,19 @@ class DatasetSplitter(Protocol):
         y: Optional[Sequence[Any]],
         groups: Optional[Sequence[Any]],
     ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
+        ...
+
+
+PI = TypeVar("PI", bound="SerializableItem")
+
+
+@runtime_checkable
+class SerializableItem(Protocol):
+    __fields__: tuple[str, ...]
+
+    @classmethod
+    def from_obj(cls: Type[PI], obj: Any) -> PI:
+        ...
+
+    def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
         ...
