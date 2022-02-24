@@ -13,6 +13,7 @@ import zarr.hierarchy
 import zarr.storage
 
 from pado.images import Image
+from pado.images.utils import Bounds
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fsspec
 from pado.predictions.providers import ImagePrediction
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
 
     from pado.dataset import PadoDataset
     from pado.images import ImageId
-    from pado.images.utils import Bounds
     from pado.images.utils import IntSize
     from pado.types import UrlpathLike
 
@@ -104,12 +104,18 @@ class ImagePredictionWriter:
     def __init__(
         self,
         *args,
+        identifier: str | None = None,
         extra_metadata: dict[str, Any],
         image_id: ImageId | None = None,
         **kwargs,
     ) -> None:
         self._image_id: ImageId | None = image_id
         self._size_map: dict[ImageId, IntSize] = {}
+
+        if identifier is None:
+            self._identifier = uuid.uuid4()
+        else:
+            self._identifier = identifier
 
         store = zarr.storage.TempStore(prefix="pado_zarr", normalize_keys=True)
         group = zarr.hierarchy.group(store=store)
@@ -139,7 +145,7 @@ class ImagePredictionWriter:
     def set_output(
         self,
         *,
-        tile_shape: tuple[int],
+        tile_shape: tuple[int, ...],
         tile_dtype: np.dtype,
         fill_value: float = 0,
     ):
@@ -172,11 +178,11 @@ class ImagePredictionWriter:
             self._size_map[self._image_id].mpp == bounds.mpp
         )  # todo: lift restriction
         arr = self.get_zarr_array(self._image_id)
-        arr[
-            int(bounds.y_left) : int(bounds.y_right),
-            int(bounds.x_left) : int(bounds.x_right),
-            :,
-        ] = prediction_data
+        aw, ah = arr.shape[:2]
+        x0, y0, x1, y1 = map(int, bounds.as_tuple())
+        x1 = min(x1, aw)
+        y1 = min(y1, ah)
+        arr[y0:y1, x0:x1, :] = prediction_data[: (y1 - y0), : (x1 - x0), :]
 
     def store_in_dataset(
         self, ds: PadoDataset, *, predictions_path: str = "../predictions"
@@ -196,12 +202,12 @@ class ImagePredictionWriter:
                 continue
 
             arr = self.get_zarr_array(image_id)
-            urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name))
+            urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
             create_image_prediction_tiff(
                 arr[:],
                 urlpath,
             )
-            pred = Image(urlpath)
+            pred = Image(urlpath, load_metadata=True, load_file_info=True)
 
             ipp[image_id] = [
                 ImagePrediction(
@@ -219,5 +225,5 @@ class ImagePredictionWriter:
                 )
             ]
 
-        provider = ImagePredictionProvider(ipp, identifier="aignostics")
+        provider = ImagePredictionProvider(ipp, identifier=self._identifier)
         ds.ingest_obj(provider)
