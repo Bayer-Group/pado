@@ -90,7 +90,9 @@ class ImagePredictionWriter:
 
     let's you incrementally build image predictions
 
-    >>> writer = ImagePredictionWriter(...)
+    >>> writer = ImagePredictionWriter(extra_metadata={"model": "my-model", "something": 4})
+    >>> writer.set_input(image_id=my_id, image_size=size_of_original)  # IntSize(W, H, mpp=mpp0)
+    >>> writer.set_output(tile_shape=(512, 512, 4), tile_dtype=np.float64, fill_value=0.0)
     >>> for tile in range(dataset):
     >>>     output = predict(tile)
     >>>     bounds = get_bounds(tile)
@@ -186,7 +188,7 @@ class ImagePredictionWriter:
 
         def _get_image_prediction_urlpath(n):
             pth = ds._ensure_dir(predictions_path)
-            return os.path.join(pth, f"{n}-{uuid.uuid4()}.tif")
+            return os.path.join(pth, f"{n}-{uuid.uuid4()}.tif")  # fixme: normalize path
 
         for image_id in self._size_map:
             name = image_id.to_url_id()
