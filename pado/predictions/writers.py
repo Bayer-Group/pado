@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+from typing import TYPE_CHECKING
 from typing import Any
 
 import numpy as np
@@ -8,6 +9,11 @@ import pyvips
 
 from pado.io.files import urlpathlike_to_fsspec
 from pado.types import UrlpathLike
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+
+    from pado.images.utils import Bounds
 
 
 def create_image_prediction_tiff(
@@ -64,3 +70,27 @@ def create_image_prediction_tiff(
                 tile_height=tile_size,
             )
             f.write(data)
+
+
+class ImagePredictionWriter:
+    """image prediction writer
+
+    let's you incrementally build image predictions
+
+    >>> writer = ImagePredictionWriter(...)
+    >>> for tile in range(dataset):
+    >>>     output = predict(tile)
+    >>>     bounds = get_bounds(tile)
+    >>>     writer.add_prediction(output, bounds=bounds)
+    >>> writer.store_in_dataset(...)
+
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def add_prediction(self, prediction_data: ArrayLike, *, bounds: Bounds) -> None:
+        pass
+
+    def store_in_dataset(self, *args, **kwargs) -> None:
+        pass
