@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import Any
+from typing import NamedTuple
+from typing import Optional
 
 from pado.io.files import fsopen
 from pado.predictions.providers import AnnotationPredictionProvider
 from pado.predictions.providers import GroupedImagePredictionProvider
 from pado.predictions.providers import ImagePredictionProvider
+from pado.predictions.providers import ImagePredictions
 from pado.predictions.providers import MetadataPredictionProvider
 
 if TYPE_CHECKING:
     from pado.dataset import PadoDataset
-    from pado.dataset import PadoItem
     from pado.images import ImageId
 
 __all__ = [
@@ -63,16 +66,21 @@ class PredictionProxy:
 
     # === access ===
 
-    def get_by_id(self, image_id: ImageId) -> PadoItem:  # fixme: custom return_type
-        from pado.dataset import PadoItem
-
-        return PadoItem(
+    def get_by_id(self, image_id: ImageId) -> PadoPredictionItem:
+        return PadoPredictionItem(
             image_id,
             self.images.get(image_id),
             self.annotations.get(image_id),
             self.metadata.get(image_id),
         )
 
-    def get_by_idx(self, idx: int) -> PadoItem:
+    def get_by_idx(self, idx: int) -> PadoPredictionItem:
         iid = self._ds.index[idx]
         return self.get_by_id(iid)
+
+
+class PadoPredictionItem(NamedTuple):
+    id: ImageId
+    image: Optional[ImagePredictions]
+    annotations: Any  # fixme
+    metadata: Any  # fixme
