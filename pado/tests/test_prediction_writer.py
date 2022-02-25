@@ -7,6 +7,7 @@ from itertools import tee
 import numpy as np
 import tiffslide
 
+from pado.dataset import PadoDataset
 from pado.images.utils import Bounds
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.predictions.writers import ImagePredictionWriter
@@ -38,7 +39,6 @@ def test_prediction_writer(dataset):
     coords = list(product(range(0, iw, tile_size), range(0, ih, tile_size)))
     for idx, (x0, y0) in enumerate(coords):
         b = Bounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
-        print(idx, b)
         writer.add_prediction(
             np.full(tile_shape, idx, dtype=tile_dtype),
             bounds=b,
@@ -52,5 +52,11 @@ def test_prediction_writer(dataset):
     assert len(tiffs) == 1
     preds = tiffslide.TiffSlide(tiffs[0])
     assert preds.dimensions == (image.dimensions.height, image.dimensions.width)
-    # for the test images ts_zarr_grp is an Array
-    assert set(np.unique(preds.ts_zarr_grp)) == set(range(len(coords)))
+
+    # assert set(np.unique(preds.ts_zarr_grp["0"])) == set(range(len(coords)))
+    # ^^^ this assertion will be relevant once we support non-pre-baked rgb overlays
+
+    ds = PadoDataset(dataset.urlpath)
+    assert len(ds.predictions.images[iid]) == 1
+    with ds.predictions.images[iid][0].image as pred_image:
+        assert pred_image.level_count > 1
