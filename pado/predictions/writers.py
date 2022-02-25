@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 from contextlib import ExitStack
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -183,6 +184,58 @@ class ImagePredictionWriter:
         x1 = min(x1, aw)
         y1 = min(y1, ah)
         arr[y0:y1, x0:x1, :] = prediction_data[: (y1 - y0), : (x1 - x0), :]
+
+    def store_in_local_dir(
+        self,
+        path: os.PathLike,
+        *,
+        predictions_path: str = "_image_predictions",
+    ):
+        """store the predictions in a local dir"""
+        ipp = {}
+
+        pth = Path(path)
+        if not pth.is_dir():
+            pth.mkdir(parents=True)
+
+        def _get_image_prediction_urlpath(n):
+            p = pth.joinpath(predictions_path)
+            p.mkdir(exist_ok=True)
+            return p.joinpath(f"{n}-{uuid.uuid4()}.tif")
+
+        for image_id in self._size_map:
+            name = image_id.to_url_id()
+            if name not in self._group:
+                continue
+
+            arr = self.get_zarr_array(image_id)
+            urlpath = _get_image_prediction_urlpath(name)
+            create_image_prediction_tiff(
+                arr[:],
+                urlpath,
+            )
+            pred = Image(urlpath, load_metadata=True, load_file_info=True)
+
+            ipp[image_id] = [
+                ImagePrediction(
+                    image_id=image_id,
+                    prediction_type=ImagePredictionType.HEATMAP,
+                    bounds=Bounds(
+                        0,
+                        0,
+                        pred.dimensions.x,
+                        pred.dimensions.y,
+                        mpp=self._size_map[image_id].mpp,
+                    ),
+                    extra_metadata=self._extra_metadata,
+                    image=pred,
+                )
+            ]
+
+        provider = ImagePredictionProvider(ipp, identifier=self._identifier)
+        provider.to_parquet(
+            pth.joinpath(f"{self._identifier}.image_predictions.parquet")
+        )
 
     def store_in_dataset(
         self, ds: PadoDataset, *, predictions_path: str = "../predictions"
