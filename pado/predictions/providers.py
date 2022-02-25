@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from pado.collections import GroupedProviderMixin
 from pado.collections import PadoMutableSequence
 from pado.collections import PadoMutableSequenceMapping
 from pado.collections import ProviderStoreMixin
@@ -79,8 +80,6 @@ class ImagePrediction:
 
 
 class ImagePredictions(PadoMutableSequence[ImagePrediction]):
-    """"""
-
     __item_class__ = ImagePrediction
 
 
@@ -102,6 +101,10 @@ class ImagePredictionProvider(
 ):
     __store_class__ = ImagePredictionsProviderStore
     __value_class__ = ImagePredictions
+
+
+class GroupedImagePredictionProvider(GroupedProviderMixin, ImagePredictionProvider):
+    __provider_class__ = ImagePredictionProvider
 
 
 # === NOT IMPLEMENTED YET =====================================================
