@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from pado.io.files import fsopen
 from pado.predictions.providers import AnnotationPredictionProvider
+from pado.predictions.providers import GroupedImagePredictionProvider
 from pado.predictions.providers import ImagePredictionProvider
 from pado.predictions.providers import MetadataPredictionProvider
 
@@ -45,7 +46,7 @@ class PredictionProxy:
             elif len(providers) == 1:
                 provider = providers[0]
             else:
-                raise NotImplementedError("todo: grouped provider")
+                provider = GroupedImagePredictionProvider(*providers)
 
             self._images = provider
         return self._images
