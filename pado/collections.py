@@ -20,6 +20,7 @@ from typing import overload
 
 import pandas as pd
 
+from pado._compat import cached_property
 from pado.images import ImageId
 from pado.io.store import Store
 from pado.types import SerializableItem
@@ -300,6 +301,58 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
         return iter(
             set(map(ImageId.from_str, self.df.index.unique())).union(self._store)
         )
+
+
+PT = TypeVar("PT")
+GT = TypeVar("GT", bound="GroupedProviderMixin")
+
+
+class GroupedProviderMixin:
+    __value_class__: Type[VT]
+    __provider_class__: Type[PT]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if PadoMutableSequenceMapping not in cls.__mro__:
+            raise AttributeError(
+                f"{cls.__name__} must also inherit from a provider class"
+            )
+        if not hasattr(cls, "__provider_class__"):
+            raise AttributeError(
+                f"subclass {cls.__name__} must define __provider_class__"
+            )
+
+    def __init__(self, *providers: PT):
+        super().__init__()
+        self.providers = []
+        for p in providers:
+            if not isinstance(p, self.__provider_class__):
+                p = self.__provider_class__(p)
+            if isinstance(p, type(self)):
+                self.providers.extend(p.providers)
+            else:
+                self.providers.append(p)
+        self.__dict__.pop("df")  # clear cache ...
+
+    @cached_property
+    def df(self):
+        return pd.concat([p.df for p in self.providers])
+
+    def __setitem__(self, image_id: ImageId, value: VT) -> None:
+        raise RuntimeError(f"can't add new item to {type(self).__name__}")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise RuntimeError(f"can't delete from {type(self).__name__}")
+
+    def __repr__(self):
+        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
+
+    def to_parquet(self, urlpath: UrlpathLike) -> None:
+        super().to_parquet(urlpath)
+
+    @classmethod
+    def from_parquet(cls: Type[GT], urlpath: UrlpathLike) -> GT:
+        raise TypeError(f"unsupported operation for {cls.__name__!r}()")
 
 
 # === mixins ==================================================================
