@@ -86,7 +86,7 @@ def create_image_prediction_tiff(
                 subifd=False,
                 bigtiff=True,
                 # properties=True,
-                compression="jp2k",
+                compression="jpeg",
                 tile_width=tile_size,
                 tile_height=tile_size,
             )
