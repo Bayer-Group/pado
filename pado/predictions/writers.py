@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import uuid
 from contextlib import ExitStack
 from pathlib import Path
@@ -15,7 +16,10 @@ import zarr.hierarchy
 import zarr.storage
 
 from pado.images import Image
+from pado.images import ImageId
+from pado.images.utils import MPP
 from pado.images.utils import Bounds
+from pado.images.utils import IntSize
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fsspec
 from pado.predictions.providers import ImagePrediction
@@ -27,8 +31,6 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pado.dataset import PadoDataset
-    from pado.images import ImageId
-    from pado.images.utils import IntSize
     from pado.types import UrlpathLike
 
 
@@ -359,5 +361,32 @@ class ImagePredictionWriter:
 if __name__ == "__main__":
 
     print("writing test image")
-    arr = np.random.randint(0, 255, (10000, 10000, 3), dtype=np.uint8)
-    create_image_prediction_tiff(arr, "./pado-predictions-writer-test-image.tif")
+    H, W, C = 10000, 8000, 5
+    TW = TH = 512
+    colors = [
+        (0, 0, 0),
+        (255, 0, 0),
+        (0, 255, 0),
+        (0, 0, 255),
+        (255, 255, 255),
+    ]
+
+    writer = ImagePredictionWriter(extra_metadata={})
+    iid = ImageId("test")
+    size = IntSize(W, H, mpp=MPP(1.0, 1.0))
+    writer.set_input(image_id=iid, image_size=size)
+    writer.set_output(
+        tile_shape=(TH, TW, C),
+        tile_dtype=np.float32,
+        fill_value=0.0,
+        channel_colors=colors,
+    )
+
+    for x in range(0, W, TW):
+        for y in range(0, H, TH):
+            b = Bounds.from_tuple((x, y, min(x + TW, W), min(y + TH, H)), mpp=size.mpp)
+            arr = np.zeros((TH, TW, C)).astype(np.float32)
+            arr[:, :, random.randint(0, C - 1)] = 1.0
+            writer.add_prediction(arr, bounds=b)
+
+    writer.store_in_local_dir(".", predictions_path=".")
