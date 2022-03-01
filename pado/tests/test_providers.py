@@ -105,6 +105,11 @@ def dataset_with_predictions(dataset):
     tile_size = 100
     tile_shape = (tile_size, tile_size, 3)
     tile_dtype = np.dtype("u1")
+    channel_colors = [
+        (0, 0, 0),
+        (128, 128, 128),
+        (255, 255, 255),
+    ]
 
     for iidx, iid in enumerate(dataset.index):
         image = dataset.images[iid]
@@ -114,7 +119,11 @@ def dataset_with_predictions(dataset):
         for pidx in range(PREDICTIONS_PER_IMAGE):
             writer = ImagePredictionWriter(extra_metadata={"idx": iidx, "pidx": pidx})
             writer.set_input(image_id=iid, image_size=image.dimensions)
-            writer.set_output(tile_shape=tile_shape, tile_dtype=tile_dtype)
+            writer.set_output(
+                tile_shape=tile_shape,
+                tile_dtype=tile_dtype,
+                channel_colors=channel_colors,
+            )
 
             iw, ih = image.dimensions.as_tuple()
             coords = list(product(range(0, iw, tile_size), range(0, ih, tile_size)))

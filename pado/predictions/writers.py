@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Sequence
 
 import numpy as np
 import pyvips
@@ -23,6 +24,7 @@ from pado.predictions.providers import ImagePredictionType
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
+    from numpy.typing import NDArray
 
     from pado.dataset import PadoDataset
     from pado.images import ImageId
@@ -91,6 +93,60 @@ def create_image_prediction_tiff(
             f.write(data)
 
 
+def _multichannel_to_rgb(
+    arr: ArrayLike,
+    *,
+    channel_colors: Sequence[tuple[int, int, int]],
+    single_channel_threshold: float | None = None,
+) -> NDArray[np.uint8]:
+    """converts a (single/multi)-channel array (X, Y, N) to an RGB color array of size (X, Y, 3)
+
+    Notes
+    -----
+      We enforce that one channel is (255, 255, 255) white color coded.
+      In the single channel case that is used as the background color.
+
+    Parameters
+    ----------
+    channel_colors:
+        one rgb color per channel
+    single_channel_threshold:
+        if single channel array provided to distinguish background from foreground
+
+    """
+    BACKGROUND_COLOR = (255, 255, 255)
+    # assume:
+    # - every channel stores some sort of score/probability for a single class
+    # -
+    assert arr.ndim == 3
+    num_channels = arr.shape[2]
+
+    colors = np.array(channel_colors, dtype=np.uint8)
+
+    assert colors.ndim == 2 and colors.shape[1] == 3, "requires rgb colors"
+    if num_channels != colors.shape[0]:
+        raise ValueError("need as many colors as channels")
+
+    if num_channels == 1:
+        assert (
+            single_channel_threshold is not None
+        ), "single channel requires to define a single_channel_threshold"
+        arr = (arr > single_channel_threshold).astype(int)[:, :, 0]
+        colors = np.array([BACKGROUND_COLOR, colors[0]], dtype=np.uint8)
+
+    else:
+        assert (
+            single_channel_threshold is None
+        ), "multi channel will just use the max across channels"
+        assert BACKGROUND_COLOR in colors
+        arr = np.argmax(arr, axis=2)
+
+    # todo:
+    # - implement morphological filtering
+    # - smoothing, etc...
+    return colors[arr]
+
+
 class ImagePredictionWriter:
     """image prediction writer
 
@@ -130,6 +186,9 @@ class ImagePredictionWriter:
         self._output_dtype: np.dtype | None = None
         self._fill_value: float = 0
 
+        # color conversion kwargs
+        self._color_conversion_kwargs = {}
+
         assert isinstance(extra_metadata, dict) and json.dumps(extra_metadata)
         self._extra_metadata = extra_metadata
 
@@ -154,12 +213,18 @@ class ImagePredictionWriter:
         tile_shape: tuple[int, ...],
         tile_dtype: np.dtype,
         fill_value: float = 0,
+        channel_colors: Sequence[tuple[int, int, int]],
+        single_channel_threshold: float | None = None,
     ):
         s = tuple(tile_shape)
         assert len(s) == 3 and all(isinstance(x, int) and x > 0 for x in s)
         self._chunk_size = s
         self._output_dtype = tile_dtype
         self._fill_value = fill_value
+        self._color_conversion_kwargs["channel_colors"] = channel_colors
+        self._color_conversion_kwargs[
+            "single_channel_threshold"
+        ] = single_channel_threshold
 
     def get_zarr_array(self, image_id: ImageId) -> zarr.Array:
         name = image_id.to_url_id()
@@ -215,8 +280,10 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = _get_image_prediction_urlpath(name)
+            rgb_arr = _multichannel_to_rgb(arr, **self._color_conversion_kwargs)
+
             create_image_prediction_tiff(
-                arr[:],
+                rgb_arr,
                 urlpath,
             )
             pred = Image(urlpath, load_metadata=True, load_file_info=True)
@@ -261,8 +328,10 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
+            rgb_arr = _multichannel_to_rgb(arr, **self._color_conversion_kwargs)
+
             create_image_prediction_tiff(
-                arr[:],
+                rgb_arr,
                 urlpath,
             )
             pred = Image(urlpath, load_metadata=True, load_file_info=True)
