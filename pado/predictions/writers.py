@@ -246,12 +246,12 @@ class ImagePredictionWriter:
     def add_prediction(self, prediction_data: ArrayLike, *, bounds: Bounds) -> None:
         """add a tile prediction to the writer"""
         assert self._image_id is not None  # todo: lift restriction
-        assert prediction_data.shape == self._chunk_size
+        # assert prediction_data.shape == self._chunk_size, f"{prediction_data.shape!r} == {self._chunk_size!r}"
         assert (
             self._size_map[self._image_id].mpp == bounds.mpp
         )  # todo: lift restriction
         arr = self.get_zarr_array(self._image_id)
-        aw, ah = arr.shape[:2]
+        ah, aw = arr.shape[:2]
         x0, y0, x1, y1 = map(int, bounds.as_tuple())
         x1 = min(x1, aw)
         y1 = min(y1, ah)
