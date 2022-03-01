@@ -79,7 +79,12 @@ def create_image_prediction_tiff(
                 ".tiff",
                 pyramid=True,
                 tile=True,
-                compression="jpeg",
+                xres=1000,
+                yres=1000,
+                subifd=False,
+                bigtiff=True,
+                # properties=True,
+                compression="jp2k",
                 tile_width=tile_size,
                 tile_height=tile_size,
             )
@@ -280,3 +285,10 @@ class ImagePredictionWriter:
 
         provider = ImagePredictionProvider(ipp, identifier=self._identifier)
         ds.ingest_obj(provider)
+
+
+if __name__ == "__main__":
+
+    print("writing test image")
+    arr = np.random.randint(0, 255, (10000, 10000, 3), dtype=np.uint8)
+    create_image_prediction_tiff(arr, "./pado-predictions-writer-test-image.tif")
