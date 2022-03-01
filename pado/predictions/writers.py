@@ -280,7 +280,7 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = _get_image_prediction_urlpath(name)
-            rgb_arr = _multichannel_to_rgb(arr, **self._color_conversion_kwargs)
+            rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
             create_image_prediction_tiff(
                 rgb_arr,
@@ -328,7 +328,7 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
-            rgb_arr = _multichannel_to_rgb(arr, **self._color_conversion_kwargs)
+            rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
             create_image_prediction_tiff(
                 rgb_arr,
