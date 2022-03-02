@@ -47,13 +47,11 @@ class Tile:
 
     @cached_property
     def size(self) -> IntSize:
-        return self.bounds.size
+        return self.bounds.round().size
 
     @cached_property
     def x0y0(self) -> IntPoint:
-        return IntPoint.from_tuple(
-            self.bounds.upper_left_coords.as_tuple(), mpp=self.mpp
-        )
+        return self.bounds.round().x0y0
 
     def shape(self, mpp: Optional[MPP] = None) -> Geometry:
         if mpp is None:
