@@ -380,7 +380,7 @@ class ImagePredictionWriter:
             urlpath = _get_image_prediction_urlpath(name)
             if self._is_rgb_prediction:
                 assert arr.ndim == 3 and arr.shape[2] == 3
-                rgb_arr = arr
+                rgb_arr = arr[:]
             else:
                 rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
@@ -433,7 +433,7 @@ class ImagePredictionWriter:
             urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
             if self._is_rgb_prediction:
                 assert arr.ndim == 3 and arr.shape[2] == 3
-                rgb_arr = arr
+                rgb_arr = arr[:]
             else:
                 rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
