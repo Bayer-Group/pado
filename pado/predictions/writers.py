@@ -4,6 +4,7 @@ import json
 import os
 import random
 import uuid
+from collections import defaultdict
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -32,6 +33,10 @@ if TYPE_CHECKING:
 
     from pado.dataset import PadoDataset
     from pado.types import UrlpathLike
+
+__all__ = [
+    "ImagePredictionWriter",
+]
 
 
 def create_image_prediction_tiff(
@@ -177,14 +182,32 @@ class ImagePredictionWriter:
 
     def __init__(
         self,
-        *args,
-        identifier: str | None = None,
+        *,
         extra_metadata: dict[str, Any],
-        image_id: ImageId | None = None,
-        **kwargs,
+        identifier: str | None = None,
+        raise_on_overwrite: bool = True,
+        **_kwargs,
     ) -> None:
-        self._image_id: ImageId | None = image_id
+        """instantiate the ImagePredictionWriter
+
+        Parameters
+        ----------
+        extra_metadata:
+            a json serializable metadata dict. Must be provided. Currently used
+            in our visualization tools to carry information about the model and
+            the specific runs.
+        identifier:
+            used to name the image prediction provider. If None, a UUID is
+            created to minimize name clashes.
+        raise_on_overwrite:
+            raise an error if add_prediction would overwrite already provided
+            data. Useful to ensure that the predictions don't overlap.
+
+        """
+        self._image_id: ImageId | None = None
         self._size_map: dict[ImageId, IntSize] = {}
+        self._raise_on_overwrite = raise_on_overwrite
+        self._mask_map: dict[ImageId, set[tuple[int, int, int, int]]] = defaultdict(set)
 
         if identifier is None:
             self._identifier = uuid.uuid4()
@@ -256,13 +279,35 @@ class ImagePredictionWriter:
     def add_prediction(self, prediction_data: ArrayLike, *, bounds: Bounds) -> None:
         """add a tile prediction to the writer"""
         assert self._image_id is not None  # todo: lift restriction
-        # assert prediction_data.shape == self._chunk_size, f"{prediction_data.shape!r} == {self._chunk_size!r}"
+
+        iid = self._image_id
+        size = self._size_map[iid]
+        arr = self.get_zarr_array(iid)
+
+        assert size.mpp == bounds.mpp  # todo: lift restriction
+
+        x0, y0, x1, y1 = b = tuple(map(int, bounds.as_tuple()))
+
+        if self._raise_on_overwrite:
+            # test that we don't overwrite existing data
+            written_bounds = self._mask_map[iid]
+            if any(
+                (x1 > _x0 and _x1 > x0) and (y1 > _y0 and _y1 > y0)
+                for _x0, _y0, _x1, _y1 in written_bounds
+            ):
+                raise RuntimeError(
+                    f"bounds: {b!r} overlap with already set bounds:\n{written_bounds!r}"
+                )
+            else:
+                # could merge adjacent tiles if this becomes a bottleneck
+                written_bounds.add(b)
+
         assert (
-            self._size_map[self._image_id].mpp == bounds.mpp
-        )  # todo: lift restriction
-        arr = self.get_zarr_array(self._image_id)
+            prediction_data.shape == self._chunk_size
+        ), f"{prediction_data.shape!r} == {self._chunk_size!r}"
+
         ah, aw = arr.shape[:2]
-        x0, y0, x1, y1 = map(int, bounds.as_tuple())
+        # todo: manage in Bounds class
         x1 = min(x1, aw)
         y1 = min(y1, ah)
         arr[y0:y1, x0:x1, :] = prediction_data[: (y1 - y0), : (x1 - x0), :]
