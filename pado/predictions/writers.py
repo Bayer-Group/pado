@@ -222,6 +222,7 @@ class ImagePredictionWriter:
         self._chunk_size: tuple[int] | None = None
         self._output_dtype: np.dtype | None = None
         self._fill_value: float = 0
+        self._is_rgb_prediction: bool | None = None
 
         # color conversion kwargs
         self._color_conversion_kwargs = {}
@@ -248,16 +249,47 @@ class ImagePredictionWriter:
         self,
         *,
         tile_shape: tuple[int, ...],
-        tile_dtype: np.dtype,
+        tile_dtype: np.dtype | type[np.numeric],
         fill_value: float = 0,
-        channel_colors: Sequence[tuple[int, int, int]],
+        is_rgb_prediction: bool = False,
+        channel_colors: Sequence[tuple[int, int, int]] = (),
         single_channel_threshold: float | None = None,
     ):
+        """set_output defines the image output
+
+        Parameters
+        ----------
+        tile_shape:
+            the shape of the tile as a tuple. Currently, requires len(tile_shape) == 3.
+        tile_dtype:
+            the numpy dtype of the prediction tile.
+        fill_value:
+            used to fill in empty chunks of the underlying zarr Array
+        is_rgb_prediction:
+            set to True if you provide an RGB tile in `.add_prediction`
+        channel_colors:
+            if you provide prediction scores in a multichannel tile, each channel requires
+            a color. provide as tuple[int, int, int] with ranges 0 <= c <= 255
+        single_channel_threshold:
+            if you provide prediction scores in a singlechannel tile, set this threshold
+            to distinguish between positive and negative predictions.
+
+        """
         s = tuple(tile_shape)
         assert len(s) == 3 and all(isinstance(x, int) and x > 0 for x in s)
         self._chunk_size = s
         self._output_dtype = tile_dtype
-        self._fill_value = fill_value
+
+        self._is_rgb_prediction = bool(is_rgb_prediction)
+        if not is_rgb_prediction:
+            self._fill_value = fill_value
+
+        else:
+            assert s[2] == 3, f"not an RBG tile: {s!r} need 3 color channels"
+            assert tile_dtype == np.uint8, f"needs to be uint8 dtype, got: {tile_dtype}"
+            assert channel_colors == ()
+            assert single_channel_threshold is None
+
         self._color_conversion_kwargs["channel_colors"] = channel_colors
         self._color_conversion_kwargs[
             "single_channel_threshold"
@@ -346,7 +378,11 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = _get_image_prediction_urlpath(name)
-            rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
+            if self._is_rgb_prediction:
+                assert arr.ndim == 3 and arr.shape[2] == 3
+                rgb_arr = arr
+            else:
+                rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
             create_image_prediction_tiff(
                 rgb_arr,
@@ -395,7 +431,11 @@ class ImagePredictionWriter:
 
             arr = self.get_zarr_array(image_id)
             urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
-            rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
+            if self._is_rgb_prediction:
+                assert arr.ndim == 3 and arr.shape[2] == 3
+                rgb_arr = arr
+            else:
+                rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
 
             create_image_prediction_tiff(
                 rgb_arr,
