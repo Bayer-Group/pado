@@ -41,6 +41,7 @@ def create_image_prediction_tiff(
     tile_size: int = 256,
     input_storage_options: dict[str, Any] | None = None,
     output_storage_options: dict[str, Any] | None = None,
+    mpp: MPP | None = None,
 ) -> None:
     """helper for writing an image_prediction tiff file"""
     with ExitStack() as stack:
@@ -72,7 +73,14 @@ def create_image_prediction_tiff(
             buffer = stack.enter_context(
                 urlpathlike_to_fsspec(input_data, storage_options=input_storage_options)
             )
-            image = pyvips.Image.new_from_buffer(buffer, "", fail=True)
+            image = pyvips.Image.new_from_buffer(
+                buffer, "", access="sequential", fail=True
+            )
+
+        kw = {}
+        if mpp:
+            kw["xres"] = 1000.0 / mpp.x  # pixels per millimeter
+            kw["yres"] = 1000.0 / mpp.y
 
         with urlpathlike_to_fsspec(
             output_urlpath,
@@ -83,14 +91,13 @@ def create_image_prediction_tiff(
                 ".tiff",
                 pyramid=True,
                 tile=True,
-                xres=1000,
-                yres=1000,
                 subifd=False,
                 bigtiff=True,
                 # properties=True,
                 compression="jpeg",
                 tile_width=tile_size,
                 tile_height=tile_size,
+                **kw,
             )
             f.write(data)
 
@@ -156,7 +163,10 @@ class ImagePredictionWriter:
 
     >>> writer = ImagePredictionWriter(extra_metadata={"model": "my-model", "something": 4})
     >>> writer.set_input(image_id=my_id, image_size=size_of_original)  # IntSize(W, H, mpp=mpp0)
-    >>> writer.set_output(tile_shape=(512, 512, 4), tile_dtype=np.float64, fill_value=0.0)
+    >>> writer.set_output(
+    ...     tile_shape=(512, 512, 4), tile_dtype=np.float64, fill_value=0.0,
+    ...     channel_colors=[(0, 0, 0), (255, 0, 0), (0, 255, 0), (255, 255, 255)],
+    ... )
     >>> for tile in range(dataset):
     >>>     output = predict(tile)
     >>>     bounds = get_bounds(tile)
@@ -287,6 +297,7 @@ class ImagePredictionWriter:
             create_image_prediction_tiff(
                 rgb_arr,
                 urlpath,
+                mpp=self._size_map[image_id].mpp,
             )
             pred = Image(urlpath, load_metadata=True, load_file_info=True)
 
@@ -335,6 +346,7 @@ class ImagePredictionWriter:
             create_image_prediction_tiff(
                 rgb_arr,
                 urlpath,
+                mpp=self._size_map[image_id].mpp,
             )
             pred = Image(urlpath, load_metadata=True, load_file_info=True)
 
