@@ -38,8 +38,11 @@ dependencies:
   - platformdirs
   - pyarrow
   - pydantic
+  - pyvips
+  - rich
   - shapely
   - tifffile>=2020.9.22
+  - typer
   - toml
   - tqdm
   - zarr

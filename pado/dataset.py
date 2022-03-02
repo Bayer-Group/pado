@@ -17,6 +17,8 @@ from typing import Union
 from typing import get_args
 from typing import overload
 
+from pado.predictions.providers import ImagePredictionProvider
+
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
@@ -384,6 +386,9 @@ class PadoDataset:
         if isinstance(obj, PadoDataset):
             for x in [obj.images, obj.metadata, obj.annotations]:
                 self.ingest_obj(x)
+        elif isinstance(obj, dict):
+            raise NotImplementedError("todo: guess provider type")
+
         elif isinstance(obj, ImageProvider):
             if identifier is None and obj.identifier is None:
                 raise ValueError("need to provide an identifier for ImageProvider")
@@ -411,6 +416,15 @@ class PadoDataset:
             obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
             self._cached_metadata_provider = None
+
+        elif isinstance(obj, ImagePredictionProvider):
+            if identifier is None and obj.identifier is None:
+                raise ValueError(
+                    "need to provide an identifier for ImagePredictionProvider"
+                )
+            identifier = identifier or obj.identifier
+            pth = self._get_fspath(f"{identifier}.image_predictions.parquet")
+            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
 
         else:
             raise TypeError(f"unsupported object type {type(obj).__name__}: {obj!r}")

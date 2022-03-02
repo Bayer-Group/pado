@@ -187,7 +187,7 @@ def mock_images(
     for image_id in mock_image_ids(number):
 
         stem, _ = os.path.splitext(image_id.last)
-        with temporary_mock_svs(stem=stem, size=(256, 256)) as fn:
+        with temporary_mock_svs(stem=stem, size=(512, 512)) as fn:
             img_data = fn.read_bytes()
             img_path = os.path.join(path, f"{stem}.svs")
 

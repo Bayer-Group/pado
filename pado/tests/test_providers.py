@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import os
 import unittest.mock
+from itertools import product
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
 import pytest
 
+from pado.dataset import PadoDataset
 from pado.images import ImageProvider
 from pado.images.providers import copy_image
 from pado.images.providers import create_image_provider
+from pado.images.utils import Bounds
 from pado.io.files import find_files
 from pado.io.paths import match_partial_paths_reversed
 from pado.mock import temporary_mock_svs
+from pado.predictions.writers import ImagePredictionWriter
 
 
 @pytest.fixture
@@ -89,3 +94,59 @@ def test_copy_image(tmp_path, image_provider):
 
     assert "new_storage_location" in image_provider[iid].urlpath
     assert len(list(find_files(new_dst, glob="**/*.svs"))) == 1
+
+
+PREDICTIONS_PER_IMAGE = 2
+
+
+@pytest.fixture
+def dataset_with_predictions(dataset):
+
+    tile_size = 100
+    tile_shape = (tile_size, tile_size, 3)
+    tile_dtype = np.dtype("u1")
+    channel_colors = [
+        (0, 0, 0),
+        (128, 128, 128),
+        (255, 255, 255),
+    ]
+
+    for iidx, iid in enumerate(dataset.index):
+        image = dataset.images[iid]
+
+        tile_mpp = image.mpp
+
+        for pidx in range(PREDICTIONS_PER_IMAGE):
+            writer = ImagePredictionWriter(extra_metadata={"idx": iidx, "pidx": pidx})
+            writer.set_input(image_id=iid, image_size=image.dimensions)
+            writer.set_output(
+                tile_shape=tile_shape,
+                tile_dtype=tile_dtype,
+                channel_colors=channel_colors,
+            )
+
+            iw, ih = image.dimensions.as_tuple()
+            coords = list(product(range(0, iw, tile_size), range(0, ih, tile_size)))
+            for idx, (x0, y0) in enumerate(coords):
+                b = Bounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
+                writer.add_prediction(
+                    np.full(tile_shape, idx, dtype=tile_dtype),
+                    bounds=b,
+                )
+
+            writer.store_in_dataset(dataset, predictions_path="_my_predictions")
+
+    yield PadoDataset(dataset.urlpath, mode="r")
+
+
+def test_grouped_image_predictions_provider(dataset_with_predictions):
+    ds = dataset_with_predictions
+    assert len(ds.predictions.images) == len(ds.images)
+
+    pitem = ds.predictions.get_by_idx(0)
+    image_predictions = pitem.image
+    assert len(image_predictions) == PREDICTIONS_PER_IMAGE
+    ipred = image_predictions[0]
+
+    assert ipred.extra_metadata
+    assert ipred.image.dimensions
