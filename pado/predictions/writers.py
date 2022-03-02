@@ -4,6 +4,7 @@ import json
 import os
 import random
 import uuid
+import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from pathlib import Path
@@ -20,6 +21,7 @@ from pado.images import Image
 from pado.images import ImageId
 from pado.images.utils import MPP
 from pado.images.utils import Bounds
+from pado.images.utils import IntBounds
 from pado.images.utils import IntSize
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fsspec
@@ -276,13 +278,20 @@ class ImagePredictionWriter:
                 fill_value=self._fill_value,
             )
 
-    def add_prediction(self, prediction_data: ArrayLike, *, bounds: Bounds) -> None:
+    def add_prediction(self, prediction_data: ArrayLike, *, bounds: IntBounds) -> None:
         """add a tile prediction to the writer"""
         assert self._image_id is not None  # todo: lift restriction
 
         iid = self._image_id
         size = self._size_map[iid]
         arr = self.get_zarr_array(iid)
+
+        if not isinstance(bounds, IntBounds):
+            warnings.warn(
+                "Received a Bounds instance instead of IntBounds. "
+                "Doublecheck why you're currently using float coordinates!"
+            )
+            bounds = bounds.floor()
 
         assert size.mpp == bounds.mpp  # todo: lift restriction
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import floor
 from typing import Callable
 from typing import Optional
 from typing import Tuple
@@ -21,6 +22,7 @@ __all__ = [
     "IntSize",
     "MPP",
     "Bounds",
+    "IntBounds",
     "Geometry",
 ]
 
@@ -163,23 +165,70 @@ class IntSize(Size):
 
 @dataclass(frozen=True)
 class Bounds:
-    """
-    A general 4D size that aims at representing rectangular shapes.
-    It optionally comes with a MPP for scaling
+    """a class for rectangular bounds
+
+    Notes
+    -----
+
+      p0 ---- +
+       |      |
+       |      |
+       + ---- p1
+
+    p0: Point(x0, y0)
+    p1: Point(x1, y1)
+
+    assert p0.x < p1.x and p0.y < p1.y
+
     """
 
-    x_left: NonNegativeFloat
-    y_left: NonNegativeFloat
-    x_right: NonNegativeFloat
-    y_right: NonNegativeFloat
+    x0: NonNegativeFloat
+    y0: NonNegativeFloat
+    x1: NonNegativeFloat
+    y1: NonNegativeFloat
     mpp: Optional[MPP] = None
 
-    def round(self) -> Bounds:
-        return Bounds(
-            round(self.x_left),
-            round(self.y_left),
-            round(self.x_right),
-            round(self.y_right),
+    def __post_init_post_parse__(self):
+        if not (self.x0 < self.x1 and self.y0 < self.y1):
+            raise ValueError(
+                f"Invalid bounds, must: {self.x0} < {self.x1} and {self.y0} < {self.y1}"
+            )
+
+    @property
+    def x0y0(self) -> Point:
+        return Point(self.x0, self.y0, mpp=self.mpp)
+
+    @property
+    def x1y1(self) -> Point:
+        return Point(self.x0, self.y0, mpp=self.mpp)
+
+    @property
+    def width(self) -> float:
+        return self.x1 - self.x0
+
+    @property
+    def height(self) -> float:
+        return self.y1 - self.y0
+
+    @property
+    def size(self) -> Size:
+        return Size(x=self.width, y=self.height, mpp=self.mpp)
+
+    def round(self) -> IntBounds:
+        return IntBounds(
+            round(self.x0),
+            round(self.y0),
+            round(self.x1),
+            round(self.y1),
+            self.mpp,
+        )
+
+    def floor(self) -> IntBounds:
+        return IntBounds(
+            floor(self.x0),
+            floor(self.y0),
+            floor(self.x1),
+            floor(self.y1),
             self.mpp,
         )
 
@@ -189,48 +238,29 @@ class Bounds:
         if current is None:
             raise ValueError(f"Can't scale: {self!r} has no mpp")
         return Bounds(
-            x_left=self.x_left * current.x / mpp.x,
-            y_left=self.y_left * current.y / mpp.y,
-            x_right=self.x_right * current.x / mpp.x,
-            y_right=self.y_right * current.y / mpp.y,
+            x0=self.x0 * current.x / mpp.x,
+            y0=self.y0 * current.y / mpp.y,
+            x1=self.x1 * current.x / mpp.x,
+            y1=self.y1 * current.y / mpp.y,
             mpp=mpp,
         )
 
-    @property
-    def upper_left_coords(self) -> IntPoint:
-        return IntPoint(x=int(self.x_left), y=int(self.y_left), mpp=self.mpp)
-
-    @property
-    def width(self):
-        return self.x_right - self.x_left
-
-    @property
-    def height(self):
-        return self.y_right - self.y_left
-
-    @property
-    def size(self) -> IntSize:
-        return IntSize(x=int(self.width), y=int(self.height), mpp=self.mpp)
-
     @classmethod
     def from_tuple(
-        cls: Type[_B], xyxy: Tuple[float, float, float, float], *, mpp: MPP
+        cls: Type[_B], x0y0x1y1: Tuple[float, float, float, float], *, mpp: MPP
     ) -> _B:
-        x_left, y_left, x_right, y_right = xyxy
-        return cls(
-            x_left=x_left, y_left=y_left, x_right=x_right, y_right=y_right, mpp=mpp
-        )
+        return cls(*x0y0x1y1, mpp=mpp)
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
-        return self.x_left, self.y_left, self.x_right, self.y_right
+        return self.x0, self.y0, self.x1, self.y1
 
-    def as_record(self) -> dict[str, float | None]:
+    def as_record(self) -> dict[str, float]:
         assert self.mpp is not None
         return {
-            "x0": self.x_left,
-            "y0": self.y_left,
-            "x1": self.x_right,
-            "y1": self.y_right,
+            "x0": self.x0,
+            "y0": self.y0,
+            "x1": self.x1,
+            "y1": self.y1,
             "mpp_x": self.mpp.x,
             "mpp_y": self.mpp.y,
         }
@@ -247,6 +277,45 @@ class Bounds:
                 record["mpp_y"],
             ),
         )
+
+
+# noinspection PyDataclass
+@dataclass(frozen=True)
+class IntBounds(Bounds):
+
+    x0: conint(ge=0, strict=True)  # type: ignore
+    y0: conint(ge=0, strict=True)  # type: ignore
+    x1: conint(ge=0, strict=True)  # type: ignore
+    y1: conint(ge=0, strict=True)  # type: ignore
+
+    @property
+    def x0y0(self) -> IntPoint:
+        return IntPoint(self.x0, self.y0, mpp=self.mpp)
+
+    @property
+    def x1y1(self) -> IntPoint:
+        return IntPoint(self.x0, self.y0, mpp=self.mpp)
+
+    @property
+    def width(self) -> int:
+        return self.x1 - self.x0
+
+    @property
+    def height(self) -> int:
+        return self.y1 - self.y0
+
+    @property
+    def size(self) -> IntSize:
+        return IntSize(x=self.width, y=self.height, mpp=self.mpp)
+
+    def round(self) -> IntBounds:
+        return self
+
+    def floor(self) -> IntBounds:
+        return self
+
+    def as_tuple(self) -> Tuple[int, int, int, int]:
+        return self.x0, self.y0, self.x1, self.y1
 
 
 @dataclass(config=type("", (), {"arbitrary_types_allowed": True}))
