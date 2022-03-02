@@ -10,6 +10,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Callable
 from typing import Sequence
 
 import numpy as np
@@ -353,115 +354,111 @@ class ImagePredictionWriter:
         y1 = min(y1, ah)
         arr[y0:y1, x0:x1, :] = prediction_data[: (y1 - y0), : (x1 - x0), :]
 
+    def _create_image_prediction(
+        self,
+        image_id: ImageId,
+        urlpath: UrlpathLike,
+    ) -> Image:
+        """creates a tiff at urlpath and returns an Image instance"""
+        zarray = self.get_zarr_array(image_id)
+
+        # convert to rgb image
+        if self._is_rgb_prediction:
+            rgb_arr = zarray[:]
+        else:
+            rgb_arr = _multichannel_to_rgb(zarray[:], **self._color_conversion_kwargs)
+        assert rgb_arr.ndim == 3 and rgb_arr.shape[2] == 3
+
+        # save as pyramidal tiff
+        create_image_prediction_tiff(
+            rgb_arr,
+            urlpath,
+            mpp=self._size_map[image_id].mpp,
+        )
+        return Image(urlpath, load_metadata=True, load_file_info=True)
+
+    def _store(
+        self,
+        provider_urlpath: UrlpathLike | None,
+        prediction_urlpath_func: Callable[[ImageId], UrlpathLike],
+    ) -> ImagePredictionProvider:
+        """store the image prediction provider and images"""
+        ipp = {}
+
+        for image_id in self._size_map:
+            name = image_id.to_url_id()
+            if name not in self._group:
+                continue
+
+            # write the prediction tiff and return an image instance
+            pred = self._create_image_prediction(
+                image_id=image_id,
+                urlpath=prediction_urlpath_func(image_id),
+            )
+
+            # add the image instance as ImagePrediction to the provider
+            ipp[image_id] = [
+                ImagePrediction(
+                    image_id=image_id,
+                    prediction_type=ImagePredictionType.HEATMAP,
+                    bounds=Bounds(
+                        0,
+                        0,
+                        pred.dimensions.x,
+                        pred.dimensions.y,
+                        mpp=self._size_map[image_id].mpp,
+                    ),
+                    extra_metadata=self._extra_metadata,
+                    image=pred,
+                )
+            ]
+
+        provider = ImagePredictionProvider(ipp, identifier=self._identifier)
+        if provider_urlpath is not None:
+            provider.to_parquet(provider_urlpath)
+        return provider
+
     def store_in_local_dir(
         self,
         path: os.PathLike,
         *,
         predictions_path: str = "_image_predictions",
-    ):
+    ) -> None:
         """store the predictions in a local dir"""
-        ipp = {}
-
         pth = Path(path)
         if not pth.is_dir():
             pth.mkdir(parents=True)
 
-        def _get_image_prediction_urlpath(n):
+        def _get_image_prediction_urlpath(iid: ImageId) -> Path:
             p = pth.joinpath(predictions_path)
             p.mkdir(exist_ok=True)
-            return p.joinpath(f"{n}-{uuid.uuid4()}.tif")
+            return p.joinpath(f"{iid.to_url_id()}-{uuid.uuid4()}.tif")
 
-        for image_id in self._size_map:
-            name = image_id.to_url_id()
-            if name not in self._group:
-                continue
-
-            arr = self.get_zarr_array(image_id)
-            urlpath = _get_image_prediction_urlpath(name)
-            if self._is_rgb_prediction:
-                assert arr.ndim == 3 and arr.shape[2] == 3
-                rgb_arr = arr[:]
-            else:
-                rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
-
-            create_image_prediction_tiff(
-                rgb_arr,
-                urlpath,
-                mpp=self._size_map[image_id].mpp,
-            )
-            pred = Image(urlpath, load_metadata=True, load_file_info=True)
-
-            ipp[image_id] = [
-                ImagePrediction(
-                    image_id=image_id,
-                    prediction_type=ImagePredictionType.HEATMAP,
-                    bounds=Bounds(
-                        0,
-                        0,
-                        pred.dimensions.x,
-                        pred.dimensions.y,
-                        mpp=self._size_map[image_id].mpp,
-                    ),
-                    extra_metadata=self._extra_metadata,
-                    image=pred,
-                )
-            ]
-
-        provider = ImagePredictionProvider(ipp, identifier=self._identifier)
-        provider.to_parquet(
-            pth.joinpath(f"{self._identifier}.image_predictions.parquet")
+        self._store(
+            pth.joinpath(f"{self._identifier}.image_predictions.parquet"),
+            _get_image_prediction_urlpath,
         )
 
     def store_in_dataset(
-        self, ds: PadoDataset, *, predictions_path: str = "../predictions"
+        self,
+        ds: PadoDataset,
+        *,
+        predictions_path: str = "../predictions",
     ) -> None:
         """store the collected prediction data in the pado dataset"""
         assert not ds.readonly
 
-        ipp = {}
-
-        def _get_image_prediction_urlpath(n):
-            pth = ds._ensure_dir(predictions_path)
-            return os.path.join(pth, f"{n}-{uuid.uuid4()}.tif")  # fixme: normalize path
-
-        for image_id in self._size_map:
-            name = image_id.to_url_id()
-            if name not in self._group:
-                continue
-
-            arr = self.get_zarr_array(image_id)
-            urlpath = fsopen(ds._fs, _get_image_prediction_urlpath(name), mode="wb")
-            if self._is_rgb_prediction:
-                assert arr.ndim == 3 and arr.shape[2] == 3
-                rgb_arr = arr[:]
-            else:
-                rgb_arr = _multichannel_to_rgb(arr[:], **self._color_conversion_kwargs)
-
-            create_image_prediction_tiff(
-                rgb_arr,
-                urlpath,
-                mpp=self._size_map[image_id].mpp,
+        def _get_image_prediction_urlpath(iid: ImageId) -> UrlpathLike:
+            # noinspection PyProtectedMember
+            fs, pth = ds._fs, ds._ensure_dir(predictions_path)
+            return fsopen(
+                fs,
+                os.path.join(pth, f"{iid.to_url_id()}-{uuid.uuid4()}.tif"),
+                mode="wb",
             )
-            pred = Image(urlpath, load_metadata=True, load_file_info=True)
 
-            ipp[image_id] = [
-                ImagePrediction(
-                    image_id=image_id,
-                    prediction_type=ImagePredictionType.HEATMAP,
-                    bounds=Bounds(
-                        0,
-                        0,
-                        pred.dimensions.x,
-                        pred.dimensions.y,
-                        mpp=self._size_map[image_id].mpp,
-                    ),
-                    extra_metadata=self._extra_metadata,
-                    image=pred,
-                )
-            ]
-
-        provider = ImagePredictionProvider(ipp, identifier=self._identifier)
-        ds.ingest_obj(provider)
+        ipp = self._store(None, _get_image_prediction_urlpath)
+        ds.ingest_obj(ipp)
 
 
 if __name__ == "__main__":
