@@ -8,7 +8,14 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 import pytest
+from pydantic.color import Color
+from shapely.geometry import Polygon
 
+from pado.annotations import Annotation
+from pado.annotations import Annotations
+from pado.annotations import AnnotationState
+from pado.annotations import Annotator
+from pado.annotations import AnnotatorType
 from pado.dataset import PadoDataset
 from pado.images import ImageProvider
 from pado.images.providers import copy_image
@@ -150,3 +157,34 @@ def test_grouped_image_predictions_provider(dataset_with_predictions):
 
     assert ipred.extra_metadata
     assert ipred.image.dimensions
+
+
+def test_annotation_provider_df_access_after_update(dataset_ro):
+    ds = PadoDataset(None)
+    iid = dataset_ro.index[0]
+
+    p_shape_before = ds.annotations.df.shape
+
+    ds.annotations[iid] = a = Annotations()
+    a_shape_before = a.df.shape
+
+    a.append(
+        Annotation.from_obj(
+            dict(
+                image_id=iid,
+                project="tggates",
+                annotator=Annotator(type=AnnotatorType("model"), name="test"),
+                state=AnnotationState(3),
+                classification="colored_square",
+                color=Color((0, 0, 0, 1)),
+                comment="No comment",
+                geometry=Polygon.from_bounds(0, 0, 500, 500),
+            )
+        )
+    )
+
+    p_shape_after = ds.annotations.df.shape
+    a_shape_after = a.df.shape
+
+    assert a_shape_before != a_shape_after
+    assert p_shape_before != p_shape_after
