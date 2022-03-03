@@ -511,7 +511,10 @@ class PadoDataset:
             raise ValueError(
                 f"unsupported cache: {set(caches).difference(valid_caches)}"
             )
-        for cache in caches:
+        caches = list(caches)
+        if "images" in caches:
+            caches.insert(caches.index("images") + 1, "index")
+        for cache in reversed(caches):
             try:
                 del self.__dict__[cache]
             except KeyError:
