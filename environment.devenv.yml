@@ -41,7 +41,7 @@ dependencies:
   - pydantic
   - rich
   - shapely
-  - tifffile>=2020.9.22
+  - tifffile>=2021.6.6
   - typer
   - toml
   - tqdm
