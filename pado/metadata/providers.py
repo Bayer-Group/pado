@@ -16,6 +16,7 @@ from typing import Optional
 
 import pandas as pd
 
+from pado._compat import cached_property
 from pado.images import ImageId
 from pado.images.ids import GetImageIdFunc
 from pado.io.store import Store
@@ -190,6 +191,7 @@ class GroupedMetadataProvider(MetadataProvider):
         self.is_standardized = len({tuple(p.df.columns) for p in self.providers}) == 1
         self.identifier = "-".join(["grouped", *(p.identifier for p in self.providers)])
 
+    @cached_property
     def df(self):
         if not self.is_standardized:
             raise RuntimeError(
