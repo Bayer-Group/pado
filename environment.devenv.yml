@@ -33,12 +33,12 @@ dependencies:
   - itsdangerous
   - numpy
   - orjson
+  - opencv
   - pandas
   - pillow
   - platformdirs
   - pyarrow
   - pydantic
-  - pyvips
   - rich
   - shapely
   - tifffile>=2020.9.22

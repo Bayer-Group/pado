@@ -6,17 +6,17 @@ import random
 import uuid
 import warnings
 from collections import defaultdict
-from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Sequence
 
+import cv2
 import numpy as np
-import pyvips
 import zarr.hierarchy
 import zarr.storage
+from tifffile import tifffile
 
 from pado.images import Image
 from pado.images import ImageId
@@ -43,71 +43,63 @@ __all__ = [
 
 
 def create_image_prediction_tiff(
-    input_data: np.ndarray | UrlpathLike,
+    input_data: np.ndarray,
     output_urlpath: UrlpathLike,
     *,
     tile_size: int = 256,
-    input_storage_options: dict[str, Any] | None = None,
     output_storage_options: dict[str, Any] | None = None,
     mpp: MPP | None = None,
 ) -> None:
     """helper for writing an image_prediction tiff file"""
-    with ExitStack() as stack:
-        if isinstance(input_data, np.ndarray):
-            # map np dtypes to vips
-            dtype_to_format = {
-                "uint8": "uchar",
-                "int8": "char",
-                "uint16": "ushort",
-                "int16": "short",
-                "uint32": "uint",
-                "int32": "int",
-                "float32": "float",
-                "float64": "double",
-                "complex64": "complex",
-                "complex128": "dpcomplex",
-            }
+    if not isinstance(input_data, np.ndarray):
+        raise TypeError(f"expected ndarray, got {type(input_data)}: {input_data!r}")
+    data = input_data
 
-            def numpy2vips(a):
-                height, width, bands = a.shape
-                linear = a.reshape(width * height * bands)
-                vi = pyvips.Image.new_from_memory(
-                    linear.data, width, height, bands, dtype_to_format[str(a.dtype)]
-                )
-                return vi
+    assert data.ndim == 3 and data.shape[2] == 3, f"shape={data.shape!r}"
 
-            image = numpy2vips(input_data)
-        else:
-            buffer = stack.enter_context(
-                urlpathlike_to_fsspec(input_data, storage_options=input_storage_options)
-            )
-            image = pyvips.Image.new_from_buffer(
-                buffer, "", access="sequential", fail=True
-            )
+    def _num_pyramids(ldim: int, tsize: int) -> int:
+        assert ldim > 0 and tsize > 0
+        n = 0
+        while ldim > tsize:
+            ldim //= 2
+            n += 1
+        return n
 
-        kw = {}
-        if mpp:
-            kw["xres"] = 1000.0 / mpp.x  # pixels per millimeter
-            kw["yres"] = 1000.0 / mpp.y
-
-        with urlpathlike_to_fsspec(
-            output_urlpath,
-            mode="wb",
-            storage_options=output_storage_options,
-        ) as f:
-            data = image.write_to_buffer(
-                ".tiff",
-                pyramid=True,
-                tile=True,
-                subifd=False,
-                bigtiff=True,
-                # properties=True,
+    # write the image to a pyramidal OME-TIFF page by page, subifd by subifd
+    with urlpathlike_to_fsspec(
+        output_urlpath,
+        mode="wb",
+        storage_options=output_storage_options,
+    ) as f:
+        with tifffile.TiffWriter(f, bigtiff=True, ome=True) as tif:
+            options = dict(
+                tile=(tile_size, tile_size),
+                photometric="rgb",
                 compression="jpeg",
-                tile_width=tile_size,
-                tile_height=tile_size,
-                **kw,
             )
-            f.write(data)
+            options0 = {}
+            if mpp:
+                options0["resolution"] = (1.0 / mpp.x, 1.0 / mpp.y, "MICROMETER")
+            im_height, im_width, _ = data.shape
+
+            # get the number of image pyramid layers
+            num_pyramids = _num_pyramids(max(im_height, im_width), tile_size)
+            # write channel data
+            tif.write(
+                data,
+                subifds=num_pyramids,
+                **options0,
+                **options,
+            )
+            # save pyramid levels to the subifds
+            lvl_data = data
+            for _ in range(num_pyramids):
+                lvl_data = cv2.pyrDown(lvl_data)
+                tif.write(
+                    lvl_data,
+                    subfiletype=1,
+                    **options,
+                )
 
 
 def _multichannel_to_rgb(
