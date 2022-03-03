@@ -8,7 +8,7 @@ import numpy as np
 import tiffslide
 
 from pado.dataset import PadoDataset
-from pado.images.utils import Bounds
+from pado.images.utils import IntBounds
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.predictions.writers import ImagePredictionWriter
 from pado.predictions.writers import _multichannel_to_rgb
@@ -88,7 +88,7 @@ def test_prediction_writer(dataset):
     iw, ih = image.dimensions.as_tuple()
     coords = list(product(range(0, iw, tile_size), range(0, ih, tile_size)))
     for idx, (x0, y0) in enumerate(coords):
-        b = Bounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
+        b = IntBounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
         writer.add_prediction(
             np.full(tile_shape, idx, dtype=tile_dtype),
             bounds=b,
