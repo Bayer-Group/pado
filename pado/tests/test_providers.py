@@ -13,7 +13,7 @@ from pado.dataset import PadoDataset
 from pado.images import ImageProvider
 from pado.images.providers import copy_image
 from pado.images.providers import create_image_provider
-from pado.images.utils import Bounds
+from pado.images.utils import IntBounds
 from pado.io.files import find_files
 from pado.io.paths import match_partial_paths_reversed
 from pado.mock import temporary_mock_svs
@@ -128,7 +128,7 @@ def dataset_with_predictions(dataset):
             iw, ih = image.dimensions.as_tuple()
             coords = list(product(range(0, iw, tile_size), range(0, ih, tile_size)))
             for idx, (x0, y0) in enumerate(coords):
-                b = Bounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
+                b = IntBounds(x0, y0, x0 + tile_size, y0 + tile_size, mpp=tile_mpp)
                 writer.add_prediction(
                     np.full(tile_shape, idx, dtype=tile_dtype),
                     bounds=b,
