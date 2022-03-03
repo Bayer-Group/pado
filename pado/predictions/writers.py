@@ -72,15 +72,24 @@ def create_image_prediction_tiff(
         storage_options=output_storage_options,
     ) as f:
         with tifffile.TiffWriter(f, bigtiff=True, ome=True) as tif:
+            im_height, im_width, _ = data.shape
+
+            options0 = {}
+            metadata = {}
+            if mpp:
+                metadata = {
+                    "PhysicalSizeX": mpp.x,
+                    "PhysicalSizeXUnit": "µm",
+                    "PhysicalSizeY": mpp.y,
+                    "PhysicalSizeYUnit": "µm",
+                }
+                options0["resolution"] = (1.0 / mpp.x, 1.0 / mpp.y, "MICROMETER")
             options = dict(
                 tile=(tile_size, tile_size),
                 photometric="rgb",
                 compression="jpeg",
+                metadata=metadata,
             )
-            options0 = {}
-            if mpp:
-                options0["resolution"] = (1.0 / mpp.x, 1.0 / mpp.y, "MICROMETER")
-            im_height, im_width, _ = data.shape
 
             # get the number of image pyramid layers
             num_pyramids = _num_pyramids(max(im_height, im_width), tile_size)
