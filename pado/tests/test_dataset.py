@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from pado.annotations import AnnotationProvider
 from pado.dataset import PadoDataset
 from pado.images import Image
 from pado.images import ImageId
@@ -162,3 +163,19 @@ def test_ingested_dataset_attribute_retrieval(datasource):
     _ = ds.annotations[image_id]
     _ = ds.metadata[image_id]
     _ = ds.images[image_id]
+
+
+def test_dataset_caches_after_ingest(dataset_ro):
+    ds = PadoDataset(None, mode="w")
+    ds.ingest_obj(dataset_ro)
+
+    assert not ds.images.df.empty
+    assert not ds.metadata.df.empty
+    assert not ds.annotations.df.empty
+
+    ds.ingest_obj(ImageProvider(dataset_ro.images, identifier="something"))
+    assert not ds.images.df.empty
+    ds.ingest_obj(MetadataProvider(dataset_ro.metadata, identifier="something"))
+    assert not ds.metadata.df.empty
+    ds.ingest_obj(AnnotationProvider(dataset_ro.annotations, identifier="something"))
+    assert not ds.annotations.df.empty
