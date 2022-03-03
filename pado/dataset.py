@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import collections.abc
 import os
 import pathlib
 import sys
@@ -17,8 +16,6 @@ from typing import Union
 from typing import get_args
 from typing import overload
 
-from pado.predictions.providers import ImagePredictionProvider
-
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
@@ -28,6 +25,7 @@ import fsspec
 import pandas as pd
 import shapely.wkt
 
+from pado._compat import cached_property
 from pado._repr import DescribeFormat
 from pado._repr import describe_format_plain_text
 from pado._repr import number
@@ -46,6 +44,7 @@ from pado.io.store import StoreType
 from pado.io.store import get_store_type
 from pado.metadata import GroupedMetadataProvider
 from pado.metadata import MetadataProvider
+from pado.predictions.providers import ImagePredictionProvider
 from pado.predictions.proxy import PredictionProxy
 from pado.types import DatasetSplitter
 from pado.types import IOMode
@@ -123,13 +122,6 @@ class PadoDataset:
         if not self.readonly:
             self._ensure_dir()
 
-        # caches
-        self._cached_index = None
-        self._cached_image_provider = None
-        self._cached_annotation_provider = None
-        self._cached_metadata_provider = None
-        self._cached_predictions_proxy = None
-
     @property
     def urlpath(self) -> str:
         """the urlpath pointing to the PadoDataset"""
@@ -157,88 +149,76 @@ class PadoDataset:
 
     # === data properties ===
 
-    @property
+    @cached_property
     def index(self) -> Sequence[ImageId]:
         """sequence of image_ids in the dataset"""
-        if self._cached_index is None:
-            image_ids = self.images.keys()
-            if isinstance(image_ids, collections.abc.Sequence):
-                self._cached_index = image_ids
-            else:
-                self._cached_index = tuple(image_ids)
-        return self._cached_index
+        image_ids = self.images.keys()
+        if isinstance(image_ids, Sequence):
+            index = image_ids
+        else:
+            index = tuple(image_ids)
+        return index
 
-    @property
+    @cached_property
     def images(self) -> ImageProvider:
         """mapping image_ids to images in the dataset"""
-        if self._cached_image_provider is None:
+        fs = self._fs
+        providers = [
+            ImageProvider.from_parquet(fsopen(fs, p, mode="rb"))
+            for p in fs.glob(self._get_fspath("*.image.parquet"))
+            if fs.isfile(p)
+        ]
 
-            fs = self._fs
-            providers = [
-                ImageProvider.from_parquet(fsopen(fs, p, mode="rb"))
-                for p in fs.glob(self._get_fspath("*.image.parquet"))
-                if fs.isfile(p)
-            ]
+        if len(providers) == 0:
+            image_provider = ImageProvider()
+        elif len(providers) == 1:
+            image_provider = providers[0]
+        else:
+            image_provider = GroupedImageProvider(*providers)
 
-            if len(providers) == 0:
-                image_provider = ImageProvider()
-            elif len(providers) == 1:
-                image_provider = providers[0]
-            else:
-                image_provider = GroupedImageProvider(*providers)
+        return image_provider
 
-            self._cached_image_provider = image_provider
-        return self._cached_image_provider
-
-    @property
+    @cached_property
     def annotations(self) -> AnnotationProvider:
         """mapping image_ids to annotations in the dataset"""
-        if self._cached_annotation_provider is None:
+        fs = self._fs
+        providers = [
+            AnnotationProvider.from_parquet(fsopen(fs, p, mode="rb"))
+            for p in fs.glob(self._get_fspath("*.annotation.parquet"))
+            if fs.isfile(p)
+        ]
 
-            fs = self._fs
-            providers = [
-                AnnotationProvider.from_parquet(fsopen(fs, p, mode="rb"))
-                for p in fs.glob(self._get_fspath("*.annotation.parquet"))
-                if fs.isfile(p)
-            ]
+        if len(providers) == 0:
+            annotation_provider = AnnotationProvider()
+        elif len(providers) == 1:
+            annotation_provider = providers[0]
+        else:
+            annotation_provider = GroupedAnnotationProvider(*providers)
 
-            if len(providers) == 0:
-                annotation_provider = AnnotationProvider()
-            elif len(providers) == 1:
-                annotation_provider = providers[0]
-            else:
-                annotation_provider = GroupedAnnotationProvider(*providers)
+        return annotation_provider
 
-            self._cached_annotation_provider = annotation_provider
-        return self._cached_annotation_provider
-
-    @property
+    @cached_property
     def metadata(self) -> MetadataProvider:
         """mapping image_ids to metadata in the dataset"""
-        if self._cached_metadata_provider is None:
+        fs = self._fs
+        providers = [
+            MetadataProvider.from_parquet(fsopen(fs, p, mode="rb"))
+            for p in fs.glob(self._get_fspath("*.metadata.parquet"))
+            if fs.isfile(p)
+        ]
 
-            fs = self._fs
-            providers = [
-                MetadataProvider.from_parquet(fsopen(fs, p, mode="rb"))
-                for p in fs.glob(self._get_fspath("*.metadata.parquet"))
-                if fs.isfile(p)
-            ]
+        if len(providers) == 0:
+            metadata_provider = MetadataProvider()
+        elif len(providers) == 1:
+            metadata_provider = providers[0]
+        else:
+            metadata_provider = GroupedMetadataProvider(*providers)
 
-            if len(providers) == 0:
-                metadata_provider = MetadataProvider()
-            elif len(providers) == 1:
-                metadata_provider = providers[0]
-            else:
-                metadata_provider = GroupedMetadataProvider(*providers)
+        return metadata_provider
 
-            self._cached_metadata_provider = metadata_provider
-        return self._cached_metadata_provider
-
-    @property
+    @cached_property
     def predictions(self) -> PredictionProxy:
-        if self._cached_predictions_proxy is None:
-            self._cached_predictions_proxy = PredictionProxy(self)
-        return self._cached_predictions_proxy
+        return PredictionProxy(self)
 
     # === access ===
 
@@ -396,8 +376,7 @@ class PadoDataset:
             pth = self._get_fspath(f"{identifier}.image.parquet")
             obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
-            self._cached_index = None
-            self._cached_image_provider = None
+            self._clear_caches("images")
 
         elif isinstance(obj, AnnotationProvider):
             if identifier is None and obj.identifier is None:
@@ -406,7 +385,7 @@ class PadoDataset:
             pth = self._get_fspath(f"{identifier}.annotation.parquet")
             obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
-            self._cached_annotation_provider = None
+            self._clear_caches("annotations")
 
         elif isinstance(obj, MetadataProvider):
             if identifier is None and obj.identifier is None:
@@ -415,7 +394,7 @@ class PadoDataset:
             pth = self._get_fspath(f"{identifier}.metadata.parquet")
             obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
             # invalidate caches
-            self._cached_metadata_provider = None
+            self._clear_caches("metadata")
 
         elif isinstance(obj, ImagePredictionProvider):
             if identifier is None and obj.identifier is None:
@@ -425,6 +404,8 @@ class PadoDataset:
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image_predictions.parquet")
             obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+            # invalidate caches
+            self._clear_caches("predictions")
 
         else:
             raise TypeError(f"unsupported object type {type(obj).__name__}: {obj!r}")
@@ -518,6 +499,23 @@ class PadoDataset:
             raise NotImplementedError(f'Format "{output_format}" is not allowed.')
 
     # === internal utility methods ===
+
+    def _clear_caches(
+        self, *caches: Literal["images", "metadata", "annotations", "predictions"]
+    ) -> None:
+        """clear each requested cached_property"""
+        valid_caches = ("images", "metadata", "annotations", "predictions")
+        if not caches:
+            caches = valid_caches
+        elif not set(caches).issubset(valid_caches):
+            raise ValueError(
+                f"unsupported cache: {set(caches).difference(valid_caches)}"
+            )
+        for cache in caches:
+            try:
+                del self.__dict__[cache]
+            except KeyError:
+                pass
 
     def _get_fspath(self, *parts: Union[str, os.PathLike]) -> str:
         """return a fspath for a resource"""
