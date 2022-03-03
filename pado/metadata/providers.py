@@ -176,8 +176,9 @@ class MetadataProvider(BaseMetadataProvider):
 class GroupedMetadataProvider(MetadataProvider):
     # todo: deduplicate
 
+    # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseMetadataProvider):
-        super().__init__()
+        # super().__init__() ... violating Liskov anyways ...
         self.providers = []
         for p in providers:
             if not isinstance(p, MetadataProvider):
@@ -187,6 +188,7 @@ class GroupedMetadataProvider(MetadataProvider):
             else:
                 self.providers.append(p)
         self.is_standardized = len({tuple(p.df.columns) for p in self.providers}) == 1
+        self.identifier = "-".join(["grouped", *(p.identifier for p in self.providers)])
 
     def df(self):
         if not self.is_standardized:

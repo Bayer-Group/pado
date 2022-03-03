@@ -187,8 +187,9 @@ class ImageProvider(BaseImageProvider):
 
 
 class GroupedImageProvider(ImageProvider):
+    # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseImageProvider):
-        super().__init__()
+        # super().__init__() ... violating Liskov anyways...
         self.providers = []
         for p in providers:
             if not isinstance(p, ImageProvider):
@@ -197,6 +198,7 @@ class GroupedImageProvider(ImageProvider):
                 self.providers.extend(p.providers)
             else:
                 self.providers.append(p)
+        self.identifier = "-".join(["grouped", *(p.identifier for p in self.providers)])
 
     @cached_property
     def df(self):
@@ -473,7 +475,7 @@ def copy_image(
     *,
     update_provider: bool = True,
     progress: bool = False,
-    chunk_size: int = 2 ** 20,
+    chunk_size: int = 2**20,
     **update_kwargs,
 ) -> None:
     """copy image data to a new location"""

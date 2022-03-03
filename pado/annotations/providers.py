@@ -205,8 +205,9 @@ class AnnotationProvider(BaseAnnotationProvider):
 class GroupedAnnotationProvider(AnnotationProvider):
     # todo: deduplicate
 
+    # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseAnnotationProvider):
-        super().__init__()
+        # super().__init__() ... violating liskov anyways ...
         self.providers = []
         for p in providers:
             if not isinstance(p, AnnotationProvider):
@@ -215,6 +216,7 @@ class GroupedAnnotationProvider(AnnotationProvider):
                 self.providers.extend(p.providers)
             else:
                 self.providers.append(p)
+        self.identifier = "-".join(["grouped", *(p.identifier for p in self.providers)])
 
     @cached_property
     def df(self):
