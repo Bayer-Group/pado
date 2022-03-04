@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC
+from reprlib import Repr
 from typing import Any
 from typing import Callable
 from typing import Collection
@@ -13,6 +14,7 @@ from typing import Dict
 from typing import Iterator
 from typing import MutableMapping
 from typing import Optional
+from typing import cast
 
 import pandas as pd
 
@@ -59,6 +61,10 @@ class MetadataProviderStore(Store):
 
 class BaseMetadataProvider(MutableMapping[ImageId, pd.DataFrame], ABC):
     """base class for metadata providers"""
+
+
+_r = Repr()
+_r.maxdict = 4
 
 
 class MetadataProvider(BaseMetadataProvider):
@@ -144,7 +150,10 @@ class MetadataProvider(BaseMetadataProvider):
         self.df.drop(image_id.to_str(), inplace=True)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.identifier!r})"
+        _akw = [_r.repr_dict(cast(dict, self), 0)]
+        if self.identifier is not None:
+            _akw.append(f"identifier={self.identifier!r}")
+        return f"{type(self).__name__}({', '.join(_akw)})"
 
     def __len__(self) -> int:
         return self.df.index.nunique(dropna=True)

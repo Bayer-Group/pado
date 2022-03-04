@@ -5,12 +5,14 @@ import uuid
 from abc import ABC
 from collections.abc import Collection
 from itertools import repeat
+from reprlib import Repr
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Iterator
 from typing import MutableMapping
 from typing import Optional
+from typing import cast
 
 import pandas as pd
 from tqdm import tqdm
@@ -66,6 +68,10 @@ class AnnotationProviderStore(Store):
 
 class BaseAnnotationProvider(MutableMapping[ImageId, Annotations], ABC):
     """base class for annotation providers"""
+
+
+_r = Repr()
+_r.maxdict = 4
 
 
 class AnnotationProvider(BaseAnnotationProvider):
@@ -192,7 +198,10 @@ class AnnotationProvider(BaseAnnotationProvider):
         )
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.identifier!r})"
+        _akw = [_r.repr_dict(cast(dict, self), 0)]
+        if self.identifier is not None:
+            _akw.append(f"identifier={self.identifier!r}")
+        return f"{type(self).__name__}({', '.join(_akw)})"
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         store = AnnotationProviderStore()

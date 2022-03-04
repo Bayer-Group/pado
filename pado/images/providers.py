@@ -3,6 +3,7 @@ from __future__ import annotations
 import os.path
 import uuid
 from abc import ABC
+from reprlib import Repr
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -14,6 +15,7 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 from typing import Type
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -81,6 +83,9 @@ class BaseImageProvider(MutableMapping[ImageId, Image], ABC):
 
 # noinspection PyUnresolvedReferences
 BaseImageProvider.register(dict)
+
+_r = Repr()
+_r.maxdict = 4
 
 
 class ImageProvider(BaseImageProvider):
@@ -162,7 +167,10 @@ class ImageProvider(BaseImageProvider):
             yield ImageId.from_str(i), Image.from_obj(x)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.identifier!r})"
+        _akw = [_r.repr_dict(cast(dict, self), 0)]
+        if self.identifier is not None:
+            _akw.append(f"identifier={self.identifier!r}")
+        return f"{type(self).__name__}({', '.join(_akw)})"
 
     def to_parquet(self, urlpath: UrlpathLike) -> None:
         store = ImageProviderStore()

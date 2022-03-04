@@ -145,7 +145,10 @@ class PadoDataset:
         return self._mode == "r"
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.urlpath!r}, mode={self._mode!r})"
+        so = ""
+        if self._storage_options:
+            so = f", storage_options={self._storage_options!r}"
+        return f"{type(self).__name__}({self.urlpath!r}, mode={self._mode!r}{so})"
 
     # === data properties ===
 
