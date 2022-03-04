@@ -82,18 +82,18 @@ class AnnotationProvider(BaseAnnotationProvider):
             provider = {}
 
         if isinstance(provider, AnnotationProvider):
-            self.df = provider.df.copy()
+            self._df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
             try:
                 _ = map(ImageId.from_str, provider.index)
             except (TypeError, ValueError):
                 raise ValueError("provider dataframe index has non ImageId indices")
-            self.df = provider.copy()
+            self._df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, (BaseAnnotationProvider, dict)):
             if not provider:
-                self.df = pd.DataFrame(columns=AnnotationModel.__fields__)
+                self._df = pd.DataFrame(columns=AnnotationModel.__fields__)
             else:
                 indices = []
                 data = []
@@ -102,7 +102,7 @@ class AnnotationProvider(BaseAnnotationProvider):
                         continue
                     indices.extend(repeat(ImageId.to_str(key), len(value)))
                     data.extend(a.to_record() for a in value)
-                self.df = pd.DataFrame.from_records(
+                self._df = pd.DataFrame.from_records(
                     index=indices,
                     data=data,
                     columns=AnnotationModel.__fields__,
@@ -114,6 +114,26 @@ class AnnotationProvider(BaseAnnotationProvider):
             )
 
         self._store = {}
+
+    @property
+    def df(self):
+        if not self._store:
+            return self._df
+        else:
+            # fixme: for now the implementation does the right thing.
+            #  but we should try to cache the dataframe based on some
+            #  indicator if the Annotations have been modified or not.
+            changed_iids = list(set(self._store))
+            changed_labels = list(map(str, changed_iids))
+            if not changed_iids:
+                dfs = [self._df]
+            else:
+                dfs = [self._df.drop(index=changed_labels, errors="ignore")]
+            for iid in changed_iids:
+                df = self._store[iid].df
+                df = df.set_index(pd.Index([iid.to_str()] * len(df)))
+                dfs.append(df)
+            return pd.concat(dfs)
 
     def __getitem__(self, image_id: ImageId) -> Annotations:
         if not isinstance(image_id, ImageId):
@@ -181,7 +201,7 @@ class AnnotationProvider(BaseAnnotationProvider):
             df = annos.df
             df = df.set_index(pd.Index([image_id.to_str()] * len(df)))
             dfs.append(df)
-        self.df = pd.concat(dfs)
+        self._df = pd.concat(dfs)
         store.to_urlpath(self.df, urlpath, identifier=self.identifier)
         self._store.clear()
 
@@ -198,7 +218,7 @@ class AnnotationProvider(BaseAnnotationProvider):
             store.METADATA_KEY_PROVIDER_VERSION,
         } == set(user_metadata), f"currently unused {user_metadata!r}"
         inst = cls(identifier=identifier)
-        inst.df = df
+        inst._df = df
         return inst
 
 
