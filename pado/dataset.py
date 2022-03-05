@@ -226,12 +226,15 @@ class PadoDataset:
     # === access ===
 
     def get_by_id(self, image_id: ImageId) -> PadoItem:
-        return PadoItem(
-            image_id,
-            self.images.get(image_id),
-            self.annotations.get(image_id),
-            self.metadata.get(image_id),
-        )
+        if image_id in self.index:
+            return PadoItem(
+                image_id,
+                self.images.get(image_id),
+                self.annotations.get(image_id),
+                self.metadata.get(image_id),
+            )
+        else:
+            raise KeyError(f'{image_id} does not match any entries in this dataset.')
 
     def get_by_idx(self, idx: int) -> PadoItem:
         image_id = self.index[idx]
