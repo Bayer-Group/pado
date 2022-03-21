@@ -15,6 +15,7 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 from typing import Type
+from typing import TypeVar
 from typing import cast
 
 import numpy as np
@@ -442,21 +443,25 @@ def create_image_provider(
     return ip
 
 
+_PT = TypeVar("_PT", bound="ImageProvider")
+
+
 def update_image_provider_urlpaths(
     search_urlpath: UrlpathLike,
     search_glob: str,
     *,
-    provider: ImageProvider | UrlpathLike,
+    provider: _PT | UrlpathLike,
     inplace: bool = False,
     ignore_ambiguous: bool = False,
     progress: bool = False,
-) -> ImageProvider:
+    provider_cls: Type[_PT] = ImageProvider,
+) -> _PT:
     """search a path and re-associate image urlpaths by filename"""
     files_and_parts = find_files(search_urlpath, glob=search_glob)
-    if isinstance(provider, ImageProvider):
+    if isinstance(provider, provider_cls):
         ip = provider
     else:
-        ip = ImageProvider.from_parquet(urlpath=provider)
+        ip = provider_cls.from_parquet(urlpath=provider)
 
     new_urlpaths = match_partial_paths_reversed(
         current_urlpaths=ip.df.urlpath,
@@ -471,7 +476,7 @@ def update_image_provider_urlpaths(
     if progress:
         print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
 
-    if inplace and not isinstance(provider, ImageProvider):
+    if inplace and not isinstance(provider, provider_cls):
         ip.to_parquet(provider)
     return ip
 
