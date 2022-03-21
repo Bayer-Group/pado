@@ -55,7 +55,7 @@ def info(
 
 @cli.command("info-stores")
 def info_stores(
-    name: Optional[str] = Option(...),
+    name: Optional[str] = Option(None),
     path: Optional[Path] = Argument(
         None, exists=True, file_okay=False, dir_okay=True, readable=True
     ),
