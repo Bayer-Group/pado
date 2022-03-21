@@ -460,7 +460,7 @@ def _get_store_subclass(store_type: StoreType) -> Type[S]:
         StoreType.ANNOTATION: ("pado.annotations.providers", "AnnotationProviderStore"),
         StoreType.IMAGE_PREDICTIONS: (
             "pado.predictions.providers",
-            "ImagePredictionProviderStore",
+            "ImagePredictionsProviderStore",
         ),
     }[store_type]
     store_cls: Type[Store] = getattr(importlib.import_module(_module), _clsname)
@@ -562,7 +562,7 @@ def migrate_store(
         m_of = urlpathlike_to_fsspec(_up, storage_options=_so)
         with m_of as m_f:
             with src_fs.open(src_pth, "wb") as f:
-                for chunk in iter(lambda: m_f.read(2 ** 20), ""):
+                for chunk in iter(lambda: m_f.read(2**20), ""):
                     f.write(chunk)
         return urlpath
 
