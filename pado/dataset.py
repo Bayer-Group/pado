@@ -252,6 +252,7 @@ class PadoDataset:
         ids_or_func: Sequence[ImageId] | Callable[[PadoItem], bool],
         *,
         urlpath: Optional[UrlpathLike] = None,
+        mode: IOMode = "r",
     ) -> PadoDataset:
         """filter a pado dataset
 
@@ -318,7 +319,7 @@ class PadoDataset:
         if len(mp) > 0:
             ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
 
-        return PadoDataset(ds.urlpath, mode="r")
+        return PadoDataset(ds.urlpath, mode=mode)
 
     def partition(
         self,
