@@ -80,7 +80,7 @@ class PadoDataset:
             'w' --> read/write, create if not there, truncate if there
             'x' --> read/write, create if not there, error if there
         storage_options:
-            a optional dictionary with options passed to fsspec for opening the urlpath
+            an optional dictionary with options passed to fsspec for opening the urlpath
 
         """
         self._storage_options: dict[str, Any] = storage_options or {}

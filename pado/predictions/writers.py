@@ -421,7 +421,7 @@ class ImagePredictionWriter:
 
     def store_in_local_dir(
         self,
-        path: os.PathLike,
+        path: os.PathLike[str] | str,
         *,
         predictions_path: str = "_image_predictions",
     ) -> None:
@@ -488,7 +488,9 @@ if __name__ == "__main__":
 
     for x in range(0, W, TW):
         for y in range(0, H, TH):
-            b = Bounds.from_tuple((x, y, min(x + TW, W), min(y + TH, H)), mpp=size.mpp)
+            b = IntBounds.from_tuple(
+                (x, y, min(x + TW, W), min(y + TH, H)), mpp=size.mpp
+            )
             arr = np.zeros((TH, TW, C)).astype(np.float32)
             arr[:, :, random.randint(0, C - 1)] = 1.0
             writer.add_prediction(arr, bounds=b)
