@@ -39,7 +39,6 @@ from pado.images import ImageProvider
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_string
-from pado.io.paths import get_root_dir
 from pado.io.store import StoreType
 from pado.io.store import get_store_type
 from pado.metadata import GroupedMetadataProvider
@@ -91,8 +90,6 @@ class PadoDataset:
             self._urlpath = f"memory://pado-{uuid.uuid4()}"
             mode = "r+"
         else:
-            # check provided urlpath and mode
-            urlpath = get_root_dir(urlpath, allow_file="pado.dataset.toml")
             try:
                 self._urlpath: str = urlpathlike_to_string(urlpath)
             except TypeError as err:
@@ -105,13 +102,14 @@ class PadoDataset:
             # if the dataset files should be there, check them
             fs = self._fs
             if mode in {"r", "r+"}:
-                if not (
-                    fs.isdir(self._root)  # raises if not there or reachable
-                    and any(fs.glob(self._get_fspath("*.image.parquet")))
-                ):
-                    raise ValueError(
-                        f"error: {self._urlpath} not a valid dataset since it has no image parquet file."
-                    )
+                try:
+                    is_dir = fs.isdir(self._root)  # raises if not there or reachable
+                except BaseException as err:
+                    raise RuntimeError(f"{self._urlpath!r} not accessible") from err
+                if not is_dir:
+                    raise ValueError(f"{self._urlpath!r} not a directory")
+                if not any(fs.glob(self._get_fspath("*.image.parquet"))):
+                    raise ValueError(f"{self._urlpath!r} has no image parquet file.")
             else:
                 pass  # fixme
 
@@ -136,7 +134,9 @@ class PadoDataset:
 
     @property
     def _root(self) -> str:
-        _, path = urlpathlike_to_fs_and_path(self._urlpath)
+        _, path = urlpathlike_to_fs_and_path(
+            self._urlpath, storage_options=self._storage_options
+        )
         return path
 
     @property
@@ -234,7 +234,7 @@ class PadoDataset:
                 self.metadata.get(image_id),
             )
         except KeyError:
-            raise KeyError(f'{image_id} does not match any images in this dataset.')
+            raise KeyError(f"{image_id} does not match any images in this dataset.")
 
     def get_by_idx(self, idx: int) -> PadoItem:
         image_id = self.index[idx]

@@ -1,8 +1,6 @@
 """helpers for dealing with fsspec OpenFile"""
 from __future__ import annotations
 
-import fnmatch
-import os.path
 from operator import itemgetter
 from typing import Optional
 from typing import Sequence
@@ -11,26 +9,12 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from pado.io.files import fsopen
-from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_path_parts
-from pado.io.files import urlpathlike_to_string
 from pado.types import UrlpathLike
 
 __all__ = [
-    "get_root_dir",
     "match_partial_paths_reversed",
 ]
-
-
-def get_root_dir(urlpath: UrlpathLike, *, allow_file: str = "*.toml") -> UrlpathLike:
-    """return the root dir from a urlpath-like path to a dir or file"""
-    fs, pth = urlpathlike_to_fs_and_path(urlpath)
-    root, file = os.path.split(pth)
-    if fnmatch.fnmatch(file, allow_file):
-        return urlpathlike_to_string(fsopen(fs, root))
-    else:
-        return urlpath
 
 
 def match_partial_paths_reversed(
