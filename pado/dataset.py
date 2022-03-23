@@ -144,6 +144,12 @@ class PadoDataset:
         """is the dataset in readonly mode"""
         return self._mode == "r"
 
+    @property
+    def persistent(self) -> bool:
+        """is the dataset stored in a persistent location"""
+        # todo: this might need to be extended if we find other usecases than memory fs
+        return self._fs.protocol != "memory"
+
     def __repr__(self):
         so = ""
         if self._storage_options:

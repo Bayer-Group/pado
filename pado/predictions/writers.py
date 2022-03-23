@@ -448,6 +448,7 @@ class ImagePredictionWriter:
     ) -> None:
         """store the collected prediction data in the pado dataset"""
         assert not ds.readonly
+        assert ds.persistent, "you provided an in-memory filesystem"
 
         def _get_image_prediction_urlpath(iid: ImageId) -> UrlpathLike:
             # noinspection PyProtectedMember
