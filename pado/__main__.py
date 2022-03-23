@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os.path
 from pathlib import Path
 from typing import Optional
@@ -47,9 +48,11 @@ def info(
 
     if name is not None:
         with dataset_registry() as registry:
-            path = registry[name]
+            path, so = registry[name]
 
-    out = PadoDataset(path, mode="r").describe(output_format="plain_text")
+    out = PadoDataset(path, mode="r", storage_options=so).describe(
+        output_format="plain_text"
+    )
     typer.echo(out)
 
 
@@ -71,12 +74,12 @@ def info_stores(
     if name is not None:
         with dataset_registry() as registry:
             try:
-                path = registry[name]
+                path, so = registry[name]
             except KeyError:
                 typer.secho(f"Name {name!r} not registered", err=True)
                 raise typer.Exit(1)
 
-    ds = PadoDataset(path, mode="r")
+    ds = PadoDataset(path, mode="r", storage_options=so)
     store_infos = get_dataset_store_infos(ds)
 
     table = Table(title="Dataset Store Version")
@@ -111,17 +114,32 @@ cli.add_typer(cli_registry, name="registry")
 def registry_add(
     name: str = Argument(...),
     location: str = Argument(...),
+    storage_options: str = Option(None),
 ):
     """manage registries for datasets"""
+    so = None
+    if storage_options:
+        try:
+            so = json.loads(storage_options)
+        except json.JSONDecodeError:
+            typer.secho(
+                f"provided incorrect JSON as storage_options:\n{storage_options!r}",
+                err=True,
+            )
+            raise typer.Exit(1)
     try:
-        ds = PadoDataset(location, mode="r")
+        print(location, so)
+        _ = PadoDataset(location, mode="r", storage_options=so)
     except ValueError as err:
         typer.secho(f"error: {err!s}", err=True)
         typer.secho(f"PadoDataset at {location!s} is not readable", err=True)
         raise typer.Exit(1)
     with dataset_registry() as registry:
-        registry[name] = ds.urlpath
-    typer.secho(f"Added {name} at {location}", color=typer.colors.GREEN)
+        registry[name] = {
+            "urlpath": location,
+            "storage_options": so,
+        }
+    typer.secho(f"Added {name} at {location!r} with {so!r}", color=typer.colors.GREEN)
 
 
 @cli_registry.command(name="list")
@@ -135,15 +153,18 @@ def registry_list(check_readable: bool = Option(False)):
             return None
         else:
             try:
-                PadoDataset(urlpath, mode="r")
+                PadoDataset(p, mode="r")
             except ValueError:
                 return False
             else:
                 return True
 
     entries = []
-    for name, urlpath in name_urlpaths:
-        entries.append((name, urlpath, readable(urlpath)))
+    with typer.progressbar(name_urlpaths) as _name_urlpaths:
+        for name, urlpath in _name_urlpaths:
+            entries.append(
+                (name, urlpath.urlpath, urlpath.storage_options, readable(urlpath))
+            )
 
     if not entries:
         typer.secho("No datasets registered", color=typer.colors.YELLOW, err=True)
@@ -151,14 +172,16 @@ def registry_list(check_readable: bool = Option(False)):
         table = Table(title="Registered Datasets")
         table.add_column("Name", justify="left", no_wrap=True)
         table.add_column("Location", justify="left")
+        table.add_column("Storage Options", justify="left")
         if check_readable:
             table.add_column("Readable")
 
-        for name, urlpath, read in entries:
+        for name, up, so, read in entries:
+            _so = json.dumps(so) if so else ""
             if check_readable:
-                table.add_row(name, urlpath, read)
+                table.add_row(name, up, _so, read)
             else:
-                table.add_row(name, urlpath)
+                table.add_row(name, up, _so)
         Console().print(table)
 
 
@@ -169,12 +192,16 @@ def registry_remove(
     """remove a registry"""
     try:
         with dataset_registry() as registry:
-            location = registry[name]
+            urlpath, storage_options = registry[name]
             del registry[name]
     except KeyError:
         typer.secho(f"Name {name!r} not registered", err=True)
     else:
-        typer.secho(f"Removed {name} at {location}", color=typer.colors.GREEN)
+        typer.secho(
+            f"Removed {name} with "
+            f"urlpath={urlpath!r} and storage_options={storage_options!r}",
+            color=typer.colors.GREEN,
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -10,11 +10,12 @@ import json
 import os.path
 import shutil
 import warnings
-from collections.abc import MutableMapping
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import MutableMapping
+from typing import NamedTuple
 from typing import Optional
 
 from dynaconf import Dynaconf
@@ -23,6 +24,7 @@ from platformdirs import user_cache_path
 from platformdirs import user_config_path
 
 from pado.types import IOMode
+from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     from pado import PadoDataset
@@ -66,7 +68,12 @@ def pado_cache_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path
     return pth
 
 
-class _DatasetRegistry(MutableMapping):
+class _DatasetRegistryItem(NamedTuple):
+    urlpath: UrlpathLike
+    storage_options: dict[str, str | int | float] | None = None
+
+
+class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
     """a simple json file based key value store"""
 
     FILENAME = ".pado_dataset_registry.json"
@@ -115,23 +122,39 @@ class _DatasetRegistry(MutableMapping):
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         return len(self._data)
 
-    def __getitem__(self, name: str):
+    def __getitem__(self, name: str) -> _DatasetRegistryItem:
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
             raise TypeError(
                 f"name must be a string, got {name!r} of {type(name).__name__}"
             )
-        return self._data[name]
+        value = self._data[name]
+        if isinstance(value, str):
+            return _DatasetRegistryItem(value)
+        else:
+            return _DatasetRegistryItem(value["urlpath"], value["storage_options"])
 
-    def __setitem__(self, name: str, path):
+    def __setitem__(self, name: str, path: str | _DatasetRegistryItem | dict[str, Any]):
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
             raise TypeError(
                 f"name must be a string, got {name!r} of {type(name).__name__}"
             )
-        self._data[name] = path
+        if isinstance(path, str):
+            self._data[name] = path
+        elif isinstance(path, _DatasetRegistryItem):
+            self._data[name] = path._asdict()
+        elif isinstance(path, dict):
+            self._data[name] = {
+                "urlpath": path["urlpath"],
+                "storage_options": path.get("storage_options", None),
+            }
+        else:
+            raise ValueError(
+                f"unsupported value: {path!r} of type {type(path).__name__!r}"
+            )
 
     def __delitem__(self, name: str):
         if self._data is None:
