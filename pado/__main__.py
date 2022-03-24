@@ -104,6 +104,53 @@ def info_stores(
     Console().print(table)
 
 
+@cli.command("copy")
+def copy(
+    src: str = Option(..., metavar="from"),
+    dst: str = Option(...),
+    image_providers: bool = Option(False),
+    metadata_providers: bool = Option(False),
+    annotation_providers: bool = Option(False),
+    image_prediction_providers: bool = Option(False),
+    images_path: Optional[str] = Option(None),
+    image_predictions_path: Optional[str] = Option(None),
+    keep_individual_providers: bool = Option(True),
+):
+    """copy data from dataset to dataset"""
+    from pado.shutil import transfer
+
+    with dataset_registry() as registry:
+        try:
+            p0, so0 = registry[src]
+        except KeyError:
+            typer.secho(f"Name {src!r} not registered", err=True)
+            raise typer.Exit(1)
+        try:
+            p1, so1 = registry[dst]
+        except KeyError:
+            typer.secho(f"Name {dst!r} not registered", err=True)
+            raise typer.Exit(1)
+
+    ds0 = PadoDataset(p0, mode="r", storage_options=so0)
+    ds1 = PadoDataset(p1, mode="a", storage_options=so1)
+
+    def progress_callback(name):
+        typer.secho(f"copying: {name}")
+
+    transfer(
+        ds0,
+        ds1,
+        image_providers=image_providers,
+        metadata_providers=metadata_providers,
+        annotation_providers=annotation_providers,
+        image_prediction_providers=image_prediction_providers,
+        images_path=images_path,
+        image_predictions_path=image_predictions_path,
+        keep_individual_providers=keep_individual_providers,
+        progress_callback=progress_callback,
+    )
+
+
 # --- pado dataset info -----------------------------------------------
 
 cli_registry = typer.Typer()
