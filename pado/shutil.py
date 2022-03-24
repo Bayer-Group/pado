@@ -39,27 +39,34 @@ def transfer(
         for up in p.df.urlpath:
             of0 = urlpathlike_local_via_fs(up, fs0)
             name = PurePath(of0.path).name
-            try:
-                of1 = fs1.open(get_fspath1(destination, name), mode="xb")
-            except FileExistsError:
+            path_remote = get_fspath1(destination, name)
+            if fs1.isfile(path_remote) and fs1.size(path_remote) > 0:
+                progress_callback(f"EXISTS {name}")
                 continue
-            with of0 as f0, of1 as f1:
-                progress_callback(name)
-                if chunked:
-                    f0_read = f0.read
-                    f1_write = f1.write
-                    bufsize = fs1.blocksize
-                    while True:
-                        progress_callback(".")
-                        buf = f0_read(bufsize)
-                        if not buf:
-                            break
-                        f1_write(buf)
-                else:
-                    buf = f0.read()
-                    progress_callback(". received")
-                    f1.write(buf)
-                    progress_callback(". transferred")
+            else:
+                of1 = fs1.open(path_remote, mode="wb")
+
+            try:
+                with of0 as f0, of1 as f1:
+                    progress_callback(name)
+                    if chunked:
+                        f0_read = f0.read
+                        f1_write = f1.write
+                        bufsize = fs1.blocksize
+                        while True:
+                            progress_callback(".")
+                            buf = f0_read(bufsize)
+                            if not buf:
+                                break
+                            f1_write(buf)
+                    else:
+                        buf = f0.read()
+                        progress_callback(". received")
+                        f1.write(buf)
+                        progress_callback(". transferred")
+            except FileNotFoundError:
+                progress_callback(f"NOT FOUND {name}")
+                continue
 
     def _transfer(p):
         if keep_individual_providers and hasattr(p, "providers"):
