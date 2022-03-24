@@ -161,9 +161,16 @@ class MetadataProvider(BaseMetadataProvider):
     def __iter__(self) -> Iterator[ImageId]:
         return map(ImageId.from_str, self.df.index.unique())
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
         store = MetadataProviderStore()
-        store.to_urlpath(self.df, urlpath, identifier=self.identifier)
+        store.to_urlpath(
+            self.df,
+            urlpath,
+            identifier=self.identifier,
+            storage_options=storage_options,
+        )
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> MetadataProvider:
@@ -234,8 +241,10 @@ class GroupedMetadataProvider(MetadataProvider):
     def __repr__(self):
         return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
-        super().to_parquet(urlpath)
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> MetadataProvider:

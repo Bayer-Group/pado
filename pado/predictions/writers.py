@@ -382,6 +382,8 @@ class ImagePredictionWriter:
         self,
         provider_urlpath: UrlpathLike | None,
         prediction_urlpath_func: Callable[[ImageId], UrlpathLike],
+        *,
+        storage_options: dict[str, Any] | None = None,
     ) -> ImagePredictionProvider:
         """store the image prediction provider and images"""
         ipp = {}
@@ -416,7 +418,7 @@ class ImagePredictionWriter:
 
         provider = ImagePredictionProvider(ipp, identifier=self._identifier)
         if provider_urlpath is not None:
-            provider.to_parquet(provider_urlpath)
+            provider.to_parquet(provider_urlpath, storage_options=storage_options)
         return provider
 
     def store_in_local_dir(

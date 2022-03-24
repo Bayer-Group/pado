@@ -347,8 +347,10 @@ class GroupedProviderMixin:
     def __repr__(self):
         return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
-        super().to_parquet(urlpath)
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
     def from_parquet(cls: Type[GT], urlpath: UrlpathLike) -> GT:
@@ -377,7 +379,9 @@ class SerializableProviderMixin:
     def __repr__(self):
         return f"{type(self).__name__}({self.identifier!r})"
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
         store = self.__store_class__()
         store.to_urlpath(self.df, urlpath, identifier=self.identifier)
 

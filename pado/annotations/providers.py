@@ -203,7 +203,9 @@ class AnnotationProvider(BaseAnnotationProvider):
             _akw.append(f"identifier={self.identifier!r}")
         return f"{type(self).__name__}({', '.join(_akw)})"
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
         store = AnnotationProviderStore()
         dfs = []
         for image_id, annos in self.items():
@@ -211,7 +213,12 @@ class AnnotationProvider(BaseAnnotationProvider):
             df = df.set_index(pd.Index([image_id.to_str()] * len(df)))
             dfs.append(df)
         self._df = pd.concat(dfs)
-        store.to_urlpath(self.df, urlpath, identifier=self.identifier)
+        store.to_urlpath(
+            self.df,
+            urlpath,
+            identifier=self.identifier,
+            storage_options=storage_options,
+        )
         self._store.clear()
 
     @classmethod
@@ -277,8 +284,10 @@ class GroupedAnnotationProvider(AnnotationProvider):
     def __repr__(self):
         return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
-        super().to_parquet(urlpath)
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> AnnotationProvider:

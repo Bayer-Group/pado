@@ -173,9 +173,16 @@ class ImageProvider(BaseImageProvider):
             _akw.append(f"identifier={self.identifier!r}")
         return f"{type(self).__name__}({', '.join(_akw)})"
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
         store = ImageProviderStore()
-        store.to_urlpath(self.df, urlpath, identifier=self.identifier)
+        store.to_urlpath(
+            self.df,
+            urlpath,
+            identifier=self.identifier,
+            storage_options=storage_options,
+        )
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
@@ -246,8 +253,10 @@ class GroupedImageProvider(ImageProvider):
     def __repr__(self):
         return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
-        super().to_parquet(urlpath)
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
@@ -296,8 +305,10 @@ class FilteredImageProvider(ImageProvider):
     def __repr__(self):
         return f"{type(self).__name__}({self._provider!r})"
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
-        super().to_parquet(urlpath)
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
     def from_parquet(cls, urlpath: UrlpathLike) -> ImageProvider:
@@ -348,7 +359,9 @@ class LocallyCachedImageProvider(ImageProvider):
     def __delitem__(self, image_id: ImageId) -> None:
         raise NotImplementedError(f"can't delete from {type(self).__name__}")
 
-    def to_parquet(self, urlpath: UrlpathLike) -> None:
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
         raise NotImplementedError
 
 
@@ -455,9 +468,12 @@ def update_image_provider_urlpaths(
     ignore_ambiguous: bool = False,
     progress: bool = False,
     provider_cls: Type[_PT] = ImageProvider,
+    storage_options: dict[str, Any] | None = None,
 ) -> _PT:
     """search a path and re-associate image urlpaths by filename"""
-    files_and_parts = find_files(search_urlpath, glob=search_glob)
+    files_and_parts = find_files(
+        search_urlpath, glob=search_glob, storage_options=storage_options
+    )
     if isinstance(provider, provider_cls):
         ip = provider
     else:
