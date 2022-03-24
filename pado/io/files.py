@@ -48,6 +48,7 @@ else:
 __all__ = [
     "find_files",
     "is_fsspec_open_file_like",
+    "urlpathlike_local_via_fs",
     "urlpathlike_to_string",
     "urlpathlike_to_fsspec",
     "urlpathlike_to_fs_and_path",
