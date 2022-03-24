@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
+from functools import partial
 from pathlib import PurePath
 from typing import Callable
+
+from fsspec import AbstractFileSystem
 
 from pado.dataset import PadoDataset
 from pado.images.providers import update_image_provider_urlpaths
 from pado.io.files import urlpathlike_local_via_fs
+from pado.predictions.providers import ImagePredictionProvider
 
 
 def transfer(
@@ -29,79 +34,116 @@ def transfer(
     elif ds1.readonly:
         raise ValueError(f"ds1 must be writable: {ds1!r}")
 
-    fs0 = ds0._fs
-    fs1, get_fspath1 = ds1._fs, ds1._get_fspath
-
-    def _transfer(p, *, resources=None):
-        def _transfer_resources(v, destination, *, chunked=False):
-            if not destination or not hasattr(v, "df"):
-                return
-            dst_dir = get_fspath1(destination)
-            if not fs1.isdir(dst_dir):
-                fs1.mkdir(dst_dir, create_parents=True)
-            for up in p.df.urlpath:
-                of0 = urlpathlike_local_via_fs(up, fs0)
-                name = PurePath(of0.path).name
-                path_remote = get_fspath1(destination, name)
-                if fs1.isfile(path_remote) and fs1.size(path_remote) > 0:
-                    progress_callback(f"EXISTS {name}")
-                    continue
-                else:
-                    of1 = fs1.open(path_remote, mode="wb")
-
-                try:
-                    with of0 as f0, of1 as f1:
-                        progress_callback(name)
-                        if chunked:
-                            f0_read = f0.read
-                            f1_write = f1.write
-                            bufsize = fs1.blocksize
-                            while True:
-                                progress_callback(".")
-                                buf = f0_read(bufsize)
-                                if not buf:
-                                    break
-                                f1_write(buf)
-                        else:
-                            buf = f0.read()
-                            progress_callback(". received")
-                            f1.write(buf)
-                            progress_callback(". transferred")
-                except FileNotFoundError:
-                    progress_callback(f"NOT FOUND {name}")
-                    continue
-
-        def _transfer_provider(v, destination):
-            progress_callback(repr(v))
-            if destination is not None:
-                _transfer_resources(v, destination)
-                v = update_image_provider_urlpaths(
-                    fs1.open(get_fspath1(destination)),
-                    search_glob="*.*",
-                    provider=v,
-                    inplace=False,
-                    ignore_ambiguous=True,
-                    progress=True,
-                    provider_cls=type(v),
-                )
-            try:
-                ds1.ingest_obj(v)
-            except FileExistsError:
-                pass
-
-        if keep_individual_providers and hasattr(p, "providers"):
-            providers = p.providers
-        else:
-            providers = [p]
-
-        for _p in providers:
-            _transfer_provider(_p, destination=resources)
+    # noinspection PyProtectedMember
+    cp = partial(
+        _transfer,
+        ds0=ds0,
+        ds1=ds1,
+        progress_callback=progress_callback,
+        keep_individual_providers=keep_individual_providers,
+    )
 
     if image_providers:
-        _transfer(ds0.images, resources=images_path)
+        cp(ds0.images, item_urlpath_destination=images_path)
     if metadata_providers:
-        _transfer(ds0.metadata)
+        cp(ds0.metadata)
     if annotation_providers:
-        _transfer(ds0.annotations)
+        cp(ds0.annotations)
     if image_prediction_providers:
-        _transfer(ds0.predictions.images, resources=image_predictions_path)
+        cp(ds0.predictions.images, item_urlpath_destination=image_predictions_path)
+
+
+def _transfer(
+    p,
+    *,
+    ds0: PadoDataset,
+    ds1: PadoDataset,
+    progress_callback,
+    keep_individual_providers,
+    item_urlpath_destination=None,
+    chunked=False,
+) -> None:
+
+    # noinspection PyProtectedMember
+    fs0: AbstractFileSystem = ds0._fs
+    # noinspection PyProtectedMember
+    fs1: AbstractFileSystem = ds1._fs
+    # noinspection PyProtectedMember
+    get_fspath1: Callable[[str], str] = ds1._get_fspath
+
+    if keep_individual_providers and hasattr(p, "providers"):
+        providers = p.providers
+    else:
+        providers = [p]
+
+    for _p in providers:
+        progress_callback(repr(_p))
+
+        # copy items referenced by urlpath in the provider if requested
+        if item_urlpath_destination is not None and hasattr(_p, "df"):
+
+            # create destination dir
+            dst_dir = get_fspath1(item_urlpath_destination)
+            if not fs1.isdir(dst_dir):
+                fs1.mkdir(dst_dir, create_parents=True)
+
+            for item_urlpath_src in _p.df.urlpath:
+                # we need to see access locally referenced items remotely,
+                # if we access the dataset remotely
+                of0 = urlpathlike_local_via_fs(item_urlpath_src, fs0)
+
+                # create the remote path
+                name = PurePath(of0.path).name
+                item_urlpath_dst = get_fspath1(item_urlpath_destination, name)
+
+                # skip if remote exists
+                if fs1.isfile(item_urlpath_dst) and fs1.size(item_urlpath_dst) > 0:
+                    progress_callback(f". EXISTS {name}")
+                    continue
+                else:
+                    of1 = fs1.open(item_urlpath_dst, mode="wb")
+
+                # transfer file
+                with ExitStack() as stack:
+                    try:
+                        f0 = stack.enter_context(of0)
+                    except FileNotFoundError:
+                        progress_callback(f"NOT FOUND {name}")
+                        continue
+                    else:
+                        progress_callback(name)
+                        f1 = stack.enter_context(of1)
+
+                    if chunked:
+                        f0_read = f0.read
+                        f1_write = f1.write
+                        buf_size = fs1.blocksize
+                        while True:
+                            progress_callback(".")
+                            buf = f0_read(buf_size)
+                            if not buf:
+                                break
+                            f1_write(buf)
+                    else:
+                        buf = f0.read()
+                        progress_callback(". received")
+                        f1.write(buf)
+                        progress_callback(". transferred")
+
+            # re-associate the uploaded provider's item urlpaths
+            _p = update_image_provider_urlpaths(
+                fs1.open(get_fspath1(item_urlpath_destination)),
+                search_glob="*.*",
+                provider=_p,
+                inplace=False,
+                ignore_ambiguous=True,
+                progress=True,
+                provider_cls=type(_p),
+            )
+
+        try:
+            ds1.ingest_obj(_p)
+        except FileExistsError:
+            progress_callback(". PROVIDER EXISTED ALREADY, OVERWRITING")
+            assert isinstance(_p, ImagePredictionProvider)
+            ds1.ingest_obj(_p, overwrite=True)
