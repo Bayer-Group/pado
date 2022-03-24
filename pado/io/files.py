@@ -31,6 +31,10 @@ import fsspec
 from fsspec import AbstractFileSystem
 from fsspec.core import OpenFile
 from fsspec.core import strip_protocol
+from fsspec.implementations.local import LocalFileSystem
+from fsspec.registry import _import_class
+from fsspec.registry import get_filesystem_class
+from fsspec.utils import get_protocol
 
 from pado.types import FsspecIOMode
 from pado.types import OpenFileLike
@@ -102,6 +106,41 @@ def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
         and isinstance(obj.fs, fsspec.AbstractFileSystem)
         and isinstance(obj.path, str)
     )
+
+
+def _deserialize_fsspec_json(obj: Any) -> dict[str, Any] | None:
+    """try to deserialize"""
+    try:
+        json_obj = json.loads(obj)  # type: ignore
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    if not isinstance(json_obj, dict):
+        # this is unexpected, so its better to raise instead of returning None
+        raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
+
+    return json_obj
+
+
+def _get_fsspec_cls_from_serialized_fs(fs_obj: str) -> type[AbstractFileSystem]:
+    """try to return the filesystem cls from a json string or pickle"""
+    try:
+        fs_dct = json.loads(fs_obj)
+    except json.JSONDecodeError:
+        # json_obj["fs"] is not json ...
+        fs = pickle.loads(literal_eval(fs_obj))
+        return type(fs)
+    else:
+        # json_obj["fs"] is json
+        if not isinstance(fs_dct, dict):
+            raise TypeError(f"expected dict, got {fs_dct!r}")
+
+        protocol = fs_dct.pop("protocol")
+        try:
+            cls = _import_class(fs_dct.pop("cls"))
+        except (ImportError, ValueError, RuntimeError, KeyError):
+            cls = get_filesystem_class(protocol)
+        return cls
 
 
 def _get_constructor_default_options(cls: type) -> dict[str, Any]:
@@ -322,6 +361,61 @@ def urlpathlike_to_fs_and_path(
             _fs.update(**storage_options)
             fs = fsspec.AbstractFileSystem.from_json(json.dumps(_fs))
         return fs, json_obj["path"]
+
+
+def urlpathlike_get_fs_cls(obj: UrlpathLike) -> type[AbstractFileSystem]:
+    """get the urlpathlike filesystem class"""
+    if is_fsspec_open_file_like(obj):
+        return type(obj.fs)
+
+    obj_json = _deserialize_fsspec_json(obj)
+    if obj_json:
+        return _get_fsspec_cls_from_serialized_fs(obj_json["fs"])
+
+    if isinstance(obj, os.PathLike):
+        obj = os.fspath(obj)
+
+    if not isinstance(obj, str):
+        raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+
+    return get_filesystem_class(get_protocol(obj))
+
+
+def urlpathlike_get_path(
+    obj: UrlpathLike, *, fs_cls: type[AbstractFileSystem] | None = None
+) -> str:
+    """get the path from the urlpath"""
+    if is_fsspec_open_file_like(obj):
+        return obj.path
+
+    obj_json = _deserialize_fsspec_json(obj)
+    if obj_json:
+        return obj_json["path"]
+
+    if isinstance(obj, os.PathLike):
+        obj = os.fspath(obj)
+
+    if not isinstance(obj, str):
+        raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+
+    if fs_cls is None:
+        fs_cls = get_filesystem_class(get_protocol(obj))
+
+    # noinspection PyProtectedMember
+    return fs_cls._strip_protocol(obj)
+
+
+def urlpathlike_local_via_fs(
+    obj: UrlpathLike,
+    fs: AbstractFileSystem,
+) -> UrlpathLike:
+    """take an urlpath and access it via another fs"""
+    fs_cls = urlpathlike_get_fs_cls(obj)
+    if issubclass(fs_cls, LocalFileSystem):
+        path = urlpathlike_get_path(obj, fs_cls=fs_cls)
+        return fsopen(fs, path)
+    else:
+        return obj
 
 
 def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
