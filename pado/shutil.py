@@ -4,6 +4,7 @@ from pathlib import PurePath
 from typing import Callable
 
 from pado.dataset import PadoDataset
+from pado.images.providers import update_image_provider_urlpaths
 from pado.io.files import urlpathlike_local_via_fs
 
 
@@ -28,68 +29,79 @@ def transfer(
     elif ds1.readonly:
         raise ValueError(f"ds1 must be writable: {ds1!r}")
 
-    def _transfer_resources(p, destination, *, chunked=False):
-        if not destination or not hasattr(p, "df"):
-            return
-        fs0 = ds0._fs
-        fs1, get_fspath1 = ds1._fs, ds1._get_fspath
-        dst_dir = get_fspath1(destination)
-        if not fs1.isdir(dst_dir):
-            fs1.mkdir(dst_dir, create_parents=True)
-        for up in p.df.urlpath:
-            of0 = urlpathlike_local_via_fs(up, fs0)
-            name = PurePath(of0.path).name
-            path_remote = get_fspath1(destination, name)
-            if fs1.isfile(path_remote) and fs1.size(path_remote) > 0:
-                progress_callback(f"EXISTS {name}")
-                continue
-            else:
-                of1 = fs1.open(path_remote, mode="wb")
+    fs0 = ds0._fs
+    fs1, get_fspath1 = ds1._fs, ds1._get_fspath
 
-            try:
-                with of0 as f0, of1 as f1:
-                    progress_callback(name)
-                    if chunked:
-                        f0_read = f0.read
-                        f1_write = f1.write
-                        bufsize = fs1.blocksize
-                        while True:
-                            progress_callback(".")
-                            buf = f0_read(bufsize)
-                            if not buf:
-                                break
-                            f1_write(buf)
-                    else:
-                        buf = f0.read()
-                        progress_callback(". received")
-                        f1.write(buf)
-                        progress_callback(". transferred")
-            except FileNotFoundError:
-                progress_callback(f"NOT FOUND {name}")
-                continue
+    def _transfer(p, *, resources=None):
+        def _transfer_resources(v, destination, *, chunked=False):
+            if not destination or not hasattr(v, "df"):
+                return
+            dst_dir = get_fspath1(destination)
+            if not fs1.isdir(dst_dir):
+                fs1.mkdir(dst_dir, create_parents=True)
+            for up in p.df.urlpath:
+                of0 = urlpathlike_local_via_fs(up, fs0)
+                name = PurePath(of0.path).name
+                path_remote = get_fspath1(destination, name)
+                if fs1.isfile(path_remote) and fs1.size(path_remote) > 0:
+                    progress_callback(f"EXISTS {name}")
+                    continue
+                else:
+                    of1 = fs1.open(path_remote, mode="wb")
 
-    def _transfer(p):
-        if keep_individual_providers and hasattr(p, "providers"):
-            for _p in p.providers:
-                progress_callback(repr(_p))
                 try:
-                    ds1.ingest_obj(_p)
-                except FileExistsError:
-                    pass
-        else:
-            progress_callback(repr(p))
+                    with of0 as f0, of1 as f1:
+                        progress_callback(name)
+                        if chunked:
+                            f0_read = f0.read
+                            f1_write = f1.write
+                            bufsize = fs1.blocksize
+                            while True:
+                                progress_callback(".")
+                                buf = f0_read(bufsize)
+                                if not buf:
+                                    break
+                                f1_write(buf)
+                        else:
+                            buf = f0.read()
+                            progress_callback(". received")
+                            f1.write(buf)
+                            progress_callback(". transferred")
+                except FileNotFoundError:
+                    progress_callback(f"NOT FOUND {name}")
+                    continue
+
+        def _transfer_provider(v, destination):
+            progress_callback(repr(v))
+            if destination is not None:
+                _transfer_resources(v, destination)
+                v = update_image_provider_urlpaths(
+                    fs1.open(get_fspath1(destination)),
+                    search_glob="*.*",
+                    provider=v,
+                    inplace=False,
+                    ignore_ambiguous=True,
+                    progress=True,
+                    provider_cls=type(v),
+                )
             try:
-                ds1.ingest_obj(p)
+                ds1.ingest_obj(v)
             except FileExistsError:
                 pass
 
+        if keep_individual_providers and hasattr(p, "providers"):
+            providers = p.providers
+        else:
+            providers = [p]
+
+        for _p in providers:
+            _transfer_provider(_p, destination=resources)
+
     if image_providers:
-        _transfer(ds0.images)
-        _transfer_resources(ds0.images, images_path)
+        _transfer(ds0.images, resources=images_path)
     if metadata_providers:
         _transfer(ds0.metadata)
     if annotation_providers:
         _transfer(ds0.annotations)
     if image_prediction_providers:
-        _transfer(ds0.predictions.images)
-        _transfer_resources(ds0.predictions.images, image_predictions_path)
+        _transfer(ds0.predictions.images, resources=image_predictions_path)
