@@ -371,10 +371,14 @@ class PadoDataset:
 
     # === data ingestion ===
 
-    def ingest_obj(self, obj: Any, *, identifier: Optional[str] = None) -> None:
+    def ingest_obj(
+        self, obj: Any, *, identifier: Optional[str] = None, overwrite: bool = False
+    ) -> None:
         """ingest an object into the dataset"""
         if self.readonly:
             raise RuntimeError(f"{self!r} opened in readonly mode")
+
+        mode = "xb" if not overwrite else "wb"
 
         if isinstance(obj, PadoDataset):
             for x in [obj.images, obj.metadata, obj.annotations]:
@@ -387,7 +391,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for ImageProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
             # invalidate caches
             self._clear_caches("images")
 
@@ -396,7 +400,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for AnnotationProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.annotation.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
             # invalidate caches
             self._clear_caches("annotations")
 
@@ -405,7 +409,7 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for MetadataProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.metadata.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
             # invalidate caches
             self._clear_caches("metadata")
 
@@ -416,7 +420,7 @@ class PadoDataset:
                 )
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image_predictions.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
             # invalidate caches
             self._clear_caches("predictions")
 
