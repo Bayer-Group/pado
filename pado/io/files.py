@@ -35,6 +35,7 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.registry import _import_class
 from fsspec.registry import get_filesystem_class
 from fsspec.utils import get_protocol
+from fsspec.utils import infer_storage_options
 
 from pado.types import FsspecIOMode
 from pado.types import OpenFileLike
@@ -49,6 +50,9 @@ __all__ = [
     "find_files",
     "is_fsspec_open_file_like",
     "urlpathlike_local_via_fs",
+    "urlpathlike_get_fs_cls",
+    "urlpathlike_get_path",
+    "urlpathlike_get_storage_args_options",
     "urlpathlike_to_string",
     "urlpathlike_to_fsspec",
     "urlpathlike_to_fs_and_path",
@@ -142,6 +146,27 @@ def _get_fsspec_cls_from_serialized_fs(fs_obj: str) -> type[AbstractFileSystem]:
         except (ImportError, ValueError, RuntimeError, KeyError):
             cls = get_filesystem_class(protocol)
         return cls
+
+
+def _get_fsspec_storage_args_options_from_serialized_fs(
+    fs_obj: str,
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """try to return the filesystem storage args and options from a json string or pickle"""
+    try:
+        fs_dct = json.loads(fs_obj)
+    except json.JSONDecodeError:
+        # json_obj["fs"] is not json ...
+        fs = pickle.loads(literal_eval(fs_obj))
+        return fs.storage_args, fs.storage_options
+    else:
+        # json_obj["fs"] is json
+        if not isinstance(fs_dct, dict):
+            raise TypeError(f"expected dict, got {fs_dct!r}")
+
+        _ = fs_dct.pop("protocol")
+        _ = fs_dct.pop("cls")
+        storage_args = fs_dct.pop("args")
+        return storage_args, fs_dct
 
 
 def _get_constructor_default_options(cls: type) -> dict[str, Any]:
@@ -404,6 +429,28 @@ def urlpathlike_get_path(
 
     # noinspection PyProtectedMember
     return fs_cls._strip_protocol(obj)
+
+
+def urlpathlike_get_storage_args_options(
+    obj: UrlpathLike,
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """get the path from the urlpath"""
+    if is_fsspec_open_file_like(obj):
+        fs = obj.fs
+        return fs.storage_args, fs.storage_options
+
+    obj_json = _deserialize_fsspec_json(obj)
+    if obj_json:
+        fs_str = obj_json["fs"]
+        return _get_fsspec_storage_args_options_from_serialized_fs(fs_str)
+
+    if isinstance(obj, os.PathLike):
+        obj = os.fspath(obj)
+
+    if not isinstance(obj, str):
+        raise TypeError(f"got {obj!r} of type {type(obj)!r}")
+
+    return (), infer_storage_options(obj)
 
 
 def urlpathlike_local_via_fs(
