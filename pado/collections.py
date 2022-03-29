@@ -31,6 +31,7 @@ __all__ = [
     "PadoMutableSequenceMapping",
     "SerializableProviderMixin",
     "ProviderStoreMixin",
+    "GroupedProviderMixin",
 ]
 
 _r = Repr()
@@ -399,15 +400,15 @@ GT = TypeVar("GT", bound="GroupedProviderMixin")
 
 
 class GroupedProviderMixin:
-    __value_class__: Type[VT]
     __provider_class__: Type[PT]
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if PadoMutableSequenceMapping not in cls.__mro__:
-            raise AttributeError(
-                f"{cls.__name__} must also inherit from a provider class"
-            )
+        # todo: should be subclass of mapping with ImageId keys
+        # if PadoMutableSequenceMapping not in cls.__mro__:
+        #     raise AttributeError(
+        #         f"{cls.__name__} must also inherit from a provider class"
+        #     )
         if not hasattr(cls, "__provider_class__"):
             raise AttributeError(
                 f"subclass {cls.__name__} must define __provider_class__"
@@ -429,7 +430,7 @@ class GroupedProviderMixin:
     def df(self):
         return pd.concat([p.df for p in self.providers])
 
-    def __setitem__(self, image_id: ImageId, value: VT) -> None:
+    def __setitem__(self, image_id: ImageId, value: Any) -> None:
         raise RuntimeError(f"can't add new item to {type(self).__name__}")
 
     def __delitem__(self, image_id: ImageId) -> None:
