@@ -181,4 +181,8 @@ def open_registered_dataset(
     from pado.dataset import PadoDataset
 
     with dataset_registry() as dct:
-        return PadoDataset(dct[name], mode=mode, storage_options=storage_options)
+        up, so = dct[name]
+        if storage_options:
+            so = so or {}
+            so.update(storage_options)
+        return PadoDataset(up, mode=mode, storage_options=so)
