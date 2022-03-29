@@ -6,9 +6,11 @@ import sys
 import textwrap
 from enum import Enum
 from numbers import Number
+from reprlib import Repr
 from typing import Any
 from typing import Callable
 from typing import Iterable
+from typing import cast
 
 if sys.version_info >= (3, 8):
     from typing import Literal
@@ -18,6 +20,7 @@ else:
 import pandas as pd
 
 __all__ = [
+    "mapping_repr",
     "DescribeFormat",
     "describe_format_plain_text",
     "number",
@@ -25,6 +28,21 @@ __all__ = [
     "number_to_str",
     "is_mpp_count",
 ]
+
+# === common repr functions ===========================================
+
+_r = Repr()
+_r.maxlist = 3
+
+
+def mapping_repr(inst: Any) -> str:
+    _akw = [_r.repr_dict(cast(dict, inst), 0)]
+    if hasattr(inst, "identifier") and inst.identifier is not None:
+        _akw.append(f"identifier={inst.identifier!r}")
+    return f"{type(inst).__name__}({', '.join(_akw)})"
+
+
+# === dataset description =============================================
 
 
 class DescribeFormat(str, Enum):
