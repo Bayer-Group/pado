@@ -33,13 +33,104 @@ __all__ = [
     "ProviderStoreMixin",
 ]
 
+_r = Repr()
+_r.maxlist = 3
+
 # === collections =============================================================
 
 PI = TypeVar("PI", bound=SerializableItem)
-PS = TypeVar("PS", bound="PadoMutableSequence")  # todo: use typing.Self
 
-_r = Repr()
-_r.maxlist = 3
+
+class PadoMutableMapping(MutableMapping[ImageId, PI]):
+    __value_type__: Type[PI]
+
+    df: pd.DataFrame
+    identifier: str
+
+    def __init__(
+        self,
+        provider: Mapping[ImageId, PI] | pd.DataFrame | dict | None = None,
+        *,
+        identifier: Optional[str] = None,
+    ):
+        if provider is None:
+            provider = {}
+
+        if isinstance(provider, type(self)):
+            self.df = provider.df.copy()
+            self.identifier = str(identifier) if identifier else provider.identifier
+        elif isinstance(provider, pd.DataFrame):
+            try:
+                _ = map(ImageId.from_str, provider.index)
+            except (TypeError, ValueError):
+                raise ValueError("provider dataframe index has non ImageId indices")
+            self.df = provider.copy()
+            self.identifier = str(identifier) if identifier else str(uuid.uuid4())
+        elif isinstance(provider, dict):
+            if not provider:
+                self.df = pd.DataFrame(columns=self.__value_type__.__fields__)
+            else:
+                self.df = pd.DataFrame.from_records(
+                    index=list(map(ImageId.to_str, provider.keys())),
+                    data=list(map(lambda x: x.to_record(), provider.values())),
+                    columns=self.__value_type__.__fields__,
+                )
+            self.identifier = str(identifier) if identifier else str(uuid.uuid4())
+        else:
+            raise TypeError(
+                f"expected `{type(self).__name__}`, got: {type(provider).__name__!r}"
+            )
+
+    def __getitem__(self, image_id: ImageId) -> PI:
+        if not isinstance(image_id, ImageId):
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
+        row = self.df.loc[image_id.to_str()]
+        return self.__value_type__.from_obj(row)
+
+    def __setitem__(self, image_id: ImageId, value: PI) -> None:
+        if not isinstance(image_id, ImageId):
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
+        if not isinstance(value, self.__value_type__):
+            raise TypeError(
+                f"values must be {self.__value_type__.__name__} instances, got {type(value).__name__!r}"
+            )
+        dct = value.to_record()
+        self.df.loc[image_id.to_str()] = pd.Series(dct)
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        if not isinstance(image_id, ImageId):
+            raise TypeError(
+                f"keys must be ImageId instances, got {type(image_id).__name__!r}"
+            )
+        self.df.drop(image_id.to_str(), inplace=True)
+
+    def __len__(self) -> int:
+        return len(self.df)
+
+    def __iter__(self) -> Iterator[ImageId]:
+        return iter(map(ImageId.from_str, self.df.index))
+
+    def items(self) -> Iterator[tuple[ImageId, PI]]:
+        iid_from_str = ImageId.from_str
+        value_from_obj = self.__value_type__.from_obj
+        for row in self.df.itertuples(index=True, name="ValueAsRow"):
+            # noinspection PyProtectedMember
+            x = row._asdict()
+            i = x.pop("Index")
+            yield iid_from_str(i), value_from_obj(x)
+
+    def __repr__(self):
+        _akw = [_r.repr_dict(cast(dict, self), 0)]
+        if self.identifier is not None:
+            _akw.append(f"identifier={self.identifier!r}")
+        return f"{type(self).__name__}({', '.join(_akw)})"
+
+
+PS = TypeVar("PS", bound="PadoMutableSequence")  # todo: use typing.Self
 
 
 class PadoMutableSequence(MutableSequence[PI]):
