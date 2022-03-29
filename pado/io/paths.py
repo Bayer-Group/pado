@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from operator import itemgetter
+from typing import TYPE_CHECKING
 from typing import Optional
 from typing import Sequence
 from typing import Set
@@ -11,6 +12,10 @@ from tqdm import tqdm
 
 from pado.io.files import urlpathlike_to_path_parts
 from pado.types import UrlpathLike
+
+if TYPE_CHECKING:
+    from pado.dataset import PadoDataset
+
 
 __all__ = [
     "match_partial_paths_reversed",
@@ -71,3 +76,10 @@ def match_partial_paths_reversed(
         x["new"] or x["cur"]
         for x in sorted(current_path_parts.values(), key=itemgetter("index"))
     ]
+
+
+def search_dataset(ds: PadoDataset, glob: str) -> list[str]:
+    """search for files in a pado dataset root path"""
+    # noinspection PyProtectedMember
+    fs, get_fspath = ds._fs, ds._get_fspath
+    return fs.glob(get_fspath(glob))
