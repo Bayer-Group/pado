@@ -6,9 +6,12 @@ from typing import Any
 from typing import NamedTuple
 from typing import Optional
 
+import pandas as pd
+
 from pado.io.files import fsopen
 from pado.predictions.providers import AnnotationPredictionProvider
 from pado.predictions.providers import GroupedImagePredictionProvider
+from pado.predictions.providers import GroupedMetadataPredictionProvider
 from pado.predictions.providers import ImagePredictionProvider
 from pado.predictions.providers import ImagePredictions
 from pado.predictions.providers import MetadataPredictionProvider
@@ -61,8 +64,25 @@ class PredictionProxy:
 
     @property
     def metadata(self) -> MetadataPredictionProvider:
-        # noinspection PyTypeChecker,PydanticTypeChecker
-        return {}  # fixme: todo
+        if self._metadata is None:
+            # noinspection PyProtectedMember
+            fs, get_fspath = self._ds._fs, self._ds._get_fspath
+            providers = [
+                MetadataPredictionProvider.from_parquet(fsopen(fs, p, mode="rb"))
+                for p in fs.glob(get_fspath("*.metadata_predictions.parquet"))
+                if fs.isfile(p)
+            ]
+
+            if len(providers) == 0:
+                # fixme: currently can't instantiate empty MetadataPredictionProvider
+                provider = {}
+            elif len(providers) == 1:
+                provider = providers[0]
+            else:
+                provider = GroupedMetadataPredictionProvider(*providers)
+
+            self._images = provider
+        return self._images
 
     # === access ===
 
@@ -83,4 +103,4 @@ class PadoPredictionItem(NamedTuple):
     id: ImageId
     image: Optional[ImagePredictions]
     annotations: Any  # fixme
-    metadata: Any  # fixme
+    metadata: Optional[pd.DataFrame]

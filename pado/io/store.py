@@ -40,6 +40,7 @@ class StoreType(str, enum.Enum):
     IMAGE = "image"
     METADATA = "metadata"
     IMAGE_PREDICTIONS = "image_predictions"
+    METADATA_PREDICTIONS = "metadata_predictions"
 
 
 class Store(ABC):
