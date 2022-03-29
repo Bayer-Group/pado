@@ -74,8 +74,7 @@ class PredictionProxy:
             ]
 
             if len(providers) == 0:
-                # fixme: currently can't instantiate empty MetadataPredictionProvider
-                provider = {}
+                provider = MetadataPredictionProvider()
             elif len(providers) == 1:
                 provider = providers[0]
             else:

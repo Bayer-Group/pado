@@ -117,6 +117,16 @@ class GroupedImagePredictionProvider(GroupedProviderMixin, ImagePredictionProvid
 # === MetadataPredictions =====================================================
 
 
+# intermediate compromise
+class MetadataPrediction:
+    __fields__ = (
+        "image_id",
+        "extra_json",  # currently, encoding some sort of model id
+        "column_name",
+        "value_json",  # for now to ease migration later
+    )
+
+
 class MetadataPredictionsProviderStore(ProviderStoreMixin, Store):
     """stores the metadata predictions provider in a single file with metadata"""
 
@@ -152,19 +162,18 @@ class MetadataPredictionProvider(
                 _ = map(ImageId.from_str, provider.index)
             except (TypeError, ValueError):
                 raise ValueError("provider dataframe index has non ImageId indices")
-            self.df = provider.copy()
+            self.df = provider.loc[:, list(MetadataPrediction.__fields__)].copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, dict):
             if not provider:
-                raise ValueError(
-                    f"can't create from an empty {type(provider).__name__}"
-                )
+                self.df = pd.DataFrame(columns=MetadataPrediction.__fields__)
             else:
                 columns = set()
                 dfs = []
                 for image_id, df in provider.items():
                     if df.empty:
                         continue
+                    df = df.loc[:, list(MetadataPrediction.__fields__)]
                     ids = set(df.index.unique())
                     assert len(ids) <= 2
                     image_id_str = image_id.to_str()
