@@ -121,9 +121,8 @@ class GroupedImagePredictionProvider(GroupedProviderMixin, ImagePredictionProvid
 class MetadataPrediction:
     __fields__ = (
         "image_id",
-        "extra_json",  # currently, encoding some sort of model id
-        "column_name",
-        "value_json",  # for now to ease migration later
+        "model_extra_json",  # currently, encoding some sort of model id
+        "row_json",  # for now to ease migration later
     )
 
 
