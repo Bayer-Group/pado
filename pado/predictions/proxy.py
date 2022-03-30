@@ -80,8 +80,8 @@ class PredictionProxy:
             else:
                 provider = GroupedMetadataPredictionProvider(*providers)
 
-            self._images = provider
-        return self._images
+            self._metadata = provider
+        return self._metadata
 
     # === access ===
 
