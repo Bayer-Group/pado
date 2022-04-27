@@ -51,7 +51,6 @@ def test_pado_test_datasource_image_ids(datasource):
     )
 
 
-@pytest.mark.xfail
 def test_open_dataset(dataset: PadoDataset, tmp_path):
     p = Path(tmp_path)
 
@@ -59,10 +58,13 @@ def test_open_dataset(dataset: PadoDataset, tmp_path):
         # noinspection PyTypeChecker
         PadoDataset(dataset.urlpath, mode="incorrect_mode")
 
+    with pytest.raises(ValueError):
+        PadoDataset(p, mode="r")
+
     with pytest.raises(FileExistsError):
         PadoDataset(dataset.urlpath, mode="x")
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(NotADirectoryError):
         PadoDataset(p / "not-found.toml", mode="r")
 
 
@@ -117,13 +119,12 @@ def test_add_source_to_readonly_dataset(dataset_ro, datasource):
         dataset_ro.ingest_obj(datasource)
 
 
-@pytest.mark.xfail
 def test_add_source_twice(datasource, tmp_path):
     dataset_path = tmp_path / "new_dataset"
     ds = PadoDataset(dataset_path, mode="x")
     ds.ingest_obj(datasource)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(FileExistsError):
         ds.ingest_obj(datasource)
 
 
@@ -146,13 +147,6 @@ def test_random_access_dataset(dataset_ro):
     md = dataset_ro.metadata[image_ids[idx]]
     assert isinstance(md, pd.DataFrame)
     assert md.size > 0
-
-
-@pytest.mark.xfail
-def test_iterate_dataset(dataset_ro):
-    for k in dataset_ro:
-        md = dataset_ro[k]
-        assert {"image", "metadata", "annotations"}.issubset(md)
 
 
 def test_ingested_dataset_attribute_retrieval(datasource):
