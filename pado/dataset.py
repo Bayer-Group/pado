@@ -107,11 +107,14 @@ class PadoDataset:
                 except BaseException as err:
                     raise RuntimeError(f"{self._urlpath!r} not accessible") from err
                 if not is_dir:
-                    raise ValueError(f"{self._urlpath!r} not a directory")
+                    raise NotADirectoryError(f"{self._urlpath!r} not a directory")
                 if not any(fs.glob(self._get_fspath("*.image.parquet"))):
                     raise ValueError(f"{self._urlpath!r} has no image parquet file.")
-            else:
-                pass  # fixme
+            elif mode == "x":
+                if fs.isdir(self._root) and fs.glob(
+                    self._get_fspath("*.image.parquet")
+                ):
+                    raise FileExistsError(f"{self._urlpath!r} exists")
 
         # file
         self._mode: IOMode = mode
