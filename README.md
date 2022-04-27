@@ -51,4 +51,4 @@ _([Santi](https://github.com/sdvillal) is happy to help you setting up pycharm i
 Build with love by Santi Villalba and Andreas Poehlmann from the _Machine
 Learning Research_ group at Bayer.
 
-`pado`: copyright 2020 Bayer AG
+`pado`: copyright 2020-2022 Bayer AG
