@@ -1,39 +1,33 @@
 from __future__ import annotations
 
-import io
 from collections import namedtuple
-from contextlib import redirect_stdout
 
-import pytest
+from typer.testing import CliRunner
 
 from pado.__main__ import cli
 
-pytestmark = pytest.mark.xfail  # currently broken after switch to typer
-
 _Output = namedtuple("_Output", "return_code stdout")
 
-
-def run(func, argv1):
-    f = io.StringIO()
-    with redirect_stdout(f):
-        return_code = func(argv1)
-    return _Output(return_code, f.getvalue().rstrip())
+runner = CliRunner()
 
 
 def test_no_args():
-    assert cli([]) == 0
+    result = runner.invoke(cli, [])
+    assert result.exit_code == 0
 
 
 def test_version():
     from pado import __version__
 
-    assert run(cli, ["--version"]) == (0, __version__)
+    result = runner.invoke(cli, ["version"])
+    assert result.exit_code == 0
+    assert result.stdout == f"{__version__}\n"
 
 
 def test_info_cmd(tmpdir):
     # help
     dataset_path = tmpdir.mkdir("not_a_dataset")
-    output = run(cli, ["info", str(dataset_path)])
-    assert output.return_code == -1
-    assert "error" in output.stdout
-    assert "not_a_dataset" in output.stdout
+    result = runner.invoke(cli, ["info", str(dataset_path)])
+    assert result.exit_code == 1
+    assert "ERROR" in result.stdout
+    assert "not_a_dataset" in result.stdout
