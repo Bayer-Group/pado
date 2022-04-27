@@ -33,10 +33,11 @@ def version():
 
 @cli.command("info")
 def info(
-    name: Optional[str] = Option(...),
+    name: Optional[str] = Option(None),
     path: Optional[Path] = Argument(
         None, exists=True, file_okay=False, dir_okay=True, readable=True
     ),
+    storage_options: str = Option(None),
 ):
     """return info regarding the pado dataset"""
     if name is not None and path is not None:
@@ -49,11 +50,19 @@ def info(
     if name is not None:
         with dataset_registry() as registry:
             path, so = registry[name]
+    else:
+        so = json.loads(storage_options or "{}")
 
-    out = PadoDataset(path, mode="r", storage_options=so).describe(
-        output_format="plain_text"
-    )
-    typer.echo(out)
+    try:
+        out = PadoDataset(path, mode="r", storage_options=so).describe(
+            output_format="plain_text"
+        )
+    except ValueError as err:
+        typer.echo(f"ERROR: {err}", err=True)
+        raise typer.Exit(1)
+    else:
+        typer.echo(out)
+        raise typer.Exit(0)
 
 
 @cli.command("info-stores")
