@@ -25,9 +25,10 @@ TBA
 ## Development Installation
 
 1. Install conda and git
-2. Clone pado `git clone https://github.com/Bayer-Group/pado.git`
-3. Run `conda env create -f environment.yaml`
-4. Activate the environment `conda activate pado`
+2. Install `conda-devenv` with `conda install conda-devenv -c conda-forge`
+3. Clone pado `git clone https://github.com/Bayer-Group/pado.git`
+4. Run `conda devenv`
+5. Activate the environment `conda activate pado`
 
 Note that in this environment `pado` is already installed in development mode,
 so go ahead and hack.
