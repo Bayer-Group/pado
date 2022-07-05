@@ -53,7 +53,7 @@ dependencies:
 
   # dev tools
   - pre_commit  # [ PADO_DEVEL ]
-  - black  # [ PADO_DEVEL ]
+  - black>=22.3.0  # [ PADO_DEVEL ]
   - isort  # [ PADO_DEVEL ]
   - flake8  # [ PADO_DEVEL ]
 
