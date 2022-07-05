@@ -41,6 +41,7 @@ so go ahead and hack.
 - Please use [numpy docstrings](https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard).
 - When contributing code, please try to use Pull Requests.
 - tests go hand in hand with modules on ```tests``` packages at the same level. We use ```pytest```.
+- Install pre-commit hooks by running `pre-commit install` in the project root folder.
 
 You can setup your IDE to help you adhering to these guidelines.
 <br>
