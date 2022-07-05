@@ -51,6 +51,12 @@ dependencies:
   - pytest>=6
   - pytest-cov
 
+  # dev tools
+  - pre_commit=2.19.0
+  - black=22.1.0
+  - isort=5.10.1
+  - flake8=4.0.1
+
   # pip installs
   - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
     - tiffslide>=0.2.0  # [ PADO_DEVEL_CI ]
