@@ -37,7 +37,7 @@ so go ahead and hack.
 ## Contributing Guidelines
 
 - Please follow [pep-8 conventions](https://www.python.org/dev/peps/pep-0008/) but:
-  - We allow 120 character long lines (try anyway to keep them short)
+  - We allow 88 character long lines (try anyway to keep them short)
 - Please use [numpy docstrings](https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard).
 - When contributing code, please try to use Pull Requests.
 - tests go hand in hand with modules on ```tests``` packages at the same level. We use ```pytest```.
