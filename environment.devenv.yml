@@ -52,10 +52,10 @@ dependencies:
   - pytest-cov
 
   # dev tools
-  - pre_commit=2.19.0
-  - black=22.1.0
-  - isort=5.10.1
-  - flake8=4.0.1
+  - pre_commit  # [ PADO_DEVEL ]
+  - black  # [ PADO_DEVEL ]
+  - isort  # [ PADO_DEVEL ]
+  - flake8  # [ PADO_DEVEL ]
 
   # pip installs
   - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
