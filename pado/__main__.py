@@ -20,8 +20,7 @@ from pado.io.store import get_dataset_store_infos
 from pado.settings import dataset_registry
 
 cli = typer.Typer(
-    name="pado",
-    epilog="#### pado dataset management ####",
+    name="pado", epilog="#### pado dataset management ####", no_args_is_help=True
 )
 
 
