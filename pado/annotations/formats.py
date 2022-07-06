@@ -125,7 +125,7 @@ class QPClassification(BaseModel):
     @validator("colorRGB", pre=True)
     def qupath_color_to_rgba(cls, v):
         """convert a qupath color to a pydantic Color"""
-        assert isinstance(v, int) and -(2 ** 31) <= v <= 2 ** 31 - 1
+        assert isinstance(v, int) and -(2**31) <= v <= 2**31 - 1
         alpha, red, blue, green = struct.pack(">i", v)
         return Color((red, blue, green, alpha / 255.0))
 
