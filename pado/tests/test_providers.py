@@ -59,6 +59,16 @@ def test_create_image_provider(multi_image_folder):
     assert len(ip) == 3
 
 
+def test_create_image_provider_empty_urlpath(tmpdir):
+    ip = create_image_provider(
+        search_urlpath=tmpdir,
+        search_glob="**/*.svs",
+        output_urlpath=None,
+    )
+
+    assert len(ip) == 0
+
+
 def test_write_image_provider(tmp_path, image_provider):
     out = tmp_path.joinpath("images.parquet")
     image_provider.to_parquet(out)
