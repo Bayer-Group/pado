@@ -37,8 +37,24 @@ This page hosts the documentation for version "|version|".
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
+   self
    installation
    quickstart
-   api
+
+.. toctree::
+   :caption: API Reference
+   :maxdepth: 2
+   :hidden:
+
+   api/annotations
+   api/images
+   api/io
+   api/metadata
+   api/predictions
+   api/collections
+   api/dataset
+   api/mock
+   api/settings
+   api/shutil
+   api/types
