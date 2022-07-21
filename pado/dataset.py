@@ -4,6 +4,7 @@ import os
 import pathlib
 import sys
 import uuid
+import warnings
 from collections.abc import Iterable
 from collections.abc import Sized
 from typing import Any
@@ -234,25 +235,59 @@ class PadoDataset:
 
     # === access ===
 
-    def get_by_id(self, image_id: ImageId) -> PadoItem:
-        try:
+    @overload
+    def __getitem__(self, key: ImageId | int) -> PadoItem:
+        ...
+
+    @overload
+    def __getitem__(self, key: slice) -> PadoDataset:
+        ...
+
+    def __getitem__(self, key: ImageId | int | slice) -> PadoItem | PadoDataset:
+
+        if isinstance(key, ImageId):
+            try:
+                return PadoItem(
+                    image_id,
+                    self.images[image_id],
+                    self.annotations.get(image_id),
+                    self.metadata.get(image_id),
+                )
+            except KeyError:
+                raise KeyError(f"{image_id} does not match any images in this dataset.")
+
+        elif isinstance(key, int):
+
+            image_id = self.index[key]
             return PadoItem(
                 image_id,
-                self.images[image_id],
+                self.images.get(image_id),
                 self.annotations.get(image_id),
                 self.metadata.get(image_id),
             )
-        except KeyError:
-            raise KeyError(f"{image_id} does not match any images in this dataset.")
+
+        elif isinstance(key, slice):
+            selected = self.index[key]
+            return self.filter(selected)
+
+        else:
+            raise TypeError(f"Unexpected type {type(key)}")
+
+    def get_by_id(self, image_id: ImageId) -> PadoItem:
+        warnings.warn(
+            "`get_by_id` is deprecated and will be removed in a future release. Use `__getitem__` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self[image_id]
 
     def get_by_idx(self, idx: int) -> PadoItem:
-        image_id = self.index[idx]
-        return PadoItem(
-            image_id,
-            self.images.get(image_id),
-            self.annotations.get(image_id),
-            self.metadata.get(image_id),
+        warnings.warn(
+            "`get_by_idx` is deprecated and will be removed in a future release. Use `__getitem__` instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return self[idx]
 
     # === filter functionality ===
 
