@@ -73,13 +73,10 @@ class MetadataProvider(BaseMetadataProvider):
 
     def __init__(
         self,
-        provider: BaseMetadataProvider | pd.DataFrame | dict | None = None,
+        provider: BaseMetadataProvider | pd.DataFrame | dict,
         *,
         identifier: Optional[str] = None,
     ) -> None:
-        if provider is None:
-            provider = {}
-
         if isinstance(provider, MetadataProvider):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
