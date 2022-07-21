@@ -23,6 +23,7 @@ from pado.images.providers import create_image_provider
 from pado.images.utils import IntBounds
 from pado.io.files import find_files
 from pado.io.paths import match_partial_paths_reversed
+from pado.metadata.providers import MetadataProvider
 from pado.mock import temporary_mock_svs
 from pado.predictions.writers import ImagePredictionWriter
 
@@ -198,3 +199,9 @@ def test_annotation_provider_df_access_after_update(dataset_ro):
 
     assert a_shape_before != a_shape_after
     assert p_shape_before != p_shape_after
+
+
+def test_empty_metadata_provider():
+    with pytest.raises(ValueError) as e:
+        MetadataProvider(provider={})
+        e.match("can't create from an empty MetadataProvider")
