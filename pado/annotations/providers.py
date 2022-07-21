@@ -212,7 +212,10 @@ class AnnotationProvider(BaseAnnotationProvider):
             df = annos.df
             df = df.set_index(pd.Index([image_id.to_str()] * len(df)))
             dfs.append(df)
-        self._df = pd.concat(dfs)
+        if len(dfs) == 0:
+            self._df = pd.DataFrame(columns=AnnotationModel.__fields__)
+        else:
+            self._df = pd.concat(dfs)
         store.to_urlpath(
             self.df,
             urlpath,
