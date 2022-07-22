@@ -270,6 +270,8 @@ class PadoDataset:
             raise KeyError(f"{key} does not match any images in this dataset.")
 
     def get_by_id(self, image_id: ImageId) -> PadoItem:
+        if not isinstance(image_id, ImageId):
+            raise TypeError(f"Unexpected type {type(image_id)}")
         warnings.warn(
             "`get_by_id` is deprecated and will be removed in a future release. Use `__getitem__` instead.",
             DeprecationWarning,
@@ -278,6 +280,8 @@ class PadoDataset:
         return self[image_id]
 
     def get_by_idx(self, idx: int) -> PadoItem:
+        if not isinstance(idx, int):
+            raise TypeError(f"Unexpected type {type(idx)}")
         warnings.warn(
             "`get_by_idx` is deprecated and will be removed in a future release. Use `__getitem__` instead.",
             DeprecationWarning,

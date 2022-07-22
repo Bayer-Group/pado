@@ -203,6 +203,18 @@ def test_dataset_getitem_raises_typeerror(dataset, arg):
         dataset[arg]
 
 
+@pytest.mark.parametrize("arg", (None, {}, 9.1, "something", 0))
+def test_dataset_get_by_id_raises_typeerror(dataset, arg):
+    with pytest.raises(TypeError):
+        dataset.get_by_id(arg)
+
+
+@pytest.mark.parametrize("arg", (None, {}, 9.1, "something", ImageId("hello")))
+def test_dataset_get_by_idx_raises_typeerror(dataset, arg):
+    with pytest.raises(TypeError):
+        dataset.get_by_idx(arg)
+
+
 # def test_dataset_getitem_raises_indexerror(dataset):
 #     # with pytest.raises(IndexError):
 #     dataset[len(dataset.index)]
