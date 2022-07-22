@@ -245,33 +245,29 @@ class PadoDataset:
 
     def __getitem__(self, key):
 
-        if isinstance(key, ImageId):
-            try:
-                return PadoItem(
-                    image_id,
-                    self.images[image_id],
-                    self.annotations.get(image_id),
-                    self.metadata.get(image_id),
-                )
-            except KeyError:
-                raise KeyError(f"{image_id} does not match any images in this dataset.")
-
-        elif isinstance(key, int):
-
-            image_id = self.index[key]
-            return PadoItem(
-                image_id,
-                self.images.get(image_id),
-                self.annotations.get(image_id),
-                self.metadata.get(image_id),
-            )
-
-        elif isinstance(key, slice):
+        if isinstance(key, slice):
             selected = self.index[key]
             return self.filter(selected)
 
+        if isinstance(key, ImageId):
+            image_id = key
+
+        elif isinstance(key, int):
+            image_id = self.index[key]
+
         else:
             raise TypeError(f"Unexpected type {type(key)}")
+
+        try:
+
+            return PadoItem(
+                image_id,
+                self.images[image_id],
+                self.annotations[image_id],
+                self.metadata[image_id],
+            )
+        except KeyError:
+            raise KeyError(f"{key} does not match any images in this dataset.")
 
     def get_by_id(self, image_id: ImageId) -> PadoItem:
         warnings.warn(

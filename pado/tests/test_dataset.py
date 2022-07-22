@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from pado.annotations import AnnotationProvider
-from pado.dataset import PadoDataset
+from pado.dataset import PadoDataset, PadoItem
 from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
@@ -173,3 +173,36 @@ def test_dataset_caches_after_ingest(dataset_ro):
     assert not ds.metadata.df.empty
     ds.ingest_obj(AnnotationProvider(dataset_ro.annotations, identifier="something"))
     assert not ds.annotations.df.empty
+
+
+@pytest.mark.parametrize("idx", list(range(3)))
+def test_dataset_getitem_padoitem(dataset, idx):
+    pado_item_idx = dataset[idx]
+    image_id = dataset.index[idx]
+    pado_item_image_id = dataset[image_id]
+
+    assert isinstance(pado_item_idx, PadoItem)
+    assert isinstance(pado_item_image_id, PadoItem)
+    assert pado_item_idx.id == pado_item_image_id.id
+    assert pado_item_idx.image == pado_item_image_id.image
+    assert pado_item_idx.annotations == pado_item_image_id.annotations
+    pd.testing.assert_frame_equal(pado_item_idx.metadata, pado_item_image_id.metadata)
+
+
+def test_dataset_getitem_slice(dataset):
+    pad_dataset = dataset[0:2]
+    assert isinstance(pad_dataset, PadoDataset)
+    assert len(pad_dataset.index) == 2
+    for pado_item in pad_dataset:
+        assert isinstance(pado_item, PadoItem)
+
+
+@pytest.mark.parametrize("arg", (None, {}, 9.1, "something"))
+def test_dataset_getitem_raises_typeerror(dataset, arg):
+    with pytest.raises(TypeError):
+        dataset[arg]
+
+
+# def test_dataset_getitem_raises_indexerror(dataset):
+#     # with pytest.raises(IndexError):
+#     dataset[len(dataset.index)]
