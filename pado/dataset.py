@@ -263,8 +263,8 @@ class PadoDataset:
             return PadoItem(
                 image_id,
                 self.images[image_id],
-                self.annotations[image_id],
-                self.metadata[image_id],
+                self.annotations.get(image_id),
+                self.metadata.get(image_id),
             )
         except KeyError:
             raise KeyError(f"{key} does not match any images in this dataset.")
