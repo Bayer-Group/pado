@@ -243,7 +243,7 @@ class PadoDataset:
     def __getitem__(self, key: slice) -> PadoDataset:
         ...
 
-    def __getitem__(self, key: ImageId | int | slice) -> PadoItem | PadoDataset:
+    def __getitem__(self, key):
 
         if isinstance(key, ImageId):
             try:
