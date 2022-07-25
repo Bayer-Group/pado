@@ -28,6 +28,7 @@ dependencies:
   # pado requirements
   - dynaconf
   - fsspec
+  - aiohttp
   - geojson-pydantic
   - imagecodecs
   - itsdangerous
