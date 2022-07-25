@@ -30,6 +30,7 @@ from tiffslide import TiffSlide
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.io.files import urlpathlike_is_localfile
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.types import UrlpathLike
@@ -468,3 +469,8 @@ class Image:
             chunkmode=chunkmode,
             zattrs=zattrs,
         )
+
+    @property
+    def is_local(self) -> bool:
+        """Return True if the image is stored locally"""
+        return urlpathlike_is_localfile(self.urlpath)
