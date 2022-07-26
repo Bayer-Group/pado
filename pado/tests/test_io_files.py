@@ -7,6 +7,7 @@ import pytest
 
 from pado.io.files import _OpenFileAndParts
 from pado.io.files import find_files
+from pado.io.files import urlpathlike_is_localfile
 from pado.io.files import urlpathlike_to_string
 
 
@@ -35,3 +36,8 @@ def test_find_files_raises_notadirectoryerror(tmpdir, urlpath):
     open(tmpdir / "file.svs", "a").close()
     with pytest.raises(NotADirectoryError):
         find_files(tmpdir / urlpath)
+
+
+def test_urlpathlike_is_localfile(tmpdir):
+    assert urlpathlike_is_localfile(tmpdir / "file.svs")
+    assert not urlpathlike_is_localfile("https://example.com/image.svs")

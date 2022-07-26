@@ -583,3 +583,20 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
 
         else:
             yield file
+
+
+def urlpathlike_is_localfile(urlpath: UrlpathLike) -> bool:
+    """Check whether an urlpath corresponds to a local file.
+
+    Parameters
+    ----------
+    urlpath : UrlpathLike
+        URL to be checked
+
+    Returns
+    -------
+    bool
+        True if `urlpath` corresponds to a local file, False otherwise
+    """
+    fs_cls = urlpathlike_get_fs_cls(urlpath)
+    return issubclass(fs_cls, LocalFileSystem)
