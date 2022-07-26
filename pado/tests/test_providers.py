@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
+import pandas as pd
 import pytest
 from pydantic.color import Color
 from shapely.geometry import Polygon
@@ -205,3 +206,11 @@ def test_empty_metadata_provider():
     with pytest.raises(ValueError) as e:
         MetadataProvider(provider={})
         e.match("can't create from an empty MetadataProvider")
+
+
+def test_metadata_provider_from_df_with_wrong_index():
+    metadata_df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    with pytest.raises(ValueError) as e:
+        MetadataProvider(metadata_df)
+    e.match("provider dataframe index has non ImageId indices")
