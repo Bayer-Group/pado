@@ -470,7 +470,6 @@ class Image:
             zattrs=zattrs,
         )
 
-    @property
     def is_local(self, must_exist=True) -> bool:
         """Return True if the image is stored locally"""
         return urlpathlike_is_localfile(self.urlpath, must_exist=must_exist)
