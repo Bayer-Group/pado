@@ -600,10 +600,5 @@ def urlpathlike_is_localfile(urlpath: UrlpathLike, must_exist: bool = True) -> b
     bool
         True if `urlpath` corresponds to a local file, False otherwise
     """
-    fs_cls = urlpathlike_get_fs_cls(urlpath)
-    local_file = issubclass(fs_cls, LocalFileSystem)
-    exists = fs_cls().exists(path=urlpath)
-    if must_exist:
-        return local_file and exists
-    else:
-        return local_file
+    fs, pth = urlpathlike_to_fs_and_path(urlpath)
+    return isinstance(fs, LocalFileSystem) and (fs.exists(pth) or not must_exist)
