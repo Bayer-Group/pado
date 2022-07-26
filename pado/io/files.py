@@ -585,13 +585,15 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
             yield file
 
 
-def urlpathlike_is_localfile(urlpath: UrlpathLike) -> bool:
-    """Check whether an urlpath corresponds to a local file.
+def urlpathlike_is_localfile(urlpath: UrlpathLike, must_exist: bool = True) -> bool:
+    """Check whether an urlpath corresponds to a file on a local filesystem.
 
     Parameters
     ----------
     urlpath : UrlpathLike
         URL to be checked
+    must_exist : bool, optional
+        If True, the file must exist on the local machine's filesystem. Default is True.
 
     Returns
     -------
@@ -599,4 +601,9 @@ def urlpathlike_is_localfile(urlpath: UrlpathLike) -> bool:
         True if `urlpath` corresponds to a local file, False otherwise
     """
     fs_cls = urlpathlike_get_fs_cls(urlpath)
-    return issubclass(fs_cls, LocalFileSystem)
+    local_file = issubclass(fs_cls, LocalFileSystem)
+    exists = fs_cls().exists(path=urlpath)
+    if must_exist:
+        return local_file and exists
+    else:
+        return local_file

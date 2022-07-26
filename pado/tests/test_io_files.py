@@ -38,6 +38,13 @@ def test_find_files_raises_notadirectoryerror(tmpdir, urlpath):
         find_files(tmpdir / urlpath)
 
 
-def test_urlpathlike_is_localfile(tmpdir):
-    assert urlpathlike_is_localfile(tmpdir / "file.svs")
-    assert not urlpathlike_is_localfile("https://example.com/image.svs")
+@pytest.mark.parametrize(
+    "urlpath, must_exist", [("file.svs", True), ("non-existent-path.svs", False)]
+)
+def test_urlpathlike_is_localfile(tmpdir, urlpath, must_exist):
+    slide_path = tmpdir.join("file.svs")
+    slide_path.write("content")
+    assert urlpathlike_is_localfile(tmpdir / urlpath, must_exist=must_exist)
+    assert not urlpathlike_is_localfile(
+        "https://example.com/image.svs", must_exist=must_exist
+    )
