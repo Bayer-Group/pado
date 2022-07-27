@@ -13,6 +13,7 @@ from pydantic.color import Color
 from shapely.geometry import Polygon
 
 from pado.annotations import Annotation
+from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
 from pado.annotations import AnnotationState
 from pado.annotations import Annotator
@@ -26,6 +27,7 @@ from pado.io.files import find_files
 from pado.io.paths import match_partial_paths_reversed
 from pado.metadata.providers import MetadataProvider
 from pado.mock import temporary_mock_svs
+from pado.predictions.providers import ImagePredictionProvider
 from pado.predictions.writers import ImagePredictionWriter
 
 
@@ -208,9 +210,17 @@ def test_empty_metadata_provider():
         e.match("can't create from an empty MetadataProvider")
 
 
-def test_metadata_provider_from_df_with_wrong_index():
-    metadata_df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-
+@pytest.mark.parametrize(
+    "provider_cls",
+    [
+        pytest.param(ImageProvider, id="image-provider"),
+        pytest.param(MetadataProvider, id="metadata-provider"),
+        pytest.param(AnnotationProvider, id="annotation-provider"),
+        pytest.param(ImagePredictionProvider, id="image-prediction-provider"),
+    ],
+)
+def test_provider_rejects_non_image_id_keys(provider_cls):
+    df = pd.DataFrame(index=[123], data={"something": [1]})
     with pytest.raises(ValueError) as e:
-        MetadataProvider(metadata_df)
+        _ = provider_cls(df)
     e.match("provider dataframe index has non ImageId indices")
