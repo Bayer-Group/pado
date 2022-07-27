@@ -86,3 +86,12 @@ def test_cmd_copy_error(registry, tmp_path):
     result = runner.invoke(cli, ["copy", "--src", "ds0", "--dst", "not-there"])
     assert result.exit_code == 1
     assert "not-there" in result.stdout
+
+
+def test_cmd_ops_list_ids(mock_dataset_path):
+    result = runner.invoke(cli, ["ops", "list-ids", mock_dataset_path])
+    assert result.exit_code == 0
+    assert "ImageId" in result.stdout
+    result = runner.invoke(cli, ["ops", "list-ids", mock_dataset_path, "--as-path"])
+    assert result.exit_code == 0
+    assert "ImageId" not in result.stdout
