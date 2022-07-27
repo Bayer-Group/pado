@@ -43,6 +43,7 @@ dependencies:
   - rich
   - shapely
   - tifffile>=2021.6.6
+  - tiffslide>=1.0.0
   - typer
   - toml
   - tqdm
@@ -58,7 +59,6 @@ dependencies:
 
   # pip installs
   - pip:         # [ PADO_DEVEL or PADO_DEVEL_CI ]
-    - tiffslide>=0.2.0  # [ PADO_DEVEL_CI ]
     - sphinxemoji # [ PADO_DEVEL ]
     - sphinx_autodoc_typehints # [ PADO_DEVEL ]
     - sphinx_rtd_theme # [ PADO_DEVEL ]
