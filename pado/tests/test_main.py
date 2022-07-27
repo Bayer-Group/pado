@@ -118,11 +118,48 @@ def test_cmd_ops_filter_ids_provide_pathlikes(mock_dataset_path):
 
 def test_cmd_ops_filter_ids_provide_csv(mock_dataset_path, tmp_path):
     ds = PadoDataset(mock_dataset_path)
+    # csv file with all columns
     csv_file = tmp_path.joinpath("iids.csv")
     csv_file.write_text(f"# header\n{os.path.join(*ds.index[0].parts)}\n")
-
     result = runner.invoke(
         cli, ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file)]
+    )
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_provide_csv_selected_column(mock_dataset_path, tmp_path):
+    ds = PadoDataset(mock_dataset_path)
+    # csv file with one selected column
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text(f"c0,c1\nnono,{','.join(ds.index[0].parts)}\n")
+    result = runner.invoke(
+        cli, ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file), "-c", "1"]
+    )
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_provide_csv_selected_multi_column(
+    mock_dataset_path, tmp_path
+):
+    ds = PadoDataset(mock_dataset_path)
+    # csv file with multiple selected columns
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text(f"c0,c1\nnono,{','.join(ds.index[0].parts)}\n")
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "filter-ids",
+            mock_dataset_path,
+            "--csv",
+            str(csv_file),
+            "-c",
+            "0",
+            "-c",
+            "1",
+        ],
     )
     assert result.exit_code == 0
     assert len(result.stdout.splitlines()) == 1

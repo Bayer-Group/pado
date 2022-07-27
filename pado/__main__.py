@@ -196,7 +196,7 @@ def ops_filter_ids(
     ),
     csv_file: Optional[Path] = Option(None, "--csv", help="path to csv file"),
     csv_column: Optional[List[int]] = Option(
-        None, help="columns to build target ids from"
+        None, "-c", help="columns to build target ids from"
     ),
     missing: FilterMissing = Option("warn", help="what to do iid can't be matched"),
     as_path: bool = Option(False),
