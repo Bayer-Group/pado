@@ -184,7 +184,7 @@ def number_to_str(
         std = None
         unit = ""
 
-    r = max(0, int(math.log10(std if std is not None else val)) - 1)
+    r = max(0, int(math.log10((std if std is not None else val) + 0.1)) - 1)
     u = (r // 3) if prefix_unit else 0
 
     val = round(val, -r)
