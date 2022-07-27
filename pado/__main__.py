@@ -357,6 +357,7 @@ def registry_remove(
             del registry[name]
     except KeyError:
         typer.secho(f"Name {name!r} not registered", err=True)
+        raise typer.Exit(1)
     else:
         typer.secho(
             f"Removed {name} with "

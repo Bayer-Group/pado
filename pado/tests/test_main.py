@@ -234,3 +234,19 @@ def test_cmd_registry_list_check_readable(registry, mock_dataset_path):
 
     result = runner.invoke(cli, ["registry", "list", "--check-readable"])
     assert result.exit_code == 0
+
+
+def test_cmd_registry_remove(registry):
+    with dataset_registry() as dct:
+        dct["efg"] = "/blabla"
+
+    result = runner.invoke(cli, ["registry", "remove", "efg"])
+    assert result.exit_code == 0
+    with dataset_registry() as dct:
+        assert "efg" not in dct
+
+
+def test_cmd_registry_remove_error_missing(registry):
+    result = runner.invoke(cli, ["registry", "remove", "abc"])
+    assert result.exit_code == 1
+    assert "not registered" in result.stdout
