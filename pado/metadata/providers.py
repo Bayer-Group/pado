@@ -82,11 +82,12 @@ class MetadataProvider(BaseMetadataProvider):
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
             try:
-                _ = map(ImageId.from_str, provider.index)
+                _ = list(map(ImageId.from_str, provider.index))
             except (TypeError, ValueError):
                 raise ValueError("provider dataframe index has non ImageId indices")
-            self.df = provider.copy()
-            self.identifier = str(identifier) if identifier else str(uuid.uuid4())
+            else:
+                self.df = provider.copy()
+                self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, (BaseMetadataProvider, dict)):
             if not provider:
                 raise ValueError("can't create from an empty MetadataProvider")
