@@ -210,6 +210,27 @@ def test_cmd_ops_filter_ids_error_noargs(mock_dataset_path):
     assert result.exit_code == 1
 
 
+def test_cmd_registry_add(registry, mock_dataset_path):
+    result = runner.invoke(
+        cli, ["registry", "add", "abc", mock_dataset_path, "--storage-options", "{}"]
+    )
+    assert result.exit_code == 0
+    with dataset_registry() as dct:
+        assert "abc" in dct
+
+
+def test_cmd_registry_add_error_storage_options(registry, mock_dataset_path):
+    result = runner.invoke(
+        cli, ["registry", "add", "abc", mock_dataset_path, "--storage-options", "NONO"]
+    )
+    assert result.exit_code == 1
+
+
+def test_cmd_registry_add_error_dataset(registry):
+    result = runner.invoke(cli, ["registry", "add", "abc", "no-path-no-no"])
+    assert result.exit_code == 1
+
+
 def test_cmd_registry_list(registry, mock_dataset_path):
     with dataset_registry() as dct:
         dct["abc"] = mock_dataset_path

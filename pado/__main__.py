@@ -288,10 +288,11 @@ def registry_add(
                 err=True,
             )
             raise typer.Exit(1)
+
+    typer.echo(f"path: {location}, storage_options: {so!r}")
     try:
-        print(location, so)
         _ = PadoDataset(location, mode="r", storage_options=so)
-    except ValueError as err:
+    except (ValueError, NotADirectoryError, RuntimeError) as err:
         typer.secho(f"error: {err!s}", err=True)
         typer.secho(f"PadoDataset at {location!s} is not readable", err=True)
         raise typer.Exit(1)
