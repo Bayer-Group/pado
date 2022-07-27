@@ -314,8 +314,8 @@ def registry_list(check_readable: bool = Option(False)):
             return None
         else:
             try:
-                PadoDataset(p, mode="r")
-            except ValueError:
+                PadoDataset(p.urlpath, mode="r", storage_options=p.storage_options)
+            except (ValueError, NotADirectoryError, RuntimeError):
                 return False
             else:
                 return True
@@ -340,7 +340,7 @@ def registry_list(check_readable: bool = Option(False)):
         for name, up, so, read in entries:
             _so = json.dumps(so) if so else ""
             if check_readable:
-                table.add_row(name, up, _so, read)
+                table.add_row(name, up, _so, str(read))
             else:
                 table.add_row(name, up, _so)
         Console().print(table)
