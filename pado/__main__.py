@@ -15,9 +15,9 @@ from typer import Option
 from pado._version import version as pado_version
 from pado.dataset import PadoDataset
 from pado.io.store import get_dataset_store_infos
+from pado.settings import dataset_registry
 
 # --- pado command line interface -------------------------------------
-from pado.settings import dataset_registry
 
 cli = typer.Typer(
     name="pado", epilog="#### pado dataset management ####", no_args_is_help=True
@@ -30,7 +30,7 @@ def version():
     typer.echo(pado_version)
 
 
-@cli.command("info")
+@cli.command("info", no_args_is_help=True)
 def info(
     name: Optional[str] = Option(None),
     path: Optional[Path] = Argument(
@@ -64,8 +64,8 @@ def info(
         raise typer.Exit(0)
 
 
-@cli.command("info-stores")
-def info_stores(
+@cli.command("stores", no_args_is_help=True)
+def stores(
     name: Optional[str] = Option(None),
     path: Optional[Path] = Argument(
         None, exists=True, file_okay=False, dir_okay=True, readable=True
@@ -112,7 +112,7 @@ def info_stores(
     Console().print(table)
 
 
-@cli.command("copy")
+@cli.command("copy", no_args_is_help=True)
 def copy(
     src: str = Option(..., metavar="from"),
     dst: str = Option(...),
@@ -161,7 +161,7 @@ def copy(
 
 # --- pado dataset info -----------------------------------------------
 
-cli_registry = typer.Typer()
+cli_registry = typer.Typer(no_args_is_help=True)
 cli.add_typer(cli_registry, name="registry")
 
 
