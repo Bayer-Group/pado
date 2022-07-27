@@ -41,9 +41,13 @@ def mock_dataset_path(tmp_path):
 @pytest.fixture(scope="function")
 def registry(tmp_path):
     # mock configuration path
-    conf_path = tmp_path.joinpath(f"mocked_pado_config_{uuid.uuid4()}")
-    settings.configure(config_path=conf_path)
-    yield
+    old_conf_path = settings.config_path
+    new_conf_path = tmp_path.joinpath(f"mocked_pado_config_{uuid.uuid4()}")
+    settings.configure(config_path=new_conf_path)
+    try:
+        yield
+    finally:
+        settings.configure(config_path=old_conf_path)
 
 
 @pytest.fixture(scope="function", autouse=True)

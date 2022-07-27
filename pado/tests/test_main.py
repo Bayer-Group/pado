@@ -25,7 +25,21 @@ def test_version():
     assert result.stdout == f"{__version__}\n"
 
 
-def test_cmd_info_error(tmpdir):
+def test_cmd_info(mock_dataset_path):
+    result = runner.invoke(cli, ["info", mock_dataset_path])
+    assert result.exit_code == 0
+    assert "SUMMARY" in result.stdout
+
+
+def test_cmd_info_from_registry(mock_dataset_path, registry):
+    with dataset_registry() as dct:
+        dct["abc"] = mock_dataset_path
+    result = runner.invoke(cli, ["info", "--name", "abc"])
+    assert result.exit_code == 0
+    assert "SUMMARY" in result.stdout
+
+
+def test_cmd_info_error_no_dataset(tmpdir):
     dataset_path = tmpdir.mkdir("not_a_dataset")
     result = runner.invoke(cli, ["info", str(dataset_path)])
     assert result.exit_code == 1
@@ -33,10 +47,19 @@ def test_cmd_info_error(tmpdir):
     assert "not_a_dataset" in result.stdout
 
 
-def test_cmd_info(mock_dataset_path):
-    result = runner.invoke(cli, ["info", mock_dataset_path])
-    assert result.exit_code == 0
-    assert "SUMMARY" in result.stdout
+def test_cmd_info_error_unknown_dataset():
+    result = runner.invoke(cli, ["info", "--name", "abc"])
+    assert result.exit_code == 1
+
+
+def test_cmd_info_error_missing_args():
+    result = runner.invoke(cli, ["info", "--storage-options", "{}"])
+    assert result.exit_code == 1
+
+
+def test_cmd_info_error_too_many_args(tmp_path):
+    result = runner.invoke(cli, ["info", "--name", "abc", str(tmp_path)])
+    assert result.exit_code == 1
 
 
 def test_cmd_stores(mock_dataset_path):
