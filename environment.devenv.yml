@@ -41,6 +41,7 @@ dependencies:
   - pyarrow
   - pydantic
   - rich
+  - requests
   - shapely
   - tifffile>=2021.6.6
   - tiffslide>=1.0.0
@@ -62,4 +63,4 @@ dependencies:
     - sphinxemoji # [ PADO_DEVEL ]
     - sphinx_autodoc_typehints # [ PADO_DEVEL ]
     - sphinx_rtd_theme # [ PADO_DEVEL ]
-    - "-e ."     # [ PADO_DEVEL ]
+    - "-e ."     # [ PADO_DEVEL or PADO_DEVEL_CI ]
