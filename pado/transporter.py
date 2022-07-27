@@ -401,7 +401,7 @@ def config(args, subparser):
         new_config["tunnel"] = args.tunnel
     if args.base_path:
         if not os.path.isabs(args.base_path):
-            logger.warn("--base-path requires an absolute path. please verify")
+            logger.warning("--base-path requires an absolute path. please verify")
         new_config["base_path"] = os.path.abspath(args.base_path)
 
     if new_config != _config:
