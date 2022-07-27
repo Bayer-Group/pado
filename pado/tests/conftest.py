@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import uuid
 
 import pytest
 
 from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
+from pado.settings import settings
 
 
 @pytest.fixture(scope="function")
@@ -37,10 +39,10 @@ def mock_dataset_path(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def registry(monkeypatch, tmp_path):
+def registry(tmp_path):
     # mock configuration path
-    conf_path = tmp_path.joinpath("mocked_pado_config")
-    monkeypatch.setenv("PADO_CONFIG_PATH", str(conf_path))
+    conf_path = tmp_path.joinpath(f"mocked_pado_config_{uuid.uuid4()}")
+    settings.configure(config_path=conf_path)
     yield
 
 

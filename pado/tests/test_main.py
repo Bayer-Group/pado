@@ -208,3 +208,29 @@ def test_cmd_ops_filter_ids_write_output(mock_dataset_path, tmp_path):
 def test_cmd_ops_filter_ids_error_noargs(mock_dataset_path):
     result = runner.invoke(cli, ["ops", "filter-ids", mock_dataset_path])
     assert result.exit_code == 1
+
+
+def test_cmd_registry_list(registry, mock_dataset_path):
+    with dataset_registry() as dct:
+        dct["abc"] = mock_dataset_path
+        dct["efg"] = "/blabla"
+
+    result = runner.invoke(cli, ["registry", "list"])
+    assert result.exit_code == 0
+    assert "abc" in result.stdout
+    assert "efg" in result.stdout
+
+
+def test_cmd_registry_list_empty(registry):
+    result = runner.invoke(cli, ["registry", "list"])
+    assert result.exit_code == 0
+    assert "No datasets registered" in result.stdout
+
+
+def test_cmd_registry_list_check_readable(registry, mock_dataset_path):
+    with dataset_registry() as dct:
+        dct["abc"] = mock_dataset_path
+        dct["efg"] = "/blabla"
+
+    result = runner.invoke(cli, ["registry", "list", "--check-readable"])
+    assert result.exit_code == 0
