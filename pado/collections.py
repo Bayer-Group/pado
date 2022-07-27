@@ -62,7 +62,7 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
             try:
-                _ = map(ImageId.from_str, provider.index)
+                _ = list(map(ImageId.from_str, provider.index))
             except (TypeError, ValueError):
                 raise ValueError("provider dataframe index has non ImageId indices")
             self.df = provider.copy()
