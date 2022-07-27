@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from pado.dataset import PadoDataset
@@ -20,11 +22,26 @@ def dataset(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def dataset_ro(datasource, tmp_path):
+def dataset_ro(tmp_path):
     dataset_path = tmp_path / "my_dataset"
     ds = mock_dataset(dataset_path)
     del ds
     yield PadoDataset(dataset_path, mode="r")
+
+
+@pytest.fixture(scope="function")
+def mock_dataset_path(tmp_path):
+    dataset_path = tmp_path / "my_dataset"
+    mock_dataset(dataset_path)
+    yield os.fspath(dataset_path)
+
+
+@pytest.fixture(scope="function")
+def registry(monkeypatch, tmp_path):
+    # mock configuration path
+    conf_path = tmp_path.joinpath("mocked_pado_config")
+    monkeypatch.setenv("PADO_CONFIG_PATH", str(conf_path))
+    yield
 
 
 @pytest.fixture(scope="function", autouse=True)
