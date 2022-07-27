@@ -41,6 +41,7 @@ dependencies:
   - pyarrow
   - pydantic
   - rich
+  - requests
   - shapely
   - tifffile>=2021.6.6
   - tiffslide>=1.0.0
