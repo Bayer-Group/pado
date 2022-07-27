@@ -95,3 +95,79 @@ def test_cmd_ops_list_ids(mock_dataset_path):
     result = runner.invoke(cli, ["ops", "list-ids", mock_dataset_path, "--as-path"])
     assert result.exit_code == 0
     assert "ImageId" not in result.stdout
+
+
+def test_cmd_ops_filter_ids(mock_dataset_path):
+    ds = PadoDataset(mock_dataset_path)
+
+    result = runner.invoke(
+        cli, ["ops", "filter-ids", mock_dataset_path, "-i", ds.index[0].to_str()]
+    )
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_provide_pathlikes(mock_dataset_path):
+    ds = PadoDataset(mock_dataset_path)
+    iid = os.path.join(*ds.index[0].parts)
+
+    result = runner.invoke(cli, ["ops", "filter-ids", mock_dataset_path, "-i", iid])
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_provide_csv(mock_dataset_path, tmp_path):
+    ds = PadoDataset(mock_dataset_path)
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text(f"# header\n{os.path.join(*ds.index[0].parts)}\n")
+
+    result = runner.invoke(
+        cli, ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file)]
+    )
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_output_pathlikes(mock_dataset_path):
+    ds = PadoDataset(mock_dataset_path)
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "filter-ids",
+            mock_dataset_path,
+            "-i",
+            ds.index[0].to_str(),
+            "--as-path",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ImageId" not in result.stdout
+
+
+def test_cmd_ops_filter_ids_write_output(mock_dataset_path, tmp_path):
+    out_pth = tmp_path.joinpath("output")
+    ds = PadoDataset(mock_dataset_path)
+
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "filter-ids",
+            mock_dataset_path,
+            "-i",
+            ds.index[0].to_str(),
+            "--out",
+            str(out_pth),
+        ],
+    )
+    assert result.exit_code == 0
+
+    dso = PadoDataset(out_pth)
+    assert len(dso.index) == 1
+    assert ds.index[0] in dso.index
+
+
+def test_cmd_ops_filter_ids_error_noargs(mock_dataset_path):
+    result = runner.invoke(cli, ["ops", "filter-ids", mock_dataset_path])
+    assert result.exit_code == 1
