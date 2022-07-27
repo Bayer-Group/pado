@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
+import uuid
+
 import pytest
 
 from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
+from pado.settings import settings
 
 
 @pytest.fixture(scope="function")
@@ -20,11 +24,30 @@ def dataset(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def dataset_ro(datasource, tmp_path):
+def dataset_ro(tmp_path):
     dataset_path = tmp_path / "my_dataset"
     ds = mock_dataset(dataset_path)
     del ds
     yield PadoDataset(dataset_path, mode="r")
+
+
+@pytest.fixture(scope="function")
+def mock_dataset_path(tmp_path):
+    dataset_path = tmp_path / "my_dataset"
+    mock_dataset(dataset_path)
+    yield os.fspath(dataset_path)
+
+
+@pytest.fixture(scope="function")
+def registry(tmp_path):
+    # mock configuration path
+    old_conf_path = settings.config_path
+    new_conf_path = tmp_path.joinpath(f"mocked_pado_config_{uuid.uuid4()}")
+    settings.configure(config_path=new_conf_path)
+    try:
+        yield
+    finally:
+        settings.configure(config_path=old_conf_path)
 
 
 @pytest.fixture(scope="function", autouse=True)

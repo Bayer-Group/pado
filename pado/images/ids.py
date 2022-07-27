@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os.path as op
+import warnings
+from enum import Enum
 from operator import itemgetter
 from pathlib import PurePath
 from typing import Any
@@ -265,8 +267,16 @@ class ImageId(Tuple[Optional[str], ...]):
         return op.join(*fs_parts)
 
     # noinspection PyPropertyAccess
-    def to_path(self) -> PurePath:
-        """return the ImageId as a relative path"""
+    def to_path(self, *, ignore_site: bool = False) -> PurePath:
+        """return the ImageId as a relative path
+
+        Parameters
+        ----------
+        ignore_site:
+            ignore the site for mapping to a PurePath and just rely on parts
+        """
+        if ignore_site:
+            return PurePath(*self.parts)
         try:
             fs_parts = self.site_mapper[self.site].fs_parts(self.parts)
         except KeyError:
@@ -323,7 +333,7 @@ def image_id_from_json_file(
 
 
 def match_partial_image_ids_reversed(
-    ids: Iterable[ImageId], image_id: ImageId
+    ids: Iterable[ImageId], image_id: ImageId | tuple[str]
 ) -> Optional[ImageId]:
     """match image_ids from back to front
 
@@ -331,7 +341,10 @@ def match_partial_image_ids_reversed(
     raises ValueError in case match is ambiguous
 
     """
-    match_set = set(ids)
+    if isinstance(ids, set):
+        match_set = ids
+    else:
+        match_set = set(ids)
 
     def match(x: ImageId, s: Set[ImageId], idx: int) -> Optional[ImageId]:
         try:
@@ -347,6 +360,47 @@ def match_partial_image_ids_reversed(
             return match(x, sj, idx - 1)
 
     return match(image_id, match_set, -1)
+
+
+class FilterMissing(str, Enum):
+    WARN = "warn"
+    ERROR = "error"
+    IGNORE = "ignore"
+
+
+def filter_image_ids(
+    ids: Iterable[ImageId],
+    target: Iterable[ImageId | tuple[str]],
+    *,
+    missing: FilterMissing | str = FilterMissing.WARN,
+) -> set[ImageId]:
+    """filter the provided ids to return the subset matching target"""
+    is_image_id = isinstance(target, ImageId)
+    is_parts_tuple = (
+        isinstance(target, (tuple, list)) and target and isinstance(target[0], str)
+    )
+
+    if is_image_id or is_parts_tuple:
+        raise TypeError(
+            "please provide a Iterable[ImageId | tuple[str]] not a plain ImageId | tuple[str]"
+        )
+
+    if isinstance(missing, str):
+        missing = FilterMissing(missing)
+
+    # todo: improve speed
+    s = set(ids)
+    o = set()
+    for t in target:
+        m = match_partial_image_ids_reversed(s, t)
+        if m is None:
+            if missing == FilterMissing.WARN:
+                warnings.warn(f"no match for: {t}")
+            elif missing == FilterMissing.ERROR:
+                raise KeyError(t)
+            continue
+        o.add(m)
+    return o
 
 
 def ensure_image_id(maybe_image_id: Any) -> ImageId:

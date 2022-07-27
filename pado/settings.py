@@ -50,7 +50,7 @@ settings = Dynaconf(
 
 def pado_config_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path:
     """return the common path for pado config files"""
-    pth = settings.config_path
+    pth = Path(settings.config_path)
     if pkg is not None:
         pth = pth.joinpath(pkg)
     if ensure_dir and not pth.is_dir():
