@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import json
 import os.path
+import sys
 from pathlib import Path
 from typing import Optional
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 import typer
 import typer.colors
@@ -39,27 +45,18 @@ def info(
     storage_options: str = Option(None),
 ):
     """return info regarding the pado dataset"""
-    if name is not None and path is not None:
-        typer.echo("Can't specify both name and path", err=True)
-        raise typer.Exit(1)
-    elif name is None and path is None:
-        typer.echo("Specify --name or path", err=True)
-        raise typer.Exit(1)
-
-    if name is not None:
-        with dataset_registry() as registry:
-            path, so = registry[name]
-    else:
-        so = json.loads(storage_options or "{}")
-
     try:
-        out = PadoDataset(path, mode="r", storage_options=so).describe(
-            output_format="plain_text"
+        ds = _ds_from_name_or_path(
+            name=name,
+            path=path,
+            storage_options=storage_options,
+            mode="r",
         )
     except ValueError as err:
         typer.echo(f"ERROR: {err}", err=True)
         raise typer.Exit(1)
     else:
+        out = ds.describe(output_format="plain_text")
         typer.echo(out)
         raise typer.Exit(0)
 
@@ -70,24 +67,15 @@ def stores(
     path: Optional[Path] = Argument(
         None, exists=True, file_okay=False, dir_okay=True, readable=True
     ),
+    storage_options: str = Option(None),
 ):
     """return versions of all dataset providers"""
-    if name is not None and path is not None:
-        typer.echo("Can't specify both name and path", err=True)
-        raise typer.Exit(1)
-    elif name is None and path is None:
-        typer.echo("Specify --name or path", err=True)
-        raise typer.Exit(1)
-
-    if name is not None:
-        with dataset_registry() as registry:
-            try:
-                path, so = registry[name]
-            except KeyError:
-                typer.secho(f"Name {name!r} not registered", err=True)
-                raise typer.Exit(1)
-
-    ds = PadoDataset(path, mode="r", storage_options=so)
+    ds = _ds_from_name_or_path(
+        name=name,
+        path=path,
+        storage_options=storage_options,
+        mode="r",
+    )
     store_infos = get_dataset_store_infos(ds)
 
     table = Table(title="Dataset Store Version")
@@ -257,6 +245,37 @@ def registry_remove(
             f"urlpath={urlpath!r} and storage_options={storage_options!r}",
             color=typer.colors.GREEN,
         )
+
+
+# --- helpers ---------------------------------------------------------
+
+
+def _ds_from_name_or_path(
+    *,
+    path: Path | None,
+    storage_options: str | None,
+    name: str | None,
+    mode: Literal["r", "w", "a", "x"],
+) -> PadoDataset:
+
+    if name is not None and path is not None:
+        typer.echo("Can't specify both name and path", err=True)
+        raise typer.Exit(1)
+    elif name is None and path is None:
+        typer.echo("Specify --name or path", err=True)
+        raise typer.Exit(1)
+
+    if name is not None:
+        with dataset_registry() as registry:
+            try:
+                path, so = registry[name]
+            except KeyError:
+                typer.secho(f"Name {name!r} not registered", err=True)
+                raise typer.Exit(1)
+    else:
+        so = json.loads(storage_options or "{}")
+
+    return PadoDataset(path, mode=mode, storage_options=so)
 
 
 if __name__ == "__main__":  # pragma: no cover
