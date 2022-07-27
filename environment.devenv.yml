@@ -62,4 +62,4 @@ dependencies:
     - sphinxemoji # [ PADO_DEVEL ]
     - sphinx_autodoc_typehints # [ PADO_DEVEL ]
     - sphinx_rtd_theme # [ PADO_DEVEL ]
-    - "-e ."     # [ PADO_DEVEL ]
+    - "-e ."     # [ PADO_DEVEL or PADO_DEVEL_CI ]
