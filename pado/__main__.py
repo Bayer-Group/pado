@@ -15,7 +15,6 @@ else:
 
 import typer
 import typer.colors
-from rich import print_json
 from rich.console import Console
 from rich.table import Table
 from typer import Argument
@@ -381,7 +380,7 @@ cli.add_typer(cli_config, name="config")
 @cli_config.command(name="show")
 def show():
     """display the current config"""
-    print_json(data=settings.to_dict())
+    Console().print_json(data=settings.to_dict())
 
 
 # --- helpers ---------------------------------------------------------
