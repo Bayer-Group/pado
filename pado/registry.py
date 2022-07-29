@@ -5,6 +5,7 @@ import os
 import warnings
 from contextlib import AbstractContextManager
 from contextlib import ExitStack
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import MutableMapping
 from typing import Optional
@@ -12,12 +13,14 @@ from typing import Optional
 import fsspec
 from fsspec.core import OpenFile
 
-from pado import PadoDataset
 from pado.settings import pado_config_path
 from pado.settings import settings
 from pado.types import FsspecIOMode
 from pado.types import IOMode
 from pado.types import UrlpathWithStorageOptions
+
+if TYPE_CHECKING:
+    from pado import PadoDataset
 
 __all__ = [
     "dataset_registry",
