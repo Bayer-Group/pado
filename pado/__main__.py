@@ -15,6 +15,7 @@ else:
 
 import typer
 import typer.colors
+from rich import print_json
 from rich.console import Console
 from rich.table import Table
 from typer import Argument
@@ -28,6 +29,7 @@ from pado.images.ids import filter_image_ids
 from pado.images.ids import load_image_ids_from_csv
 from pado.io.store import get_dataset_store_infos
 from pado.registry import dataset_registry
+from pado.settings import settings
 
 # --- pado command line interface -------------------------------------
 
@@ -368,6 +370,18 @@ def registry_remove(
             f"urlpath={urlpath!r} and storage_options={storage_options!r}",
             color=typer.colors.GREEN,
         )
+
+
+# --- config ----------------------------------------------------------
+
+cli_config = typer.Typer(no_args_is_help=True)
+cli.add_typer(cli_config, name="config")
+
+
+@cli_config.command(name="show")
+def show():
+    """display the current config"""
+    print_json(data=settings.to_dict())
 
 
 # --- helpers ---------------------------------------------------------
