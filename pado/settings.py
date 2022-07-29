@@ -55,7 +55,7 @@ def pado_config_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Pat
 
 def pado_cache_path(pkg: str | None = None, *, ensure_dir: bool = False) -> Path:
     """return the common path for pado cache files"""
-    pth = settings.cache_path
+    pth = Path(settings.cache_path)
     if pkg is not None:
         pth = pth.joinpath(pkg)
     if ensure_dir and not pth.is_dir():
