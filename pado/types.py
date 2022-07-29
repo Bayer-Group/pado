@@ -5,6 +5,7 @@ A collection of useful types and abstract base classes in pado
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from typing import IO
 from typing import TYPE_CHECKING
 from typing import Any
@@ -93,3 +94,9 @@ class SerializableItem(Protocol):
 
     def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
         ...
+
+
+class FilterMissing(str, Enum):
+    WARN = "warn"
+    ERROR = "error"
+    IGNORE = "ignore"
