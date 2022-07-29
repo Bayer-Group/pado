@@ -27,7 +27,7 @@ from pado.images.ids import ImageId
 from pado.images.ids import filter_image_ids
 from pado.images.ids import load_image_ids_from_csv
 from pado.io.store import get_dataset_store_infos
-from pado.settings import dataset_registry
+from pado.registry import dataset_registry
 
 # --- pado command line interface -------------------------------------
 

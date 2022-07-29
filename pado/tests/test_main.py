@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 from pado.__main__ import cli
 from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
-from pado.settings import dataset_registry
+from pado.registry import dataset_registry
 
 runner = CliRunner(mix_stderr=False)
 
