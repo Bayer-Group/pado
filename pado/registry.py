@@ -16,6 +16,11 @@ from pado.settings import pado_config_path
 from pado.types import IOMode
 from pado.types import UrlpathLike
 
+__all__ = [
+    "dataset_registry",
+    "open_registered_dataset",
+]
+
 
 class _DatasetRegistryItem(NamedTuple):
     urlpath: UrlpathLike
