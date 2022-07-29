@@ -11,6 +11,7 @@ from typing import Any
 from typing import AnyStr
 from typing import ContextManager
 from typing import Iterator
+from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -57,6 +58,13 @@ class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
 UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
 IOMode = Literal["r", "r+", "w", "a", "x"]
 FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
+
+
+class UrlpathWithStorageOptions(NamedTuple):
+    """container for urlpath with optional storage options"""
+
+    urlpath: UrlpathLike
+    storage_options: dict[str, str | int | float] | None = None
 
 
 @runtime_checkable

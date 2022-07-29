@@ -2,64 +2,82 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import warnings
 from contextlib import AbstractContextManager
 from contextlib import ExitStack
 from typing import Any
 from typing import MutableMapping
-from typing import NamedTuple
 from typing import Optional
+
+import fsspec
+from fsspec.core import OpenFile
 
 from pado import PadoDataset
 from pado.settings import pado_config_path
+from pado.settings import settings
+from pado.types import FsspecIOMode
 from pado.types import IOMode
-from pado.types import UrlpathLike
+from pado.types import UrlpathWithStorageOptions
 
 __all__ = [
     "dataset_registry",
+    "list_registries",
     "open_registered_dataset",
 ]
 
 
-class _DatasetRegistryItem(NamedTuple):
-    urlpath: UrlpathLike
-    storage_options: dict[str, str | int | float] | None = None
-
-
-class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
+class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions]):
     """a simple json file based key value store"""
 
     FILENAME = ".pado_dataset_registry.json"
 
-    def __init__(self):
+    def __init__(self, name: str | None):
+        self._name: str | None = name
         self._cm: Optional[ExitStack] = None
         self._data: Optional[dict] = None
 
+    @property
+    def is_default(self):
+        return self._name is None
+
     def __enter__(self):
-        fn = os.path.join(
-            pado_config_path(ensure_dir=True),
-            self.FILENAME,
-        )
+        # load the data
         try:
-            with open(fn) as f:
-                self._data = json.load(f)
+            with self._open(mode="r") as f:
+                contents = f.read()
         except FileNotFoundError:
             self._data = {}
+            return self
+
+        try:
+            self._data = json.loads(contents)
         except json.JSONDecodeError:
-            shutil.move(fn, f"{fn}.corrupted")
-            warnings.warn(f"registry corrupted and moved to {fn}.corrupted")
+            of = self._open(mode="w")
+            fn = of.path
+            fs = of.fs
+            warnings.warn(f"registry corrupted: moving to {fn}.corrupted")
+            fs.move(fn, f"{fn}.corrupted")
             self._data = {}
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        fn = os.path.join(
-            pado_config_path(ensure_dir=True),
-            self.FILENAME,
-        )
-        with open(fn, "w") as f:
+        with self._open(mode="w") as f:
             json.dump(self._data, f, indent=2)
         self._data = None
+
+    def _open(self, mode: FsspecIOMode) -> OpenFile:
+        # return a fsspec OpenFile instance for the registry json
+        if self._name is None:
+            urlpath = os.path.join(
+                pado_config_path(ensure_dir=True),
+                self.FILENAME,
+            )
+            storage_options = {}
+        else:
+            dct = settings.registry[self._name]
+            urlpath = dct.pop("urlpath")
+            storage_options = dct
+        return fsspec.open(urlpath, mode=mode, **storage_options)
 
     def __contains__(self, name: str):
         if self._data is None:
@@ -76,7 +94,7 @@ class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         return len(self._data)
 
-    def __getitem__(self, name: str) -> _DatasetRegistryItem:
+    def __getitem__(self, name: str) -> UrlpathWithStorageOptions:
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
@@ -85,11 +103,13 @@ class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
             )
         value = self._data[name]
         if isinstance(value, str):
-            return _DatasetRegistryItem(value)
+            return UrlpathWithStorageOptions(value)
         else:
-            return _DatasetRegistryItem(value["urlpath"], value["storage_options"])
+            return UrlpathWithStorageOptions(value["urlpath"], value["storage_options"])
 
-    def __setitem__(self, name: str, path: str | _DatasetRegistryItem | dict[str, Any]):
+    def __setitem__(
+        self, name: str, path: str | UrlpathWithStorageOptions | dict[str, Any]
+    ):
         if self._data is None:
             raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
@@ -98,7 +118,7 @@ class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
             )
         if isinstance(path, str):
             self._data[name] = path
-        elif isinstance(path, _DatasetRegistryItem):
+        elif isinstance(path, UrlpathWithStorageOptions):
             self._data[name] = path._asdict()
         elif isinstance(path, dict):
             self._data[name] = {
@@ -120,9 +140,19 @@ class _DatasetRegistry(MutableMapping[str, _DatasetRegistryItem]):
             yield name, self[name]
 
 
-def dataset_registry() -> AbstractContextManager[_DatasetRegistry]:
+def dataset_registry(
+    name: str | None = None,
+) -> AbstractContextManager[_DatasetRegistry]:
     """return the dataset registry instance"""
-    return _DatasetRegistry()
+    return _DatasetRegistry(name)
+
+
+def list_registries() -> dict[str, _DatasetRegistry]:
+    """return additional registry instances
+
+    Note: the default registry is not included in this output
+    """
+    return {key: _DatasetRegistry(key) for key in settings.registry}
 
 
 def open_registered_dataset(
