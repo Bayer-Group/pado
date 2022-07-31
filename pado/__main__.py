@@ -319,28 +319,44 @@ def registry_add(
 @cli_registry.command(name="list")
 def registry_list(check_readable: bool = Option(False)):
     """list configured registries"""
-    from pado.dataset import PadoDataset
     from pado.registry import dataset_registry
 
-    with dataset_registry() as registry:
-        name_urlpaths = list(registry.items())
+    if check_readable:
+        from pado.dataset import PadoDataset
 
-    def readable(p) -> Optional[bool]:
-        if not check_readable:
-            return None
-        else:
+        def readable(name, p) -> Optional[bool]:
             try:
                 PadoDataset(p.urlpath, mode="r", storage_options=p.storage_options)
             except (ValueError, NotADirectoryError, RuntimeError):
                 return False
+            except OSError as err:
+                typer.secho(
+                    f"[{name}] ?network/permissions? -> {type(err).__name__}({str(err)!r})",
+                    fg="yellow",
+                    err=True,
+                )
+                return False
             else:
                 return True
+
+    else:
+
+        def readable(*_) -> Optional[bool]:
+            return None
+
+    with dataset_registry() as registry:
+        name_urlpaths = list(registry.items())
 
     entries = []
     with typer.progressbar(name_urlpaths) as _name_urlpaths:
         for name, urlpath in _name_urlpaths:
             entries.append(
-                (name, urlpath.urlpath, urlpath.storage_options, readable(urlpath))
+                (
+                    name,
+                    urlpath.urlpath,
+                    urlpath.storage_options,
+                    readable(name, urlpath),
+                )
             )
 
     if not entries:
