@@ -39,5 +39,5 @@ jobs:
         if [ "$RUNNER_OS" == "Windows" ]; then
           pytest --cov=pado || echo "::warning:: Windows tests failed, but failure is ignored"
         else
-          pytest --cov=pado
+          pytest --cov=pado ./pado/tests
         fi
