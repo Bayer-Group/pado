@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import warnings
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Iterator
 from typing import MutableMapping
 from typing import Optional
 
@@ -25,6 +27,7 @@ __all__ = [
     "dataset_registry",
     "list_registries",
     "open_registered_dataset",
+    "has_secrets",
 ]
 
 
@@ -88,6 +91,112 @@ class _JsonFileData(AbstractContextManager):
         return fsspec.open(urlpath, mode=mode, **storage_options)
 
 
+class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
+    """a simple json file based secret store for the registry
+
+    note: this is not encrypted!
+    """
+
+    FILENAME = ".pado_secrets.json"
+
+    def __init__(self):
+        super().__init__(None)
+
+    @staticmethod
+    def make_key(name, dataset_name, secret_name):
+        if not name.isidentifier():
+            raise ValueError(f"{name!r} should have been a valid identifier")
+        if not dataset_name.isidentifier():
+            raise ValueError(f"{dataset_name!r} should have been a valid identifier")
+        if not secret_name.isidentifier():
+            raise ValueError(f"{secret_name!r} should have been a valid identifier")
+        return f"@SECRET:{name}:{dataset_name}:{secret_name}"
+
+    @staticmethod
+    def is_secret(key):
+        if not isinstance(key, str):
+            raise TypeError(f"key must be of type str, got {type(key).__name__}")
+        if not key.startswith("@SECRET:"):
+            return False
+        try:
+            _, name, dataset_name, secret_name = key.split(":")
+        except ValueError:
+            return False
+        if not name.isidentifier():
+            raise RuntimeError(f"{name!r} should have been a valid identifier")
+        if not dataset_name.isidentifier():
+            raise RuntimeError(f"{dataset_name!r} should have been a valid identifier")
+        if not secret_name.isidentifier():
+            raise RuntimeError(f"{secret_name!r} should have been a valid identifier")
+        return True
+
+    def set(
+        self, registry_name: str | None, dataset_name: str, secret_name: str, value: str
+    ):
+        key = self.make_key(registry_name, dataset_name, secret_name)
+        self[key] = value
+
+    def __setitem__(self, k: str, v: str) -> None:
+        if not self.is_secret(k):
+            raise KeyError("prefer using .set(...)")
+        self.data[k] = base64.urlsafe_b64encode(v.encode()).decode()
+
+    def __delitem__(self, k: str) -> None:
+        if not self.is_secret(k):
+            raise KeyError(k)
+        del self.data[k]
+
+    def __getitem__(self, k: str) -> str:
+        if not self.is_secret(k):
+            raise KeyError(k)
+        v = self.data[k]
+        return base64.urlsafe_b64decode(v.encode()).decode()
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.data)
+
+
+secret_stores = {"user_input": _UserInputSecretStore()}
+
+is_secret = _UserInputSecretStore.is_secret
+
+
+_NO_DEFAULT = object()
+
+
+def get_secret(value: str, *, default: Any = _NO_DEFAULT) -> str:
+    """return the secret from stores"""
+    if not is_secret(value):
+        return value
+
+    for store in secret_stores.values():
+        try:
+            return store[value]
+        except KeyError:
+            pass
+    if default is _NO_DEFAULT:
+        raise KeyError(f"{value} not in stores")
+    return default
+
+
+def has_secrets(value: str | UrlpathWithStorageOptions) -> bool:
+    return len(list_secrets(value)) > 0
+
+
+def list_secrets(value: str | UrlpathWithStorageOptions) -> list[str]:
+    if isinstance(value, str):
+        check = [value]
+    elif isinstance(value, UrlpathWithStorageOptions):
+        so = value.storage_options or {}
+        check = [value.urlpath, *so.values()]
+    else:
+        raise TypeError("must provide str or UrlpathWithStorageOptions")
+    return [x for x in check if is_secret(x)]
+
+
 class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFileData):
     """a simple json file based key value store"""
 
@@ -112,9 +221,14 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFile
             )
         value = self.data[name]
         if isinstance(value, str):
+            value = get_secret(value, default=value)
             return UrlpathWithStorageOptions(value)
         else:
-            return UrlpathWithStorageOptions(value["urlpath"], value["storage_options"])
+            urlpath = get_secret(value["urlpath"], default=value["urlpath"])
+            so = {
+                k: get_secret(v, default=v) for k, v in value["storage_options"].items()
+            }
+            return UrlpathWithStorageOptions(urlpath, so)
 
     def __setitem__(
         self, name: str, path: str | UrlpathWithStorageOptions | dict[str, Any]
@@ -123,6 +237,8 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFile
             raise TypeError(
                 f"name must be a string, got {name!r} of {type(name).__name__}"
             )
+        if not name.isidentifier():
+            raise ValueError("name must be a valid python identifier")
         if isinstance(path, str):
             self.data[name] = path
         elif isinstance(path, UrlpathWithStorageOptions):

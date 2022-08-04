@@ -320,6 +320,7 @@ def registry_add(
 def registry_list(check_readable: bool = Option(False)):
     """list configured registries"""
     from pado.registry import dataset_registry
+    from pado.registry import has_secrets
 
     if check_readable:
         from pado.dataset import PadoDataset
@@ -350,12 +351,16 @@ def registry_list(check_readable: bool = Option(False)):
     entries = []
     with typer.progressbar(name_urlpaths) as _name_urlpaths:
         for name, urlpath in _name_urlpaths:
+            _has_secrets = has_secrets(urlpath)
+            can_read = not _has_secrets and readable(name, urlpath)
+
             entries.append(
                 (
                     name,
                     urlpath.urlpath,
                     urlpath.storage_options,
-                    readable(name, urlpath),
+                    can_read,
+                    _has_secrets,
                 )
             )
 
@@ -368,13 +373,14 @@ def registry_list(check_readable: bool = Option(False)):
         table.add_column("Storage Options", justify="left")
         if check_readable:
             table.add_column("Readable")
+        table.add_column("Secrets")
 
-        for name, up, so, read in entries:
+        for name, up, so, read, sec in entries:
             _so = json.dumps(so) if so else ""
             if check_readable:
-                table.add_row(name, up, _so, str(read))
+                table.add_row(name, up, _so, str(read), str(sec))
             else:
-                table.add_row(name, up, _so)
+                table.add_row(name, up, _so, str(sec))
         Console().print(table)
 
 
