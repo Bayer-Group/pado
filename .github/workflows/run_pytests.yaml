@@ -13,7 +13,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: [3.8]
-
         # include:
         #   # we'll test the python support on ubuntu
         #   - os: ubuntu-latest
@@ -21,56 +20,24 @@ jobs:
         #   - os: ubuntu-latest
         #     python-version: 3.6
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
 
     - name: Make python reference python3 because conda-devenv needs it
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: ${{ matrix.python-version }}
 
-    - name: Create the environment.yml via conda-devenv
+    - name: Install pado with testing devs
+      id: pip-cache
       run: |
         python -m pip install --upgrade pip
-        python -m pip install --upgrade setuptools
-        python -m pip install git+https://github.com/ESSS/conda-devenv.git@2.1.1
-        python -m conda_devenv.devenv --env PADO_DEVEL_CI=TRUE --file environment.devenv.yml --print > environment.yml
-
-    - name: Cache conda
-      uses: actions/cache@v2
-      env:
-        CACHE_NUMBER: 0
-      with:
-        path: ~/conda_pkgs_dir
-        key: conda-pkgs-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_NUMBER }}-${{ hashFiles('environment.devenv.yml') }}
-
-    - name: Setup conda
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        environment-file: environment.yml
-        activate-environment: pado
-        python-version: ${{ matrix.python-version }}
-        miniforge-variant: Mambaforge
-        mamba-version: "*"
-        use-mamba: true
-        channels: conda-forge
-        channel-priority: strict
-        use-only-tar-bz2: true
-
-    - name: Verify conda installation
-      shell: bash -l {0}
-      run: |
-        conda info
-        conda list
+        python -m pip install .[cli,create,dev]
 
     - name: Test with pytest
       shell: bash -l {0}
       run: |
         if [ "$RUNNER_OS" == "Windows" ]; then
-          pytest --cov=pado || echo "::warning:: windows tests failure"
+          pytest --cov=pado || echo "::warning:: Windows tests failed, but failure is ignored"
         else
           pytest --cov=pado
         fi
-    #- name: Upload coverage to Codecov
-    #  uses: codecov/codecov-action@v1
-    #  with:
-    #    name: pado
