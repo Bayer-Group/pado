@@ -135,6 +135,7 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
     ):
         key = self.make_key(registry_name, dataset_name, secret_name)
         self[key] = value
+        return key
 
     def __setitem__(self, k: str, v: str) -> None:
         if not self.is_secret(k):
@@ -174,7 +175,8 @@ def get_secret(value: str, *, default: Any = _NO_DEFAULT) -> str:
 
     for store in secret_stores.values():
         try:
-            return store[value]
+            with store:
+                return store[value]
         except KeyError:
             pass
     if default is _NO_DEFAULT:
@@ -184,6 +186,21 @@ def get_secret(value: str, *, default: Any = _NO_DEFAULT) -> str:
 
 def has_secrets(value: str | UrlpathWithStorageOptions) -> bool:
     return len(list_secrets(value)) > 0
+
+
+def set_secret(
+    registry_name: str | None,
+    dataset_name: str,
+    secret_name: str,
+    value: str,
+):
+    store = secret_stores["user_input"]
+    if registry_name is not None:
+        raise NotImplementedError("todo: named registries")
+    else:
+        registry_name = "__default__"
+    with store:
+        return store.set(registry_name, dataset_name, secret_name, value)
 
 
 def list_secrets(value: str | UrlpathWithStorageOptions) -> list[str]:
@@ -225,9 +242,13 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFile
             return UrlpathWithStorageOptions(value)
         else:
             urlpath = get_secret(value["urlpath"], default=value["urlpath"])
-            so = {
-                k: get_secret(v, default=v) for k, v in value["storage_options"].items()
-            }
+            if value["storage_options"] is None:
+                so = None
+            else:
+                so = {
+                    k: get_secret(v, default=v)
+                    for k, v in value["storage_options"].items()
+                }
             return UrlpathWithStorageOptions(urlpath, so)
 
     def __setitem__(

@@ -285,10 +285,13 @@ def registry_add(
     name: str = Argument(...),
     location: str = Argument(...),
     storage_options: str = Option(None),
+    urlpath_is_secret: bool = Option(False, help="the urlpath itself is secret"),
+    secret: List[str] = Option([], help="which storage_options are secret"),
 ):
     """manage registries for datasets"""
     from pado.dataset import PadoDataset
     from pado.registry import dataset_registry
+    from pado.registry import set_secret
 
     so = None
     if storage_options:
@@ -301,6 +304,10 @@ def registry_add(
             )
             raise typer.Exit(1)
 
+    if secret and not set(secret).issubset(so or {}):
+        typer.secho("secret not a key in storage_options", err=True, fg="red")
+        raise typer.Exit(1)
+
     typer.echo(f"path: {location}, storage_options: {so!r}")
     try:
         _ = PadoDataset(location, mode="r", storage_options=so)
@@ -308,10 +315,25 @@ def registry_add(
         typer.secho(f"error: {err!s}", err=True)
         typer.secho(f"PadoDataset at {location!s} is not readable", err=True)
         raise typer.Exit(1)
+
+    if urlpath_is_secret:
+        typer.secho("scrambling: urlpath", fg="green")
+        _location = set_secret(None, name, "urlpath", location)
+    else:
+        _location = location
+
+    if so is not None:
+        _so = so.copy()
+        for s in secret:
+            typer.secho(f"scrambling: {s}", fg="green")
+            _so[s] = set_secret(None, name, s, so[s])
+    else:
+        _so = None
+
     with dataset_registry() as registry:
         registry[name] = {
-            "urlpath": location,
-            "storage_options": so,
+            "urlpath": _location,
+            "storage_options": _so,
         }
     typer.secho(f"Added {name} at {location!r} with {so!r}", color=typer.colors.GREEN)
 
