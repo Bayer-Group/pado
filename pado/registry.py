@@ -4,7 +4,6 @@ import json
 import os
 import warnings
 from contextlib import AbstractContextManager
-from contextlib import ExitStack
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import MutableMapping
@@ -29,15 +28,21 @@ __all__ = [
 ]
 
 
-class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions]):
-    """a simple json file based key value store"""
+class _JsonFileData(AbstractContextManager):
+    """load a dict from json in a context manager"""
 
-    FILENAME = ".pado_dataset_registry.json"
+    FILENAME: str  # define in subclasses
 
     def __init__(self, name: str | None):
+        super().__init__()
         self._name: str | None = name
-        self._cm: Optional[ExitStack] = None
         self._data: Optional[dict] = None
+
+    @property
+    def data(self):
+        if self._data is None:
+            raise RuntimeError(f"{self!r} has to be used in a with statement")
+        return self._data
 
     @property
     def is_default(self):
@@ -82,29 +87,30 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions]):
             storage_options = dct
         return fsspec.open(urlpath, mode=mode, **storage_options)
 
+
+class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFileData):
+    """a simple json file based key value store"""
+
+    FILENAME = ".pado_dataset_registry.json"
+
+    def __init__(self, name: str | None):
+        super().__init__(name)
+
     def __contains__(self, name: str):
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
-        return name in self._data
+        return name in self.data
 
     def __iter__(self):
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
-        return iter(self._data)
+        return iter(self.data)
 
     def __len__(self):
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
-        return len(self._data)
+        return len(self.data)
 
     def __getitem__(self, name: str) -> UrlpathWithStorageOptions:
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
             raise TypeError(
                 f"name must be a string, got {name!r} of {type(name).__name__}"
             )
-        value = self._data[name]
+        value = self.data[name]
         if isinstance(value, str):
             return UrlpathWithStorageOptions(value)
         else:
@@ -113,18 +119,16 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions]):
     def __setitem__(
         self, name: str, path: str | UrlpathWithStorageOptions | dict[str, Any]
     ):
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
         if not isinstance(name, str):
             raise TypeError(
                 f"name must be a string, got {name!r} of {type(name).__name__}"
             )
         if isinstance(path, str):
-            self._data[name] = path
+            self.data[name] = path
         elif isinstance(path, UrlpathWithStorageOptions):
-            self._data[name] = path._asdict()
+            self.data[name] = path._asdict()
         elif isinstance(path, dict):
-            self._data[name] = {
+            self.data[name] = {
                 "urlpath": path["urlpath"],
                 "storage_options": path.get("storage_options", None),
             }
@@ -134,9 +138,7 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions]):
             )
 
     def __delitem__(self, name: str):
-        if self._data is None:
-            raise RuntimeError(f"{self!r} has to be used in a with statement")
-        del self._data[name]
+        del self.data[name]
 
     def items(self):
         for name in self:
