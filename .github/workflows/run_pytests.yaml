@@ -37,7 +37,7 @@ jobs:
       shell: bash -l {0}
       run: |
         if [ "$RUNNER_OS" == "Windows" ]; then
-          pytest --cov=pado || echo "::warning:: Windows tests failed, but failure is ignored"
+          pytest --cov=pado ./pado/tests || echo "::warning:: Windows tests failed, but failure is ignored"
         else
           pytest --cov=pado ./pado/tests
         fi
