@@ -9,7 +9,7 @@ from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
 from pado.settings import dataset_registry
 
-runner = CliRunner()
+runner = CliRunner(mix_stderr=False)
 
 
 def test_no_args():
@@ -43,8 +43,8 @@ def test_cmd_info_error_no_dataset(tmpdir):
     dataset_path = tmpdir.mkdir("not_a_dataset")
     result = runner.invoke(cli, ["info", str(dataset_path)])
     assert result.exit_code == 1
-    assert "ERROR" in result.stdout
-    assert "not_a_dataset" in result.stdout
+    assert "ERROR" in result.stderr
+    assert "not_a_dataset" in result.stderr
 
 
 def test_cmd_info_error_unknown_dataset():
@@ -102,13 +102,13 @@ def test_cmd_copy_error(registry, tmp_path):
     # src dataset not there
     result = runner.invoke(cli, ["copy", "--src", "not-there", "--dst", "ds1"])
     assert result.exit_code == 1
-    assert "not-there" in result.stdout
+    assert "not-there" in result.stderr
     # dst dataset not there
     with dataset_registry() as dct:
         dct["ds0"] = "somepath"
     result = runner.invoke(cli, ["copy", "--src", "ds0", "--dst", "not-there"])
     assert result.exit_code == 1
-    assert "not-there" in result.stdout
+    assert "not-there" in result.stderr
 
 
 def test_cmd_ops_list_ids(mock_dataset_path):
@@ -143,12 +143,51 @@ def test_cmd_ops_filter_ids_provide_csv(mock_dataset_path, tmp_path):
     ds = PadoDataset(mock_dataset_path)
     # csv file with all columns
     csv_file = tmp_path.joinpath("iids.csv")
-    csv_file.write_text(f"# header\n{os.path.join(*ds.index[0].parts)}\n")
+    csv_file.write_text(f"custom_column\n{os.path.join(*ds.index[0].parts)}\n")
     result = runner.invoke(
-        cli, ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file)]
+        cli,
+        ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file)],
     )
     assert result.exit_code == 0
     assert len(result.stdout.splitlines()) == 1
+    assert "custom_column" in result.stderr
+
+
+def test_cmd_ops_filter_ids_provide_csv_without_headers(mock_dataset_path, tmp_path):
+    ds = PadoDataset(mock_dataset_path)
+    # csv file with all columns
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text(f"{os.path.join(*ds.index[0].parts)}\n")
+    result = runner.invoke(
+        cli,
+        ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file), "--no-header"],
+    )
+    assert result.exit_code == 0
+    assert len(result.stdout.splitlines()) == 1
+
+
+def test_cmd_ops_filter_ids_provide_csv_without_headers_wrong_c(
+    mock_dataset_path, tmp_path
+):
+    ds = PadoDataset(mock_dataset_path)
+    # csv file with all columns
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text(f"{os.path.join(*ds.index[0].parts)}\n")
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "filter-ids",
+            mock_dataset_path,
+            "--csv",
+            str(csv_file),
+            "--no-header",
+            "-c",
+            "blah",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "integer" in result.stderr
 
 
 def test_cmd_ops_filter_ids_provide_csv_selected_column(mock_dataset_path, tmp_path):
@@ -157,7 +196,8 @@ def test_cmd_ops_filter_ids_provide_csv_selected_column(mock_dataset_path, tmp_p
     csv_file = tmp_path.joinpath("iids.csv")
     csv_file.write_text(f"c0,c1\nnono,{','.join(ds.index[0].parts)}\n")
     result = runner.invoke(
-        cli, ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file), "-c", "1"]
+        cli,
+        ["ops", "filter-ids", mock_dataset_path, "--csv", str(csv_file), "-c", "c1"],
     )
     assert result.exit_code == 0
     assert len(result.stdout.splitlines()) == 1
@@ -179,9 +219,9 @@ def test_cmd_ops_filter_ids_provide_csv_selected_multi_column(
             "--csv",
             str(csv_file),
             "-c",
-            "0",
+            "c0",
             "-c",
-            "1",
+            "c1",
         ],
     )
     assert result.exit_code == 0
@@ -268,7 +308,7 @@ def test_cmd_registry_list(registry, mock_dataset_path):
 def test_cmd_registry_list_empty(registry):
     result = runner.invoke(cli, ["registry", "list"])
     assert result.exit_code == 0
-    assert "No datasets registered" in result.stdout
+    assert "No datasets registered" in result.stderr
 
 
 def test_cmd_registry_list_check_readable(registry, mock_dataset_path):
@@ -293,4 +333,4 @@ def test_cmd_registry_remove(registry):
 def test_cmd_registry_remove_error_missing(registry):
     result = runner.invoke(cli, ["registry", "remove", "abc"])
     assert result.exit_code == 1
-    assert "not registered" in result.stdout
+    assert "not registered" in result.stderr

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import operator
 import os.path as op
 import warnings
 from enum import Enum
 from operator import itemgetter
+from pathlib import Path
 from pathlib import PurePath
 from typing import Any
 from typing import Callable
@@ -421,3 +424,62 @@ def ensure_image_id(maybe_image_id: Any) -> ImageId:
             pass
         raise ValueError(f"can't cast string {maybe_image_id!r} to ImageId")
     raise TypeError(f"{maybe_image_id!r} of type {type(maybe_image_id).__name__!r}")
+
+
+def load_image_ids_from_csv(
+    csv_file: Path,
+    *,
+    csv_columns: list[int] | list[str] | None = None,
+    no_header: bool = False,
+) -> tuple[list[tuple[str, ...]], list[str] | None]:
+    """load tuples from csv file
+
+    Parameters
+    ----------
+    csv_file:
+        path to your csv file
+    csv_columns:
+        a list of column names or column indices
+    no_header:
+        if enabled assume csv file has no header (requires int indices in csv_columns)
+
+    Returns
+    -------
+    image_ids:
+        tuple of selected cells for each row
+    fieldnames:
+        None if no_header=True else a list of column names
+
+    """
+    if csv_columns is not None and not isinstance(csv_columns, (list, tuple)):
+        raise TypeError(
+            "csv_columns must be a list of int | str, got:", type(csv_columns).__name__
+        )
+
+    if no_header and csv_columns is not None:
+        csv_columns = [int(c) for c in csv_columns]
+
+    csv_columns = csv_columns or []
+
+    # get selectors for columns
+    if len(csv_columns) == 0 and not no_header:
+        get_cells = lambda r: tuple(r.values())  # noqa: E731
+    elif len(csv_columns) == 0 and no_header:
+        get_cells = operator.itemgetter(slice(None))
+    elif len(csv_columns) == 1:
+        get_cells = lambda r, idx=csv_columns[0]: (r[idx],)  # noqa: E731
+    else:
+        get_cells = operator.itemgetter(*csv_columns)
+
+    out = []
+    with csv_file.open(mode="r", newline="") as f:
+        if no_header:
+            reader = csv.reader(f)
+            fieldnames = None
+        else:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+        for row in reader:
+            out.append(get_cells(row))
+
+    return out, fieldnames
