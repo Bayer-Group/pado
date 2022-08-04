@@ -6,8 +6,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from pado._repr import DescribeFormat
 from pado.annotations import AnnotationProvider
-from pado.dataset import PadoDataset, PadoItem
+from pado.dataset import PadoDataset
+from pado.dataset import PadoItem
 from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
@@ -215,6 +217,12 @@ def test_dataset_get_by_idx_raises_typeerror(dataset, arg):
         dataset.get_by_idx(arg)
 
 
-# def test_dataset_getitem_raises_indexerror(dataset):
-#     # with pytest.raises(IndexError):
-#     dataset[len(dataset.index)]
+def test_dataset_describe(dataset):
+    output = dataset.describe(output_format=DescribeFormat.JSON)
+    assert len(output) > 0
+
+
+def test_dataset_describe_ip_only(dataset_ip_only):
+    output = dataset_ip_only.describe(output_format=DescribeFormat.JSON)
+    assert output["metadata_columns"] == []
+    assert output["avg_annotations_per_image"]["val"] == 0
