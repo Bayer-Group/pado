@@ -28,6 +28,8 @@ __all__ = [
     "list_registries",
     "open_registered_dataset",
     "has_secrets",
+    "list_secrets",
+    "set_secret",
 ]
 
 
@@ -113,22 +115,22 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
         return f"@SECRET:{name}:{dataset_name}:{secret_name}"
 
     @staticmethod
-    def is_secret(key):
+    def parse_secret(key):
         if not isinstance(key, str):
             raise TypeError(f"key must be of type str, got {type(key).__name__}")
         if not key.startswith("@SECRET:"):
-            return False
+            return None
         try:
             _, name, dataset_name, secret_name = key.split(":")
         except ValueError:
-            return False
+            return None
         if not name.isidentifier():
             raise RuntimeError(f"{name!r} should have been a valid identifier")
         if not dataset_name.isidentifier():
             raise RuntimeError(f"{dataset_name!r} should have been a valid identifier")
         if not secret_name.isidentifier():
             raise RuntimeError(f"{secret_name!r} should have been a valid identifier")
-        return True
+        return name, dataset_name, secret_name
 
     def set(
         self, registry_name: str | None, dataset_name: str, secret_name: str, value: str
@@ -138,17 +140,17 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
         return key
 
     def __setitem__(self, k: str, v: str) -> None:
-        if not self.is_secret(k):
+        if self.parse_secret(k) is None:
             raise KeyError("prefer using .set(...)")
         self.data[k] = base64.urlsafe_b64encode(v.encode()).decode()
 
     def __delitem__(self, k: str) -> None:
-        if not self.is_secret(k):
+        if self.parse_secret(k) is None:
             raise KeyError(k)
         del self.data[k]
 
     def __getitem__(self, k: str) -> str:
-        if not self.is_secret(k):
+        if self.parse_secret(k) is None:
             raise KeyError(k)
         v = self.data[k]
         return base64.urlsafe_b64decode(v.encode()).decode()
@@ -162,7 +164,10 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
 
 secret_stores = {"user_input": _UserInputSecretStore()}
 
-is_secret = _UserInputSecretStore.is_secret
+
+def is_secret(secret_name: str) -> bool:
+    """return if secret is a secret"""
+    return _UserInputSecretStore.parse_secret(secret_name) is not None
 
 
 _NO_DEFAULT = object()
@@ -189,16 +194,29 @@ def has_secrets(value: str | UrlpathWithStorageOptions) -> bool:
 
 
 def set_secret(
-    registry_name: str | None,
-    dataset_name: str,
     secret_name: str,
     value: str,
+    *,
+    registry_name: str | None = ...,
+    dataset_name: str | None = None,
 ):
+    """set a secret"""
     store = secret_stores["user_input"]
-    if registry_name is not None:
-        raise NotImplementedError("todo: named registries")
+    if is_secret(secret_name):
+        registry_name, dataset_name, secret_name = store.parse_secret(secret_name)
     else:
-        registry_name = "__default__"
+        if registry_name is ...:
+            raise ValueError(
+                "must provide registry_name if secret is a python identifier"
+            )
+        elif registry_name is not None:
+            raise NotImplementedError("todo: named registries")
+        else:
+            registry_name = "__default__"
+        if dataset_name is None:
+            raise ValueError(
+                "must provide dataset_name if secret is a python identifier"
+            )
     with store:
         return store.set(registry_name, dataset_name, secret_name, value)
 

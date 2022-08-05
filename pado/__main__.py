@@ -318,7 +318,9 @@ def registry_add(
 
     if urlpath_is_secret:
         typer.secho("scrambling: urlpath", fg="green")
-        _location = set_secret(None, name, "urlpath", location)
+        _location = set_secret(
+            "urlpath", location, registry_name=None, dataset_name=name
+        )
     else:
         _location = location
 
@@ -326,7 +328,7 @@ def registry_add(
         _so = so.copy()
         for s in secret:
             typer.secho(f"scrambling: {s}", fg="green")
-            _so[s] = set_secret(None, name, s, so[s])
+            _so[s] = set_secret(s, so[s], registry_name=None, dataset_name=name)
     else:
         _so = None
 
@@ -426,6 +428,33 @@ def registry_remove(
             f"urlpath={urlpath!r} and storage_options={storage_options!r}",
             color=typer.colors.GREEN,
         )
+
+
+@cli_registry.command(name="input-secrets")
+def registry_input_secrets():
+    """enter secrets from registry"""
+    from pado.registry import dataset_registry
+    from pado.registry import list_secrets
+    from pado.registry import set_secret
+
+    with dataset_registry() as registry:
+        for dataset_name, up_so in registry.items():
+            secrets = list_secrets(up_so)
+            if not secrets:
+                typer.secho(f"{dataset_name} has no missing secrets", fg="green")
+                continue
+
+            for secret in secrets:
+                typer.secho(f"{dataset_name} requires {secret}", fg="yellow")
+                value = typer.prompt(
+                    "set value (empty is skip)", default="", show_default=False
+                )
+                if not value.strip():
+                    typer.echo("skipped.")
+                    continue
+                set_secret(secret, value.strip())
+                typer.secho(f"{secret} = {value}")
+    typer.echo("done")
 
 
 # --- config ----------------------------------------------------------
