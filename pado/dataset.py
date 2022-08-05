@@ -516,10 +516,14 @@ class PadoDataset:
         adf["area"] = adf["geometry"].apply(lambda x: shapely.wkt.loads(x).area)
         agg_annotations = adf.groupby("classification")["area"].agg(["sum", "count"])
 
+        # get metadata columns
         try:
-            md_columns = self.metadata.df.columns.to_list()
+            mp = self.metadata
         except TypeError:
+            # todo: self.metadata currently raises TypeError if no provider found
             md_columns = []
+        else:
+            md_columns = mp.df.columns.to_list()
 
         def make_replace_nan_cast(cast: Callable, default: Any) -> Callable:
             def _cast(x: Any) -> Any:
