@@ -451,15 +451,15 @@ def load_image_ids_from_csv(
         None if no_header=True else a list of column names
 
     """
+
     if csv_columns is not None:
-        is_non_empty_list = isinstance(csv_columns, list) and csv_columns
-        if not (
-            is_non_empty_list and all(isinstance(c, (int, str)) for c in csv_columns)
-        ):
-            _t = type(csv_columns).__name__
-            if is_non_empty_list:
-                _t += f"[{type(csv_columns[0]).__name__}]"
-            raise TypeError("csv_columns must be a list[int] or list[str], got:", _t)
+        is_seq = isinstance(csv_columns, (list, tuple))
+        if not is_seq or any(not isinstance(c, (int, str)) for c in csv_columns):
+            stype = type(csv_columns).__name__
+            if is_seq and csv_columns:
+                etype = type(csv_columns[0]).__name__
+                stype += f"[{etype}]" if stype != "tuple" else f"[{etype},...]"
+            raise TypeError("csv_columns must be a list[int] or list[str], got:", stype)
 
     if no_header and csv_columns is not None:
         csv_columns = [int(c) for c in csv_columns]

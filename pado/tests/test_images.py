@@ -6,6 +6,7 @@ import pickle
 import pytest
 
 from pado.images import ImageId
+from pado.images.ids import load_image_ids_from_csv
 
 # --- test constructors -----------------------------------------------
 
@@ -205,6 +206,35 @@ def test_image_id_file_mapper_fspath():
 def test_image_id_file_mapper_to_path():
     iid = ImageId("a", "b")  # no site!
     assert iid.to_path()
+
+
+def test_load_image_ids_from_csv(tmp_path):
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text("c0,c1\ni10,i11\n")
+    tids, header = load_image_ids_from_csv(csv_file, csv_columns=["c1", "c0"])
+    assert tids == [("i11", "i10")]
+    assert header == ["c0", "c1"]
+
+
+def test_load_image_ids_from_csv_no_header(tmp_path):
+    csv_file = tmp_path.joinpath("iids.csv")
+    csv_file.write_text("i00,i01\ni10,i11\n")
+    tids, header = load_image_ids_from_csv(csv_file, csv_columns=[1, 0], no_header=True)
+    assert tids == [
+        ("i01", "i00"),
+        ("i11", "i10"),
+    ]
+    assert header is None
+
+
+def test_load_image_ids_from_csv_wrong_column_type(tmp_path):
+    csv_file = tmp_path.joinpath("iids.csv")
+    with pytest.raises(TypeError) as e:
+        load_image_ids_from_csv(csv_file, csv_columns=[1.0, 2.0])
+        e.match("csv_columns must be a list[int] or list[str], got: list[float]")
+    with pytest.raises(TypeError) as e:
+        load_image_ids_from_csv(csv_file, csv_columns=1.0)
+        e.match("csv_columns must be a list[int] or list[str], got: float")
 
 
 # --- test in datasets ------------------------------------------------
