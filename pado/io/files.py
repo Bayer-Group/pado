@@ -42,8 +42,10 @@ from pado.types import OpenFileLike
 from pado.types import UrlpathLike
 
 if sys.version_info[:2] >= (3, 10):
+    from typing import Literal
     from typing import TypeGuard
 else:
+    from typing_extensions import Literal
     from typing_extensions import TypeGuard
 
 __all__ = [
@@ -204,11 +206,46 @@ def _pathlike_to_string(pathlike: os.PathLike[AnyStr]) -> str:
         raise TypeError(f"can't stringify: {pathlike!r} of type {type(pathlike)!r}")
 
 
+def _build_uri(
+    cls_name,
+    protocol,
+    path,
+    custom_args,
+    custom_options,
+    *,
+    ignore_options,
+    repr_fallback,
+):
+    if ignore_options is True:
+        custom_options.clear()
+    elif ignore_options:
+        for key in ignore_options:
+            if key in custom_options:
+                del custom_options[key]
+
+    if not custom_args and not custom_options:
+        return f"{protocol}://{path}"
+
+    elif not custom_args:
+        # todo: ... can prettify some file systems
+        pass
+
+    if not repr_fallback:
+        raise ValueError("can't serialize urlpath to a pure uri")
+
+    # provide a repr like string
+    fs_params = [
+        *custom_args,
+        *(f"{k}={v!r}" for k, v in custom_options.items()),
+    ]
+    return f"{cls_name}({', '.join(fs_params)}).open({path!r})"
+
+
 def urlpathlike_to_uri(
     urlpath: UrlpathLike,
     *,
     repr_fallback: bool = False,
-    ignore_options: Collection[str] = (),
+    ignore_options: Collection[str] | Literal[True] = (),
 ) -> str:
     """convert an urlpath-like object to an fsspec URI
 
@@ -228,40 +265,50 @@ def urlpathlike_to_uri(
         a URI string representation of the urlpath-like
 
     """
+    if isinstance(urlpath, str) and urlpath[0] == "{" and urlpath[-1] == "}":
+        obj = _deserialize_fsspec_json(urlpath)
+        if obj:
+            _fs = obj["fs"]
+            if isinstance(_fs, str):
+                _fs = json.loads(_fs)
+            cls_name = _fs["cls"]
+            custom_args = _fs.pop("args")
+            custom_options = _fs
+            path = obj["path"]
+            protocol = _fs.pop("protocol")
+            return _build_uri(
+                cls_name,
+                protocol,
+                path,
+                custom_args,
+                custom_options,
+                ignore_options=ignore_options,
+                repr_fallback=repr_fallback,
+            )
+
     if is_fsspec_open_file_like(urlpath):
         fs = urlpath.fs
-        pth = urlpath.path
+        path = urlpath.path
 
         cls = type(fs)
+        cls_name = f"{cls.__module__}.{cls.__name__}"
         custom_args = fs.storage_args
         default_options = _get_constructor_default_options(cls)
         custom_options = _remove_duplicate_items(fs.storage_options, default_options)
 
-        if ignore_options:
-            for key in ignore_options:
-                if key in custom_options:
-                    del custom_options[key]
+        protocol = fs.protocol
+        if isinstance(protocol, (list, tuple)):
+            protocol = protocol[0]
 
-        if not custom_args and not custom_options:
-            proto = fs.protocol
-            if isinstance(proto, (list, tuple)):
-                proto = proto[0]
-            return f"{proto}://{pth}"
-
-        elif not custom_args:
-            # todo: ... can prettify some file systems
-            pass
-
-        if not repr_fallback:
-            raise ValueError("can't serialize urlpath to a pure uri")
-
-        # provide a repr like string
-        cls_name = f"{cls.__module__}.{cls.__name__}"
-        fs_params = [
-            *custom_args,
-            *(f"{k}={v!r}" for k, v in custom_options.items()),
-        ]
-        return f"{cls_name}({', '.join(fs_params)}).open({pth!r})"
+        return _build_uri(
+            cls_name,
+            protocol,
+            path,
+            custom_args,
+            custom_options,
+            ignore_options=ignore_options,
+            repr_fallback=repr_fallback,
+        )
 
     else:
         return _pathlike_to_string(urlpath)
