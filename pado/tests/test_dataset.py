@@ -217,9 +217,26 @@ def test_dataset_get_by_idx_raises_typeerror(dataset, arg):
         dataset.get_by_idx(arg)
 
 
+DESCRIPTION_KEYS = {
+    "avg_annotations_per_image",
+    "avg_image_height",
+    "avg_image_size",
+    "avg_image_width",
+    "common_classes_area",
+    "common_classes_count",
+    "metadata_columns",
+    "num_images",
+    "num_mpps",
+    "path",
+    "total_num_annotations",
+    "total_size_images",
+}
+
+
 def test_dataset_describe(dataset):
     output = dataset.describe(output_format=DescribeFormat.JSON)
-    assert len(output) > 0
+    assert set(output) == DESCRIPTION_KEYS
+    assert output["num_images"] == 3
 
 
 def test_dataset_describe_ip_only(dataset_ip_only):
