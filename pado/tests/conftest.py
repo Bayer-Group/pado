@@ -24,6 +24,13 @@ def dataset(tmp_path):
 
 
 @pytest.fixture(scope="function")
+def dataset_ip_only(tmp_path):
+    dataset_path = tmp_path / "my_dataset"
+    ds = mock_dataset(dataset_path, metadata_provider=False, annotation_provider=False)
+    yield ds
+
+
+@pytest.fixture(scope="function")
 def dataset_ro(tmp_path):
     dataset_path = tmp_path / "my_dataset"
     ds = mock_dataset(dataset_path)

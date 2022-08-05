@@ -82,6 +82,8 @@ def mock_dataset(
     *,
     num_images: int = 3,
     images_urlpath: Optional[UrlpathLike] = None,
+    metadata_provider: bool = True,
+    annotation_provider: bool = True,
 ) -> PadoDataset:
     """provide a mocked dataset for testing"""
     ds = PadoDataset(urlpath, mode="x")
@@ -94,12 +96,14 @@ def mock_dataset(
 
     ip = mock_images(images_urlpath, num_images)
     image_ids = list(ip.keys())
-    ap = mock_annotations(image_ids)
-    mp = mock_metadata(image_ids)
-
     ds.ingest_obj(ip)
-    ds.ingest_obj(ap)
-    ds.ingest_obj(mp)
+    if metadata_provider:
+        mp = mock_metadata(image_ids)
+        ds.ingest_obj(mp)
+    if annotation_provider:
+        ap = mock_annotations(image_ids)
+        ds.ingest_obj(ap)
+
     return ds
 
 

@@ -61,7 +61,7 @@ def test_multiclass_to_rgb():
 
 def test_prediction_writer(dataset):
     """tests the prediction writer"""
-    item = dataset.get_by_idx(0)
+    item = dataset[0]
 
     iid = item.id
     image = item.image

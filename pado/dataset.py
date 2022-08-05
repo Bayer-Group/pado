@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import pathlib
 import sys
@@ -515,6 +516,24 @@ class PadoDataset:
         adf["area"] = adf["geometry"].apply(lambda x: shapely.wkt.loads(x).area)
         agg_annotations = adf.groupby("classification")["area"].agg(["sum", "count"])
 
+        # get metadata columns
+        try:
+            mp = self.metadata
+        except TypeError:
+            # todo: self.metadata currently raises TypeError if no provider found
+            md_columns = []
+        else:
+            md_columns = mp.df.columns.to_list()
+
+        def make_replace_nan_cast(cast: Callable, default: Any) -> Callable:
+            def _cast(x: Any) -> Any:
+                if isinstance(x, float) and math.isnan(x):
+                    return default
+                else:
+                    return cast(x)
+
+            return _cast
+
         data = {
             "path": self.urlpath,
             "num_images": len(self.images),
@@ -526,9 +545,11 @@ class PadoDataset:
             "avg_image_height": number(idf["height"], agg="avg", unit="px"),
             "avg_image_size": number(idf["size_bytes"], agg="avg", unit="b"),
             "avg_annotations_per_image": number(
-                adf.groupby("image_id")["geometry"].count(), agg="avg"
+                adf.groupby("image_id")["geometry"].count(),
+                agg="avg",
+                cast=make_replace_nan_cast(int, default=0),
             ),
-            "metadata_columns": self.metadata.df.columns.to_list(),
+            "metadata_columns": md_columns,
             "total_size_images": number(idf["size_bytes"], agg="sum", unit="b"),
             "total_num_annotations": sum(
                 len(x) for x in list(self.annotations.values())
