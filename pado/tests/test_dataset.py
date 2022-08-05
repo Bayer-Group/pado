@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from pado._repr import DescribeFormat
 from pado.annotations import AnnotationProvider
+from pado.dataset import DescribeFormat
 from pado.dataset import PadoDataset
 from pado.dataset import PadoItem
 from pado.images import Image
