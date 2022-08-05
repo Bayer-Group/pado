@@ -352,11 +352,9 @@ def registry_list(check_readable: bool = Option(False)):
         def readable(name, p) -> Optional[bool]:
             try:
                 PadoDataset(p.urlpath, mode="r", storage_options=p.storage_options)
-            except (ValueError, NotADirectoryError, RuntimeError):
-                return False
-            except OSError as err:
+            except (ValueError, NotADirectoryError, RuntimeError) as err:
                 typer.secho(
-                    f"[{name}] ?network/permissions? -> {type(err).__name__}({str(err)!r})",
+                    f"[{name}] -> {err!r})",
                     fg="yellow",
                     err=True,
                 )
