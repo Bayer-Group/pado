@@ -142,6 +142,7 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
     def __setitem__(self, k: str, v: str) -> None:
         if self.parse_secret(k) is None:
             raise KeyError("prefer using .set(...)")
+        v = json.dumps(v)
         self.data[k] = base64.urlsafe_b64encode(v.encode()).decode()
 
     def __delitem__(self, k: str) -> None:
@@ -153,7 +154,8 @@ class _UserInputSecretStore(MutableMapping[str, str], _JsonFileData):
         if self.parse_secret(k) is None:
             raise KeyError(k)
         v = self.data[k]
-        return base64.urlsafe_b64decode(v.encode()).decode()
+        v = base64.urlsafe_b64decode(v.encode()).decode()
+        return json.loads(v)
 
     def __len__(self) -> int:
         return len(self.data)
