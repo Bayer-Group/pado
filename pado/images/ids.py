@@ -5,6 +5,7 @@ import os.path as op
 import warnings
 from enum import Enum
 from operator import itemgetter
+from pathlib import Path
 from pathlib import PurePath
 from typing import Any
 from typing import Callable
@@ -421,3 +422,59 @@ def ensure_image_id(maybe_image_id: Any) -> ImageId:
             pass
         raise ValueError(f"can't cast string {maybe_image_id!r} to ImageId")
     raise TypeError(f"{maybe_image_id!r} of type {type(maybe_image_id).__name__!r}")
+
+
+def load_image_ids_from_csv(
+    csv_file: Path,
+    *,
+    csv_columns: list[int] | list[str] | None = None,
+    no_header: bool = False,
+) -> tuple[list[tuple[str, ...]], list[str] | None]:
+    """load tuples from csv file
+
+    Parameters
+    ----------
+    csv_file:
+        path to your csv file
+    csv_columns:
+        a list of column names or column indices (`None` or `[]` means all)
+    no_header:
+        if enabled assume csv file has no header (requires int indices in csv_columns)
+
+    Returns
+    -------
+    image_ids:
+        tuple of selected cells for each row
+    fieldnames:
+        None if no_header=True else a list of column names
+
+    """
+    from pandas import read_csv
+
+    if csv_columns is not None:
+        is_seq = isinstance(csv_columns, (list, tuple))
+        if not is_seq or any(not isinstance(c, (int, str)) for c in csv_columns):
+            stype = type(csv_columns).__name__
+            if is_seq and csv_columns:
+                etype = type(csv_columns[0]).__name__
+                stype += f"[{etype}]" if stype != "tuple" else f"[{etype},...]"
+            raise TypeError("csv_columns must be a list[int] or list[str], got:", stype)
+
+    if no_header and csv_columns is not None:
+        csv_columns = [int(c) for c in csv_columns]
+
+    csv_columns = csv_columns or []
+    if len(csv_columns) == 0:
+        csv_columns = slice(None)
+
+    kw = {"header": None} if no_header else {}
+    df = read_csv(csv_file, **kw)
+
+    if no_header:
+        fieldnames = None
+    else:
+        fieldnames = list(df.columns)
+
+    df = df.loc[:, csv_columns]
+    rows = list(df.itertuples(index=False, name="PadoImageIdTuple"))
+    return rows, fieldnames

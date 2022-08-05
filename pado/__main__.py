@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import operator
 import os.path
 import sys
 from pathlib import Path
@@ -26,6 +25,7 @@ from pado.dataset import PadoDataset
 from pado.images.ids import FilterMissing
 from pado.images.ids import ImageId
 from pado.images.ids import filter_image_ids
+from pado.images.ids import load_image_ids_from_csv
 from pado.io.store import get_dataset_store_infos
 from pado.settings import dataset_registry
 
@@ -195,9 +195,12 @@ def ops_filter_ids(
         None, "--image-id", "-i", help="str encoded ImageId or 'some/path/file.svs'"
     ),
     csv_file: Optional[Path] = Option(None, "--csv", help="path to csv file"),
-    csv_column: Optional[List[int]] = Option(
-        None, "-c", help="columns to build target ids from"
+    csv_column: Optional[List[str]] = Option(
+        None,
+        "-c",
+        help="column_names (or indices if --no-header) to build target ids from",
     ),
+    no_header: bool = Option(False, help="csv file has no header"),
     missing: FilterMissing = Option("warn", help="what to do iid can't be matched"),
     as_path: bool = Option(False),
     output: Optional[Path] = Option(
@@ -210,6 +213,14 @@ def ops_filter_ids(
         typer.echo("must provide either --image-id some/id.svs or --csv iids.csv")
         raise typer.Exit(1)
 
+    if no_header and not all(x.isdigit() for x in csv_column):
+        typer.secho(
+            "error: must provide integer column indices when using --no-header",
+            err=True,
+            fg="red",
+        )
+        raise typer.Exit(2)
+
     ds = _ds_from_name_or_path(
         name=name,
         path=path,
@@ -217,25 +228,15 @@ def ops_filter_ids(
         mode="r",
     )
 
-    targets = []
-
     if csv_file:
-        import csv
-
-        # get selectors for columns
-        if not csv_column:
-            get_cells = operator.itemgetter(slice(None))
-        elif len(csv_column) == 1:
-            get_cells = lambda r, idx=csv_column[0]: (r[idx],)  # noqa: E731
-        else:
-            get_cells = operator.itemgetter(*csv_column)
-
-        # collect targets
-        with csv_file.open(mode="r", newline="") as f:
-            # todo: might have to expose some config for `DictReader` here
-            for row in csv.DictReader(f):
-                cells = tuple(row.values())
-                targets.append(get_cells(cells))
+        targets, headers = load_image_ids_from_csv(
+            csv_file,
+            csv_columns=csv_column,
+            no_header=no_header,
+        )
+    else:
+        headers = None
+        targets = []
 
     # add cli provided image ids
     for t in image_ids:
@@ -253,7 +254,6 @@ def ops_filter_ids(
         filtered_ds = PadoDataset(output, mode="x")
         filtered_ds.ingest_obj(ds.filter(filtered_ids))
         typer.echo(f"Wrote new pado dataset to path: '{output}'")
-        raise typer.Exit(0)
 
     else:
         if not as_path:
@@ -262,7 +262,10 @@ def ops_filter_ids(
         else:
             for iid in filtered_ids:
                 typer.echo(iid.to_path(ignore_site=True))
-        raise typer.Exit(0)
+
+    if headers:
+        typer.secho(f"# using csv headers: {headers!r}", fg="yellow", err=True)
+    raise typer.Exit(0)
 
 
 # --- pado dataset registry -------------------------------------------
