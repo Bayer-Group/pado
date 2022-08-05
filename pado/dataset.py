@@ -102,7 +102,10 @@ class PadoDataset:
                 raise ValueError(f"unsupported mode {mode!r}")
 
             # if the dataset files should be there, check them
-            fs = self._fs
+            try:
+                fs = self._fs
+            except OSError as err:
+                raise RuntimeError(f"can't instantiate filesystem: {err!r}")
             if mode in {"r", "r+"}:
                 try:
                     is_dir = fs.isdir(self._root)  # raises if not there or reachable
