@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import csv
 import hashlib
-import operator
 import os.path as op
 import warnings
 from enum import Enum
@@ -451,6 +449,7 @@ def load_image_ids_from_csv(
         None if no_header=True else a list of column names
 
     """
+    from pandas import read_csv
 
     if csv_columns is not None:
         is_seq = isinstance(csv_columns, (list, tuple))
@@ -465,26 +464,17 @@ def load_image_ids_from_csv(
         csv_columns = [int(c) for c in csv_columns]
 
     csv_columns = csv_columns or []
+    if len(csv_columns) == 0:
+        csv_columns = slice(None)
 
-    # get selectors for columns
-    if len(csv_columns) == 0 and not no_header:
-        get_cells = lambda r: tuple(r.values())  # noqa: E731
-    elif len(csv_columns) == 0 and no_header:
-        get_cells = operator.itemgetter(slice(None))
-    elif len(csv_columns) == 1:
-        get_cells = lambda r, idx=csv_columns[0]: (r[idx],)  # noqa: E731
+    kw = {"header": None} if no_header else {}
+    df = read_csv(csv_file, **kw)
+
+    if no_header:
+        fieldnames = None
     else:
-        get_cells = operator.itemgetter(*csv_columns)
+        fieldnames = list(df.columns)
 
-    out = []
-    with csv_file.open(mode="r", newline="") as f:
-        if no_header:
-            reader = csv.reader(f)
-            fieldnames = None
-        else:
-            reader = csv.DictReader(f)
-            fieldnames = reader.fieldnames
-        for row in reader:
-            out.append(get_cells(row))
-
-    return out, fieldnames
+    df = df.loc[:, csv_columns]
+    rows = list(df.itertuples(index=False, name="PadoImageIdTuple"))
+    return rows, fieldnames
