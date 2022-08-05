@@ -5,12 +5,14 @@ A collection of useful types and abstract base classes in pado
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from typing import IO
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import AnyStr
 from typing import ContextManager
 from typing import Iterator
+from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -59,6 +61,13 @@ IOMode = Literal["r", "r+", "w", "a", "x"]
 FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
 
 
+class UrlpathWithStorageOptions(NamedTuple):
+    """container for urlpath with optional storage options"""
+
+    urlpath: UrlpathLike
+    storage_options: dict[str, str | int | float] | None = None
+
+
 @runtime_checkable
 class DatasetSplitter(Protocol):
     """splitter classes from sklearn.model_selection"""
@@ -85,3 +94,9 @@ class SerializableItem(Protocol):
 
     def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
         ...
+
+
+class FilterMissing(str, Enum):
+    WARN = "warn"
+    ERROR = "error"
+    IGNORE = "ignore"

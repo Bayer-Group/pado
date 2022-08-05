@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 from typer.testing import CliRunner
@@ -7,7 +8,8 @@ from typer.testing import CliRunner
 from pado.__main__ import cli
 from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
-from pado.settings import dataset_registry
+from pado.registry import dataset_registry
+from pado.types import UrlpathWithStorageOptions
 
 runner = CliRunner(mix_stderr=False)
 
@@ -274,12 +276,48 @@ def test_cmd_ops_filter_ids_error_noargs(mock_dataset_path):
 
 
 def test_cmd_registry_add(registry, mock_dataset_path):
-    result = runner.invoke(
-        cli, ["registry", "add", "abc", mock_dataset_path, "--storage-options", "{}"]
-    )
+    result = runner.invoke(cli, ["registry", "add", "abc", mock_dataset_path])
     assert result.exit_code == 0
     with dataset_registry() as dct:
         assert "abc" in dct
+
+
+def test_cmd_registry_add_wrong_secret(registry, mock_dataset_path):
+    result = runner.invoke(
+        cli,
+        [
+            "registry",
+            "add",
+            "abc",
+            mock_dataset_path,
+            "--storage-options",
+            "{}",
+            "--secret",
+            "blabla",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "not a key in storage_options" in result.stderr
+
+
+def test_cmd_registry_add_scramble_secret(registry, mock_dataset_path):
+    result = runner.invoke(
+        cli,
+        [
+            "registry",
+            "add",
+            "abc",
+            mock_dataset_path,
+            "--storage-options",
+            '{"something": 1}',
+            "--secret",
+            "something",
+            "--urlpath-is-secret",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "scrambling: urlpath" in result.stdout
+    assert "scrambling: something" in result.stdout
 
 
 def test_cmd_registry_add_error_storage_options(registry, mock_dataset_path):
@@ -334,3 +372,35 @@ def test_cmd_registry_remove_error_missing(registry):
     result = runner.invoke(cli, ["registry", "remove", "abc"])
     assert result.exit_code == 1
     assert "not registered" in result.stderr
+
+
+def _make_secret_urlpath_with_storage_options(dataset_name, *so):
+    return UrlpathWithStorageOptions(
+        urlpath=f"@SECRET:__default__:{dataset_name}:urlpath",
+        storage_options={s: f"@SECRET:__default__:{dataset_name}:{s}" for s in so},
+    )
+
+
+def test_cmd_registry_input_secrets(registry):
+    with dataset_registry() as dct:
+        dct["nosecrets"] = "/nono"
+        dct["abc"] = _make_secret_urlpath_with_storage_options("abc", "blah", "skip")
+
+    result = runner.invoke(
+        cli, ["registry", "input-secrets"], input="urlpath-test\nblah-test\n \n"
+    )
+    assert result.exit_code == 0
+    assert "nosecrets has no missing secrets" in result.stdout
+    assert "@SECRET:__default__:abc:urlpath = urlpath-test" in result.stdout
+    assert "@SECRET:__default__:abc:blah = blah-test" in result.stdout
+    assert "skipped." in result.stdout
+
+
+def test_cmd_options_show():
+    result = runner.invoke(
+        cli,
+        ["config", "show"],
+    )
+    assert result.exit_code == 0
+    dct = json.loads(result.stdout)
+    assert {"CACHE_PATH", "CONFIG_PATH"}.issubset(dct)

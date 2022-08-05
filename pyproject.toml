@@ -31,6 +31,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "if MYPY:",
   "from typing_extensions import",
+  "[.][.][.]$",
 ]
 
 [tool.black]

@@ -5,6 +5,7 @@ import os.path
 import sys
 from pathlib import Path
 from pathlib import PurePath
+from typing import TYPE_CHECKING
 from typing import List
 from typing import Optional
 
@@ -21,13 +22,10 @@ from typer import Argument
 from typer import Option
 
 from pado._version import version as pado_version
-from pado.dataset import PadoDataset
-from pado.images.ids import FilterMissing
-from pado.images.ids import ImageId
-from pado.images.ids import filter_image_ids
-from pado.images.ids import load_image_ids_from_csv
-from pado.io.store import get_dataset_store_infos
-from pado.settings import dataset_registry
+from pado.types import FilterMissing
+
+if TYPE_CHECKING:
+    from pado.dataset import PadoDataset
 
 # --- pado command line interface -------------------------------------
 
@@ -76,6 +74,8 @@ def stores(
     storage_options: str = Option(None),
 ):
     """return versions of all dataset providers"""
+    from pado.io.store import get_dataset_store_infos
+
     ds = _ds_from_name_or_path(
         name=name,
         path=path,
@@ -119,6 +119,8 @@ def copy(
     keep_individual_providers: bool = Option(True),
 ):
     """copy data from dataset to dataset"""
+    from pado.dataset import PadoDataset
+    from pado.registry import dataset_registry
     from pado.shutil import transfer
 
     with dataset_registry() as registry:
@@ -208,6 +210,10 @@ def ops_filter_ids(
     ),
 ):
     """list image ids in dataset"""
+    from pado.dataset import PadoDataset
+    from pado.images.ids import ImageId
+    from pado.images.ids import filter_image_ids
+    from pado.images.ids import load_image_ids_from_csv
 
     if not image_ids and not csv_file:
         typer.echo("must provide either --image-id some/id.svs or --csv iids.csv")
@@ -279,8 +285,14 @@ def registry_add(
     name: str = Argument(...),
     location: str = Argument(...),
     storage_options: str = Option(None),
+    urlpath_is_secret: bool = Option(False, help="the urlpath itself is secret"),
+    secret: List[str] = Option([], help="which storage_options are secret"),
 ):
     """manage registries for datasets"""
+    from pado.dataset import PadoDataset
+    from pado.registry import dataset_registry
+    from pado.registry import set_secret
+
     so = None
     if storage_options:
         try:
@@ -292,6 +304,10 @@ def registry_add(
             )
             raise typer.Exit(1)
 
+    if secret and not set(secret).issubset(so or {}):
+        typer.secho("secret not a key in storage_options", err=True, fg="red")
+        raise typer.Exit(1)
+
     typer.echo(f"path: {location}, storage_options: {so!r}")
     try:
         _ = PadoDataset(location, mode="r", storage_options=so)
@@ -299,10 +315,27 @@ def registry_add(
         typer.secho(f"error: {err!s}", err=True)
         typer.secho(f"PadoDataset at {location!s} is not readable", err=True)
         raise typer.Exit(1)
+
+    if urlpath_is_secret:
+        typer.secho("scrambling: urlpath", fg="green")
+        _location = set_secret(
+            "urlpath", location, registry_name=None, dataset_name=name
+        )
+    else:
+        _location = location
+
+    if so is not None:
+        _so = so.copy()
+        for s in secret:
+            typer.secho(f"scrambling: {s}", fg="green")
+            _so[s] = set_secret(s, so[s], registry_name=None, dataset_name=name)
+    else:
+        _so = None
+
     with dataset_registry() as registry:
         registry[name] = {
-            "urlpath": location,
-            "storage_options": so,
+            "urlpath": _location,
+            "storage_options": _so,
         }
     typer.secho(f"Added {name} at {location!r} with {so!r}", color=typer.colors.GREEN)
 
@@ -310,25 +343,47 @@ def registry_add(
 @cli_registry.command(name="list")
 def registry_list(check_readable: bool = Option(False)):
     """list configured registries"""
-    with dataset_registry() as registry:
-        name_urlpaths = list(registry.items())
+    from pado.registry import dataset_registry
+    from pado.registry import has_secrets
 
-    def readable(p) -> Optional[bool]:
-        if not check_readable:
-            return None
-        else:
+    if check_readable:
+        from pado.dataset import PadoDataset
+
+        def readable(name, p) -> Optional[bool]:
             try:
                 PadoDataset(p.urlpath, mode="r", storage_options=p.storage_options)
-            except (ValueError, NotADirectoryError, RuntimeError):
+            except (ValueError, NotADirectoryError, RuntimeError) as err:
+                typer.secho(
+                    f"[{name}] -> {err!r})",
+                    fg="yellow",
+                    err=True,
+                )
                 return False
             else:
                 return True
 
+    else:
+
+        def readable(*_) -> Optional[bool]:
+            return None
+
+    with dataset_registry() as registry:
+        name_urlpaths = list(registry.items())
+
     entries = []
     with typer.progressbar(name_urlpaths) as _name_urlpaths:
         for name, urlpath in _name_urlpaths:
+            _has_secrets = has_secrets(urlpath)
+            can_read = not _has_secrets and readable(name, urlpath)
+
             entries.append(
-                (name, urlpath.urlpath, urlpath.storage_options, readable(urlpath))
+                (
+                    name,
+                    urlpath.urlpath,
+                    urlpath.storage_options,
+                    can_read,
+                    _has_secrets,
+                )
             )
 
     if not entries:
@@ -340,13 +395,14 @@ def registry_list(check_readable: bool = Option(False)):
         table.add_column("Storage Options", justify="left")
         if check_readable:
             table.add_column("Readable")
+        table.add_column("Secrets")
 
-        for name, up, so, read in entries:
+        for name, up, so, read, sec in entries:
             _so = json.dumps(so) if so else ""
             if check_readable:
-                table.add_row(name, up, _so, str(read))
+                table.add_row(name, up, _so, str(read), str(sec))
             else:
-                table.add_row(name, up, _so)
+                table.add_row(name, up, _so, str(sec))
         Console().print(table)
 
 
@@ -355,6 +411,8 @@ def registry_remove(
     name: str = Argument(...),
 ):
     """remove a registry"""
+    from pado.registry import dataset_registry
+
     try:
         with dataset_registry() as registry:
             urlpath, storage_options = registry[name]
@@ -370,6 +428,47 @@ def registry_remove(
         )
 
 
+@cli_registry.command(name="input-secrets")
+def registry_input_secrets():
+    """enter secrets from registry"""
+    from pado.registry import dataset_registry
+    from pado.registry import list_secrets
+    from pado.registry import set_secret
+
+    with dataset_registry() as registry:
+        for dataset_name, up_so in registry.items():
+            secrets = list_secrets(up_so)
+            if not secrets:
+                typer.secho(f"{dataset_name} has no missing secrets", fg="green")
+                continue
+
+            for secret in secrets:
+                typer.secho(f"{dataset_name} requires {secret}", fg="yellow")
+                value = typer.prompt(
+                    "set value (empty is skip)", default="", show_default=False
+                )
+                if not value.strip():
+                    typer.echo("skipped.")
+                    continue
+                set_secret(secret, value.strip())
+                typer.secho(f"{secret} = {value}")
+    typer.echo("done")
+
+
+# --- config ----------------------------------------------------------
+
+cli_config = typer.Typer(no_args_is_help=True)
+cli.add_typer(cli_config, name="config")
+
+
+@cli_config.command(name="show")
+def show():
+    """display the current config"""
+    from pado.settings import settings
+
+    Console().print_json(data=settings.to_dict())
+
+
 # --- helpers ---------------------------------------------------------
 
 
@@ -380,6 +479,8 @@ def _ds_from_name_or_path(
     name: str | None,
     mode: Literal["r", "w", "a", "x"],
 ) -> PadoDataset:
+    from pado.dataset import PadoDataset
+    from pado.registry import dataset_registry
 
     if name is not None and path is not None:
         typer.echo("Can't specify both name and path", err=True)

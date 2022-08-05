@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import os.path as op
 import warnings
-from enum import Enum
 from operator import itemgetter
 from pathlib import Path
 from pathlib import PurePath
@@ -21,6 +20,7 @@ from orjson import JSONDecodeError
 from orjson import dumps as orjson_dumps
 from orjson import loads as orjson_loads
 
+from pado.types import FilterMissing
 from pado.types import OpenFileLike
 
 
@@ -361,12 +361,6 @@ def match_partial_image_ids_reversed(
             return match(x, sj, idx - 1)
 
     return match(image_id, match_set, -1)
-
-
-class FilterMissing(str, Enum):
-    WARN = "warn"
-    ERROR = "error"
-    IGNORE = "ignore"
 
 
 def filter_image_ids(
