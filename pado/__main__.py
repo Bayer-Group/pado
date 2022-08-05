@@ -327,11 +327,13 @@ def ops_local_images(
     ),
     storage_options: str = Option(None),
     as_path: bool = Option(False),
+    check_missing: bool = Option(False),
 ):
     """image ids with remote urlpaths"""
     from fsspec.implementations.local import LocalFileSystem
 
     from pado.io.files import urlpathlike_get_fs_cls
+    from pado.io.files import urlpathlike_get_path
     from pado.io.files import urlpathlike_to_uri
 
     ds = _ds_from_name_or_path(
@@ -343,13 +345,16 @@ def ops_local_images(
 
     if not as_path:
 
-        def _echo(i, _, u):
-            typer.echo(f"{i}\t{u}")
+        def _echo(s, _, u, m):
+            c = [s, u] if m is None else [s, u, m]
+            typer.echo("\t".join(c))
 
     else:
 
-        def _echo(_, i, u):
-            typer.echo(f"{i.to_path(ignore_site=True)}\t{u}")
+        def _echo(_, i, u, m):
+            s = str(i.to_path(ignore_site=True))
+            c = [s, u] if m is None else [s, u, m]
+            typer.echo("\t".join(c))
 
     up = ds.images.df.urlpath
     for iid in ds.index:
@@ -359,7 +364,12 @@ def ops_local_images(
         if not issubclass(fs, LocalFileSystem):
             continue
         uri = urlpathlike_to_uri(urlpath, ignore_options=True)
-        _echo(str_iid, iid, uri)
+        missing = None
+        if check_missing:
+            pth = urlpathlike_get_path(urlpath)
+            missing = "missing" if not ds._fs.exists(pth) else None
+
+        _echo(str_iid, iid, uri, missing)
 
     raise typer.Exit(0)
 
