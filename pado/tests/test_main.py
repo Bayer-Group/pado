@@ -275,6 +275,19 @@ def test_cmd_ops_filter_ids_error_noargs(mock_dataset_path):
     assert result.exit_code == 1
 
 
+def test_cmd_ops_remote_ids(mock_dataset_path):
+    result = runner.invoke(cli, ["ops", "remote-images", mock_dataset_path])
+    assert result.exit_code == 0
+    assert result.stderr == ""
+    assert result.stdout == ""
+
+
+def test_cmd_ops_local_ids(mock_dataset_path):
+    result = runner.invoke(cli, ["ops", "local-images", mock_dataset_path])
+    assert result.exit_code == 0
+    assert len(list(result.stdout.splitlines())) == 3
+
+
 def test_cmd_registry_add(registry, mock_dataset_path):
     result = runner.invoke(cli, ["registry", "add", "abc", mock_dataset_path])
     assert result.exit_code == 0

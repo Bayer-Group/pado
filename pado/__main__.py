@@ -209,7 +209,7 @@ def ops_filter_ids(
         None, "--out", "-o", file_okay=False, dir_okay=True, help="output path"
     ),
 ):
-    """list image ids in dataset"""
+    """filter image ids"""
     from pado.dataset import PadoDataset
     from pado.images.ids import ImageId
     from pado.images.ids import filter_image_ids
@@ -271,6 +271,96 @@ def ops_filter_ids(
 
     if headers:
         typer.secho(f"# using csv headers: {headers!r}", fg="yellow", err=True)
+    raise typer.Exit(0)
+
+
+@cli_ops.command(name="remote-images")
+def ops_remote_ids(
+    name: Optional[str] = Option(None),
+    path: Optional[Path] = Argument(
+        None, exists=True, file_okay=False, dir_okay=True, readable=True
+    ),
+    storage_options: str = Option(None),
+    as_path: bool = Option(False),
+):
+    """image ids with remote urlpaths"""
+    from fsspec.implementations.local import LocalFileSystem
+
+    from pado.io.files import urlpathlike_get_fs_cls
+    from pado.io.files import urlpathlike_to_uri
+
+    ds = _ds_from_name_or_path(
+        name=name,
+        path=path,
+        storage_options=storage_options,
+        mode="r",
+    )
+
+    if not as_path:
+
+        def _echo(i, _, u):
+            typer.echo(f"{i}\t{u}")
+
+    else:
+
+        def _echo(_, i, u):
+            typer.echo(f"{i.to_path(ignore_site=True)}\t{u}")
+
+    up = ds.images.df.urlpath
+    for iid in ds.index:
+        str_iid = iid.to_str()
+        urlpath = up[str_iid]
+        fs = urlpathlike_get_fs_cls(urlpath)
+        if issubclass(fs, LocalFileSystem):
+            continue
+        uri = urlpathlike_to_uri(urlpath, ignore_options=True)
+        _echo(str_iid, iid, uri)
+
+    raise typer.Exit(0)
+
+
+@cli_ops.command(name="local-images")
+def ops_local_images(
+    name: Optional[str] = Option(None),
+    path: Optional[Path] = Argument(
+        None, exists=True, file_okay=False, dir_okay=True, readable=True
+    ),
+    storage_options: str = Option(None),
+    as_path: bool = Option(False),
+):
+    """image ids with remote urlpaths"""
+    from fsspec.implementations.local import LocalFileSystem
+
+    from pado.io.files import urlpathlike_get_fs_cls
+    from pado.io.files import urlpathlike_to_uri
+
+    ds = _ds_from_name_or_path(
+        name=name,
+        path=path,
+        storage_options=storage_options,
+        mode="r",
+    )
+
+    if not as_path:
+
+        def _echo(i, _, u):
+            typer.echo(f"{i}\t{u}")
+
+    else:
+
+        def _echo(_, i, u):
+            typer.echo(f"{i.to_path(ignore_site=True)}\t{u}")
+
+    up = ds.images.df.urlpath
+    for iid in ds.index:
+        str_iid = iid.to_str()
+        urlpath = up[str_iid]
+        fs = urlpathlike_get_fs_cls(urlpath)
+        if not issubclass(fs, LocalFileSystem):
+            continue
+        uri = urlpathlike_to_uri(urlpath, ignore_options=True)
+        _echo(str_iid, iid, uri)
+
     raise typer.Exit(0)
 
 
@@ -499,7 +589,11 @@ def _ds_from_name_or_path(
     else:
         so = json.loads(storage_options or "{}")
 
-    return PadoDataset(path, mode=mode, storage_options=so)
+    try:
+        return PadoDataset(path, mode=mode, storage_options=so)
+    except RuntimeError as err:
+        typer.secho(f"{str(err)}", err=True)
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
