@@ -580,7 +580,9 @@ class PadoDataset:
     # === internal utility methods ===
 
     def _clear_caches(
-        self, *caches: Literal["images", "metadata", "annotations", "predictions"]
+        self,
+        *caches: Literal["images", "metadata", "annotations", "predictions"],
+        _target: dict | None = None,
     ) -> None:
         """clear each requested cached_property"""
         valid_caches = ("images", "metadata", "annotations", "predictions")
@@ -593,9 +595,11 @@ class PadoDataset:
         caches = list(caches)
         if "images" in caches:
             caches.insert(caches.index("images") + 1, "index")
+        if _target is None:
+            _target = self.__dict__
         for cache in reversed(caches):
             try:
-                del self.__dict__[cache]
+                del _target[cache]
             except KeyError:
                 pass
 
@@ -609,6 +613,31 @@ class PadoDataset:
         if not fs.isdir(pth):
             fs.mkdir(pth)
         return pth
+
+    # === pickling ===
+
+    def __getstate__(self):
+        """"""
+        state = self.__dict__.copy()
+        self._clear_caches(
+            "images", "metadata", "annotations", "predictions", _target=state
+        )
+        if type(self._fs).__name__ == "MemoryFileSystem":
+            from fsspec.implementations.memory import MemoryFileSystem
+
+            assert isinstance(self._fs, MemoryFileSystem)
+
+            # todo: should just copy everything under the dataset's urlpath
+            state["__pado_fsspec_memory_store__"] = MemoryFileSystem.store
+        return state
+
+    def __setstate__(self, state):
+        memory_store = state.pop("__pado_fsspec_memory_store__", None)
+        if memory_store is not None:
+            from fsspec.implementations.memory import MemoryFileSystem
+
+            MemoryFileSystem.store.update(memory_store)
+        self.__dict__.update(state)
 
 
 # === helpers and utils =======================================================
