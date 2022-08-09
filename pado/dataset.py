@@ -39,6 +39,7 @@ from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.io.files import fsopen
+from pado.io.files import urlpathlike_get_path
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_string
 from pado.io.store import StoreType
@@ -616,8 +617,8 @@ class PadoDataset:
 
     # === pickling ===
 
-    def __getstate__(self):
-        """"""
+    def __getstate__(self) -> dict[str, Any]:
+        # clear caches and specialize for memory:// datasets
         state = self.__dict__.copy()
         self._clear_caches(
             "images", "metadata", "annotations", "predictions", _target=state
@@ -626,17 +627,41 @@ class PadoDataset:
             from fsspec.implementations.memory import MemoryFileSystem
 
             assert isinstance(self._fs, MemoryFileSystem)
+            path = urlpathlike_get_path(self._urlpath, fs_cls=type(self._fs))
+            store = {
+                k: v for k, v in MemoryFileSystem.store.items() if k.startswith(path)
+            }
+            if store:
+                warnings.warn(
+                    "Pickling a `memory://` filesystem backed dataset.",
+                    stacklevel=2,
+                )
+                state["__pado_fsspec_memory_store__"] = store
 
-            # todo: should just copy everything under the dataset's urlpath
-            state["__pado_fsspec_memory_store__"] = MemoryFileSystem.store
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # specialized for memory:// datasets
         memory_store = state.pop("__pado_fsspec_memory_store__", None)
         if memory_store is not None:
             from fsspec.implementations.memory import MemoryFileSystem
 
+            # warn if overwriting pseudo files in the MemoryFileSystem
+            if not memory_store.keys().isdisjoint(MemoryFileSystem.store):
+                warnings.warn(
+                    "Key collision when unpickling a `memory://` filesystem backed dataset:"
+                    f" {set(memory_store).intersection(MemoryFileSystem.store)!r}",
+                    stacklevel=2,
+                )
+
+            # reconstruct pseudo dirs in the MemoryFileSystem
+            dirs = set(map(os.path.dirname, memory_store))
+            for path in sorted(dirs):
+                if path not in MemoryFileSystem.pseudo_dirs:
+                    MemoryFileSystem.pseudo_dirs.append(path)
+
             MemoryFileSystem.store.update(memory_store)
+
         self.__dict__.update(state)
 
 
