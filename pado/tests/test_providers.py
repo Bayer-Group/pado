@@ -205,9 +205,8 @@ def test_annotation_provider_df_access_after_update(dataset_ro):
 
 
 def test_empty_metadata_provider():
-    with pytest.raises(ValueError) as e:
-        MetadataProvider(provider={})
-        e.match("can't create from an empty MetadataProvider")
+    mp = MetadataProvider({})
+    assert len(mp) == 0
 
 
 @pytest.mark.parametrize(

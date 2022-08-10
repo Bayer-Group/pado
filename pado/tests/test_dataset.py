@@ -297,3 +297,10 @@ def test_dataset_unpickle_fsspec_memory_dataset_different_process(tmp_path):
     )
     out = subprocess.run([sys.executable, load_pickle_py], capture_output=True)
     assert out.returncode == 0, out.stderr.decode()
+
+
+def test_empty_dataset():
+    ds = PadoDataset(None)
+    assert len(ds.images) == 0
+    assert len(ds.metadata) == 0
+    assert len(ds.annotations) == 0

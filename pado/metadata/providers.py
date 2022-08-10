@@ -90,7 +90,8 @@ class MetadataProvider(BaseMetadataProvider):
                 self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, (BaseMetadataProvider, dict)):
             if not provider:
-                raise ValueError("can't create from an empty MetadataProvider")
+                self.df = pd.DataFrame(index=[], data={})
+                self.identifier = str(identifier) if identifier else str(uuid.uuid4())
             else:
                 columns = set()
                 dfs = []
