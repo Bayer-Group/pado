@@ -304,3 +304,11 @@ def test_empty_dataset():
     assert len(ds.images) == 0
     assert len(ds.metadata) == 0
     assert len(ds.annotations) == 0
+
+
+def test_dataset_filter_empty(dataset_ro):
+    ds = dataset_ro.filter([], on_empty="ignore")
+    assert len(ds.images) == 0
+    assert len(ds.metadata) == 0
+    assert len(ds.annotations) == 0
+    assert (ds.metadata.df.columns == dataset_ro.metadata.df.columns).all()

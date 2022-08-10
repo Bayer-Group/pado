@@ -302,6 +302,7 @@ class PadoDataset:
         *,
         urlpath: Optional[UrlpathLike] = None,
         mode: IOMode = "r",
+        on_empty: Literal["ignore", "warn", "error"] = "warn",
     ) -> PadoDataset:
         """filter a pado dataset
 
@@ -316,6 +317,10 @@ class PadoDataset:
             a in-memory PadoDataset
         mode:
             set the io mode for the returned dataset
+        on_empty:
+            "warn" (default) will warn if the filtering returns an empty dataset.
+            "error" raises a ValueError.
+            "ignore" returns empty datasets without warning.
 
         """
         # todo: if this is not fast enough might consider lazy filtering
@@ -324,7 +329,7 @@ class PadoDataset:
             raise ValueError("must provide a list of ImageIds")
 
         if isinstance(ids_or_func, Iterable) and isinstance(ids_or_func, Sized):
-            ids = pd.Series(ids_or_func).apply(str.__call__)
+            ids = pd.Series(ids_or_func, dtype=object).apply(str.__call__)
             _ip, _ap, _mp = self.images, self.annotations, self.metadata
             ip = ImageProvider(
                 _ip.df.loc[_ip.df.index.intersection(ids), :], identifier=_ip.identifier
@@ -358,7 +363,14 @@ class PadoDataset:
             )
 
         if len(ip) == 0:
-            raise RuntimeError("didn't match any images")
+            if on_empty == "error":
+                raise ValueError("did not match any images")
+            elif on_empty == "warn":
+                warnings.warn("did not match any images", stacklevel=2)
+            elif on_empty == "ignore":
+                pass
+            else:
+                raise ValueError(f"on_empty: {on_empty!r}")
 
         ds = PadoDataset(urlpath, mode="w")
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
@@ -369,6 +381,8 @@ class PadoDataset:
             )
         if len(mp) > 0:
             ds.ingest_obj(MetadataProvider(mp, identifier=self.metadata.identifier))
+        elif len(mp.df.columns) > 0:
+            ds.ingest_obj(MetadataProvider(mp.df, identifier=self.metadata.identifier))
 
         return PadoDataset(ds.urlpath, mode=mode)
 
