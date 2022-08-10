@@ -80,13 +80,10 @@ class AnnotationProvider(BaseAnnotationProvider):
 
     def __init__(
         self,
-        provider: BaseAnnotationProvider | pd.DataFrame | dict | None = None,
+        provider: BaseAnnotationProvider | pd.DataFrame | dict,
         *,
         identifier: Optional[str] = None,
     ):
-        if provider is None:
-            provider = {}
-
         if isinstance(provider, AnnotationProvider):
             self._df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
@@ -236,7 +233,7 @@ class AnnotationProvider(BaseAnnotationProvider):
             store.METADATA_KEY_CREATED_BY,
             store.METADATA_KEY_PROVIDER_VERSION,
         } == set(user_metadata), f"currently unused {user_metadata!r}"
-        inst = cls(identifier=identifier)
+        inst = cls({}, identifier=identifier)
         inst._df = df
         return inst
 
@@ -318,7 +315,7 @@ def create_annotation_provider(
     if resume:
         ap = AnnotationProvider.from_parquet(urlpath=output_urlpath)
     else:
-        ap = AnnotationProvider(identifier=identifier)
+        ap = AnnotationProvider({}, identifier=identifier)
 
     if progress:
         files_and_parts = tqdm(files_and_parts)

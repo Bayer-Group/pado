@@ -207,7 +207,7 @@ class PadoDataset:
         ]
 
         if len(providers) == 0:
-            annotation_provider = AnnotationProvider()
+            annotation_provider = AnnotationProvider({})
         elif len(providers) == 1:
             annotation_provider = providers[0]
         else:
