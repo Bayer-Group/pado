@@ -314,6 +314,8 @@ class PadoDataset:
         urlpath:
             a urlpath to store the filtered provider. If None (default) returns
             a in-memory PadoDataset
+        mode:
+            set the io mode for the returned dataset
 
         """
         # todo: if this is not fast enough might consider lazy filtering
@@ -340,7 +342,7 @@ class PadoDataset:
             ap = {}
             mp = {}
             for image_id in self.index:
-                item = self.get_by_id(image_id)
+                item = self[image_id]
                 keep = func(item)
                 if not keep:
                     continue
@@ -421,12 +423,14 @@ class PadoDataset:
         if self.readonly:
             raise RuntimeError(f"{self!r} opened in readonly mode")
 
-        mode = "xb" if not overwrite else "wb"
-
         if isinstance(obj, PadoDataset):
             for x in [obj.images, obj.metadata, obj.annotations]:
                 self.ingest_obj(x)
-        elif isinstance(obj, dict):
+            return
+
+        cache: Literal["images", "annotations", "metadata", "predictions"]
+
+        if isinstance(obj, dict):
             raise NotImplementedError("todo: guess provider type")
 
         elif isinstance(obj, ImageProvider):
@@ -434,27 +438,21 @@ class PadoDataset:
                 raise ValueError("need to provide an identifier for ImageProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
-            # invalidate caches
-            self._clear_caches("images")
+            cache = "images"
 
         elif isinstance(obj, AnnotationProvider):
             if identifier is None and obj.identifier is None:
                 raise ValueError("need to provide an identifier for AnnotationProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.annotation.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
-            # invalidate caches
-            self._clear_caches("annotations")
+            cache = "annotations"
 
         elif isinstance(obj, MetadataProvider):
             if identifier is None and obj.identifier is None:
                 raise ValueError("need to provide an identifier for MetadataProvider")
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.metadata.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
-            # invalidate caches
-            self._clear_caches("metadata")
+            cache = "metadata"
 
         elif isinstance(obj, ImagePredictionProvider):
             if identifier is None and obj.identifier is None:
@@ -463,12 +461,16 @@ class PadoDataset:
                 )
             identifier = identifier or obj.identifier
             pth = self._get_fspath(f"{identifier}.image_predictions.parquet")
-            obj.to_parquet(fsopen(self._fs, pth, mode=mode))
-            # invalidate caches
-            self._clear_caches("predictions")
+            cache = "predictions"
 
         else:
             raise TypeError(f"unsupported object type {type(obj).__name__}: {obj!r}")
+
+        if overwrite:
+            obj.to_parquet(fsopen(self._fs, pth, mode="wb"))
+        else:
+            obj.to_parquet(fsopen(self._fs, pth, mode="xb"))
+        self._clear_caches(cache)
 
     def ingest_file(
         self, urlpath: UrlpathLike, *, identifier: Optional[str] = None
@@ -620,9 +622,7 @@ class PadoDataset:
     def __getstate__(self) -> dict[str, Any]:
         # clear caches and specialize for memory:// datasets
         state = self.__dict__.copy()
-        self._clear_caches(
-            "images", "metadata", "annotations", "predictions", _target=state
-        )
+        self._clear_caches(_target=state)
         if type(self._fs).__name__ == "MemoryFileSystem":
             from fsspec.implementations.memory import MemoryFileSystem
 
