@@ -370,7 +370,7 @@ class PadoDataset:
             elif on_empty == "ignore":
                 pass
             else:
-                raise ValueError(f"on_empty: {on_empty!r}")
+                raise ValueError(f"on_empty not one of {'error', 'warn', 'ignore'}, got: {on_empty!r}")
 
         ds = PadoDataset(urlpath, mode="w")
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
