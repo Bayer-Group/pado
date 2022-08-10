@@ -7,6 +7,8 @@ import pytest
 
 from pado.images import ImageId
 from pado.images.ids import load_image_ids_from_csv
+from pado.images.providers import update_image_provider_urlpaths
+from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
 
@@ -245,3 +247,26 @@ def test_image_id_in_dataset(dataset_ro):
     assert isinstance(key, ImageId)
     assert key in dataset_ro.annotations
     assert key in dataset_ro.metadata
+
+
+def test_update_image_provider_urlpaths(dataset, tmp_path, capsys):
+
+    new_image_loc = tmp_path.joinpath("somewhere_else")
+    new_image_loc.mkdir()
+    for image_id in dataset.index[:-1]:
+        image = dataset.images[image_id]
+        with urlpathlike_to_fsspec(image.urlpath, mode="rb") as f:
+            new_image_loc.joinpath(image_id.last).write_bytes(f.read())
+
+    update_image_provider_urlpaths(
+        new_image_loc,
+        "*.svs",
+        provider=dataset.images,
+        progress=True,
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "found 2 new files matching the pattern" in captured.err
+    assert "provider has 3 images" in captured.err
+    assert "trying to match new files" in captured.err
+    assert "re-associated 2 images" in captured.err
