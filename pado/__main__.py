@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json
 import os.path
 import sys
@@ -370,6 +371,94 @@ def ops_local_images(
             missing = "missing" if not ds._fs.exists(pth) else None
 
         _echo(str_iid, iid, uri, missing)
+
+    raise typer.Exit(0)
+
+
+@cli_ops.command(name="update-images")
+def ops_update_images(
+    name: Optional[str] = Option(None),
+    path: Optional[Path] = Argument(
+        None, exists=True, file_okay=False, dir_okay=True, readable=True
+    ),
+    storage_options: str = Option(None),
+    search_urlpath: str = Option(..., help="the search path"),
+    glob: Optional[str] = Option(None),
+    search_storage_options: str = Option(None),
+    dry_run: bool = Option(False, help="don't update the dataset"),
+):
+    """update image urlpaths with new locations"""
+    from pado.images.providers import update_image_provider_urlpaths
+    from pado.io.files import fsopen
+    from pado.io.files import urlpathlike_get_path
+    from pado.io.files import urlpathlike_to_fs_and_path
+    from pado.io.files import urlpathlike_to_uri
+    from pado.io.paths import search_dataset
+
+    is_pattern = "*" in search_urlpath
+    has_glob = glob is not None
+
+    if has_glob and "*" not in glob:
+        typer.secho("provided `--glob` does not contain wildcard '*'", fg="yellow")
+        raise typer.Exit(1)
+
+    if is_pattern and has_glob:
+        typer.secho(
+            "Provide wildcard in `--search-urlpath` OR provide `--glob`", fg="yellow"
+        )
+        raise typer.Exit(1)
+
+    if not is_pattern and not has_glob:
+        typer.secho(
+            "`--search-urlpath` is not a pattern: must provide --glob (i.e. `--glob '*.svs'`)",
+            fg="red",
+        )
+        raise typer.Exit(1)
+
+    # split the non wildcard path and glob pattern without instantiating the fs
+    pth = urlpathlike_get_path(search_urlpath)
+    if glob:
+        pth = os.path.join(pth, glob)
+    parts = list(PurePath(pth).parts)
+    base_parts = list(itertools.takewhile(lambda x: "*" not in x, parts))
+    glob_parts = parts[len(base_parts) :]
+    assert base_parts and glob_parts, f"base={base_parts}, glob={glob_parts}"
+    idx = search_urlpath.find(glob_parts[0])
+    if idx >= 0:
+        search_urlpath = search_urlpath[:idx]
+    glob = os.path.join(*glob_parts)
+
+    # get the filesystem and the path
+    search_so = json.loads(search_storage_options or "{}")
+    fs, pth = urlpathlike_to_fs_and_path(search_urlpath, storage_options=search_so)
+
+    # get the dataset
+    ds = _ds_from_name_or_path(
+        name=name,
+        path=path,
+        storage_options=storage_options,
+        mode="r",
+    )
+
+    providers = search_dataset(ds, "*.image.parquet")
+    mode: Literal["wb", "rb"]
+    if dry_run:
+        mode = "rb"
+    else:
+        mode = "wb"
+
+    for ip_urlpath in providers:
+        ip_uri = urlpathlike_to_uri(ip_urlpath, ignore_options=True)
+        typer.secho(f"updating: {ip_uri}", fg="green")
+        update_image_provider_urlpaths(
+            fsopen(fs, pth, mode=mode),
+            glob,
+            provider=ip_urlpath,
+            progress=True,
+            inplace=not dry_run,
+        )
+        if dry_run:
+            typer.secho("dry-run: skipping write", fg="yellow")
 
     raise typer.Exit(0)
 
