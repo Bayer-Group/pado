@@ -474,10 +474,16 @@ def update_image_provider_urlpaths(
     files_and_parts = find_files(
         search_urlpath, glob=search_glob, storage_options=storage_options
     )
+    if progress:
+        print(f"[info] found {len(files_and_parts)} new files matching the pattern")
+
     if isinstance(provider, provider_cls):
         ip = provider
     else:
         ip = provider_cls.from_parquet(urlpath=provider)
+
+    if progress:
+        print(f"[info] provider has {len(provider)} images")
 
     new_urlpaths = match_partial_paths_reversed(
         current_urlpaths=ip.df.urlpath,
@@ -490,7 +496,9 @@ def update_image_provider_urlpaths(
     ip.df.loc[:, "urlpath"] = [urlpathlike_to_string(p) for p in new_urlpaths]
 
     if progress:
-        print(f"re-associated {np.sum(old.values != ip.df.urlpath.values)} files")
+        print(
+            f"[info] re-associated {np.sum(old.values != ip.df.urlpath.values)} images"
+        )
 
     if inplace and not isinstance(provider, provider_cls):
         ip.to_parquet(provider)

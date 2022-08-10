@@ -64,7 +64,7 @@ def match_partial_paths_reversed(
             return match(x, sj, idx - 1)
 
     if progress:
-        new_urlpaths = tqdm(new_urlpaths, desc="matching new files")
+        new_urlpaths = tqdm(new_urlpaths, desc="trying to match new files")
 
     for new_up in new_urlpaths:
         new_parts = urlpathlike_to_path_parts(new_up)

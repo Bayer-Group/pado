@@ -21,7 +21,6 @@ from typing import AnyStr
 from typing import BinaryIO
 from typing import Collection
 from typing import ContextManager
-from typing import Iterable
 from typing import Iterator
 from typing import NamedTuple
 from typing import Tuple
@@ -79,7 +78,7 @@ def find_files(
     *,
     glob: str = "**/*",
     storage_options: dict[str, Any] | None = None,
-) -> Iterable[_OpenFileAndParts]:
+) -> list[_OpenFileAndParts]:
     """iterate over the files with matching at all paths"""
     if storage_options is None:
         storage_options = {}
