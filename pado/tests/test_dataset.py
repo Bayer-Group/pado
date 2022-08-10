@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import pickle
+import subprocess
+import sys
+import textwrap
+import warnings
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -14,6 +19,7 @@ from pado.images import Image
 from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.metadata import MetadataProvider
+from pado.mock import mock_dataset
 
 
 def count_images(ds: PadoDataset):
@@ -243,3 +249,51 @@ def test_dataset_describe_ip_only(dataset_ip_only):
     output = dataset_ip_only.describe(output_format=DescribeFormat.JSON)
     assert output["metadata_columns"] == []
     assert output["avg_annotations_per_image"]["val"] == 0
+
+
+def test_dataset_pickle_fsspec_memory_dataset():
+    ds = mock_dataset(None)  # create an in memory dataset
+
+    with pytest.warns(UserWarning, match=r".*memory"):
+        _ = pickle.dumps(ds)
+
+
+def test_dataset_unpickle_fsspec_memory_dataset_same_process():
+    ds = mock_dataset(None)  # create an in memory dataset
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pickled = pickle.dumps(ds)
+
+    with pytest.warns(UserWarning, match=r"Key collision .*memory"):
+        ds = pickle.loads(pickled)
+
+    assert ds[0].image is not None  # test if we can access the ds
+
+
+def test_dataset_unpickle_fsspec_memory_dataset_different_process(tmp_path):
+    ds = mock_dataset(None)  # create an in memory dataset
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pickled = pickle.dumps(ds)
+
+    load_pickle_py = tmp_path.joinpath("load_pickle.py")
+    load_pickle_py.write_text(
+        textwrap.dedent(
+            f"""\
+            import pickle
+            import warnings
+
+            pickled = {pickled!r}
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                ds = pickle.loads(pickled)
+            assert ds[0].image is not None  # test if we can access the ds
+
+            """
+        )
+    )
+    out = subprocess.run([sys.executable, load_pickle_py], capture_output=True)
+    assert out.returncode == 0, out.stderr.decode()
