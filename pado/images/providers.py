@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os.path
+import sys
 import uuid
 from abc import ABC
 from reprlib import Repr
@@ -475,7 +476,14 @@ def update_image_provider_urlpaths(
         search_urlpath, glob=search_glob, storage_options=storage_options
     )
     if progress:
-        print(f"[info] found {len(files_and_parts)} new files matching the pattern")
+        print(
+            f"[info] found {len(files_and_parts)} new files matching the pattern",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    if len(files_and_parts) == 0:
+        raise FileNotFoundError("no files found")
 
     if isinstance(provider, provider_cls):
         ip = provider
@@ -483,7 +491,11 @@ def update_image_provider_urlpaths(
         ip = provider_cls.from_parquet(urlpath=provider)
 
     if progress:
-        print(f"[info] provider has {len(provider)} images")
+        print(
+            f"[info] provider has {len(provider)} images",
+            file=sys.stderr,
+            flush=True,
+        )
 
     new_urlpaths = match_partial_paths_reversed(
         current_urlpaths=ip.df.urlpath,
@@ -497,7 +509,9 @@ def update_image_provider_urlpaths(
 
     if progress:
         print(
-            f"[info] re-associated {np.sum(old.values != ip.df.urlpath.values)} images"
+            f"[info] re-associated {np.sum(old.values != ip.df.urlpath.values)} images",
+            file=sys.stderr,
+            flush=True,
         )
 
     if inplace and not isinstance(provider, provider_cls):
