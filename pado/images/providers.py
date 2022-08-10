@@ -492,7 +492,7 @@ def update_image_provider_urlpaths(
 
     if progress:
         print(
-            f"[info] provider has {len(provider)} images",
+            f"[info] provider has {len(ip)} images",
             file=sys.stderr,
             flush=True,
         )
@@ -507,14 +507,15 @@ def update_image_provider_urlpaths(
     old = ip.df.urlpath.copy()
     ip.df.loc[:, "urlpath"] = [urlpathlike_to_string(p) for p in new_urlpaths]
 
+    num_updated = np.sum(old.values != ip.df.urlpath.values)
     if progress:
         print(
-            f"[info] re-associated {np.sum(old.values != ip.df.urlpath.values)} images",
+            f"[info] re-associated {num_updated} images",
             file=sys.stderr,
             flush=True,
         )
 
-    if inplace and not isinstance(provider, provider_cls):
+    if inplace and not isinstance(provider, provider_cls) and num_updated:
         ip.to_parquet(provider)
     return ip
 
