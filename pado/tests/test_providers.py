@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import os
 import unittest.mock
 from itertools import product
@@ -19,6 +20,7 @@ from pado.annotations import AnnotationState
 from pado.annotations import Annotator
 from pado.annotations import AnnotatorType
 from pado.dataset import PadoDataset
+from pado.images import ImageId
 from pado.images import ImageProvider
 from pado.images.providers import copy_image
 from pado.images.providers import create_image_provider
@@ -210,16 +212,24 @@ def test_empty_metadata_provider():
 
 
 @pytest.mark.parametrize(
-    "provider_cls",
-    [
-        pytest.param(ImageProvider, id="image-provider"),
-        pytest.param(MetadataProvider, id="metadata-provider"),
-        pytest.param(AnnotationProvider, id="annotation-provider"),
-        pytest.param(ImagePredictionProvider, id="image-prediction-provider"),
-    ],
+    "provider_cls,index0",
+    itertools.product(
+        [
+            ImageProvider,
+            MetadataProvider,
+            AnnotationProvider,
+            ImagePredictionProvider,
+        ],
+        [
+            ImageId("1.svs"),
+            123,
+            "somestring",
+        ],
+    ),
+    ids=lambda x: x.__name__ if isinstance(x, type) else type(x).__name__,
 )
-def test_provider_rejects_non_image_id_keys(provider_cls):
-    df = pd.DataFrame(index=[123], data={"something": [1]})
+def test_provider_rejects_non_image_id_keys(provider_cls, index0):
+    df = pd.DataFrame(index=[index0], data={"something": [1]})
     with pytest.raises(ValueError) as e:
         _ = provider_cls(df)
-    e.match("provider dataframe index has non ImageId indices")
+    e.match("Detected dataframe indices of type")
