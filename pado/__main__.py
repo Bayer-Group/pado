@@ -440,18 +440,18 @@ def ops_update_images(
         mode="r",
     )
 
-    providers = search_dataset(ds, "*.image.parquet")
     mode: Literal["wb", "rb"]
     if dry_run:
         mode = "rb"
     else:
         mode = "wb"
+    providers = search_dataset(ds, "*.image.parquet", mode=mode)
 
     for ip_urlpath in providers:
         ip_uri = urlpathlike_to_uri(ip_urlpath, ignore_options=True)
         typer.secho(f"updating: {ip_uri}", fg="green")
         update_image_provider_urlpaths(
-            fsopen(fs, pth, mode=mode),
+            fsopen(fs, pth),
             glob,
             provider=ip_urlpath,
             progress=True,

@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_path_parts
+from pado.types import FsspecIOMode
 from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
@@ -81,8 +82,10 @@ def match_partial_paths_reversed(
     ]
 
 
-def search_dataset(ds: PadoDataset, glob: str) -> list[OpenFile]:
+def search_dataset(
+    ds: PadoDataset, glob: str, *, mode: FsspecIOMode = "rb"
+) -> list[OpenFile]:
     """search for files in a pado dataset root path"""
     # noinspection PyProtectedMember
     fs, get_fspath = ds._fs, ds._get_fspath
-    return [fsopen(fs, p, mode="rb") for p in fs.glob(get_fspath(glob))]
+    return [fsopen(fs, p, mode=mode) for p in fs.glob(get_fspath(glob))]
