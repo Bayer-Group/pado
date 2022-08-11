@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from itertools import repeat
 from reprlib import Repr
+from textwrap import dedent
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -32,6 +34,7 @@ __all__ = [
     "SerializableProviderMixin",
     "ProviderStoreMixin",
     "GroupedProviderMixin",
+    "validate_dataframe_index",
 ]
 
 _r = Repr()
@@ -61,10 +64,7 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            try:
-                _ = list(map(ImageId.from_str, provider.index))
-            except (TypeError, ValueError):
-                raise ValueError("provider dataframe index has non ImageId indices")
+            validate_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, dict):
@@ -301,10 +301,7 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            try:
-                _ = list(map(ImageId.from_str, provider.index))
-            except (TypeError, ValueError):
-                raise ValueError("provider dataframe index has non ImageId indices")
+            validate_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, dict):
@@ -534,3 +531,30 @@ class ProviderStoreMixin(Store):
             **md,
             self.METADATA_KEY_PROVIDER_VERSION: provider_version,
         }
+
+
+# === helpers =================================================================
+
+
+def validate_dataframe_index(df: pd.DataFrame) -> None:
+    """raise if an incorrect index is used"""
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError(f"expected pandas.DataFrame, got: {type(df).__name__!r}")
+
+    try:
+        deque(map(ImageId.from_str, df.index), maxlen=0)
+    except (TypeError, ValueError):
+        idx0 = df.index[0]
+        if isinstance(idx0, tuple):
+            msg = """\
+                Detected dataframe indices of type: tuple
+                Did you forget to cast the ImageIds in the index to str?
+                >>> df = pd.DataFrame(index=[iid.to_str() for iid in image_ids], data=...)
+            """
+        else:
+            msg = f"""\
+                Detected dataframe indices of type: {type(idx0).__name__}
+                You have to provide a dataframe with string image ids as an index:
+                >>> df = pd.DataFrame(index=[iid.to_str() for iid in image_ids], data=...)
+            """
+        raise ValueError(dedent(msg))
