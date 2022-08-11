@@ -440,3 +440,89 @@ def test_cmd_options_show():
     assert result.exit_code == 0
     dct = json.loads(result.stdout)
     assert {"CACHE_PATH", "CONFIG_PATH"}.issubset(dct)
+
+
+def test_cmd_ops_update_image(dataset_and_images_path):
+    ds_pth, img_pth = dataset_and_images_path
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "update-images",
+            ds_pth,
+            "--search-urlpath",
+            img_pth,
+            "--glob",
+            "*.svs",
+        ],
+    )
+    assert result.exit_code == 0
+    assert img_pth in PadoDataset(ds_pth).images.df.urlpath.iloc[0]
+
+
+def test_cmd_ops_update_image_dry_run(dataset_and_images_path):
+    ds_pth, img_pth = dataset_and_images_path
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "update-images",
+            ds_pth,
+            "--search-urlpath",
+            img_pth,
+            "--glob",
+            "*.svs",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0
+    assert img_pth not in PadoDataset(ds_pth).images.df.urlpath.iloc[0]
+
+
+def test_cmd_ops_update_image_no_pattern_missing_glob(mock_dataset_path, tmp_path):
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "update-images",
+            mock_dataset_path,
+            "--search-urlpath",
+            os.fspath(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "not a pattern: must provide --glob" in result.stdout
+
+
+def test_cmd_ops_update_image_wrong_glob(mock_dataset_path, tmp_path):
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "update-images",
+            mock_dataset_path,
+            "--search-urlpath",
+            os.fspath(tmp_path),
+            "--glob",
+            "abc.tif",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "does not contain wildcard '*'" in result.stdout
+
+
+def test_cmd_ops_update_image_pattern_and_glob(mock_dataset_path, tmp_path):
+    result = runner.invoke(
+        cli,
+        [
+            "ops",
+            "update-images",
+            mock_dataset_path,
+            "--search-urlpath",
+            os.fspath(tmp_path / "*"),
+            "--glob",
+            "*",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "`--search-urlpath` OR provide `--glob`" in result.stdout
