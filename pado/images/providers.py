@@ -29,6 +29,7 @@ from fsspec.implementations.local import LocalFileSystem
 from tqdm import tqdm
 
 from pado._compat import cached_property
+from pado.collections import raise_if_wrong_dataframe_index
 from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
 from pado.images.ids import image_id_from_parts
@@ -107,10 +108,7 @@ class ImageProvider(BaseImageProvider):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            try:
-                _ = list(map(ImageId.from_str, provider.index))
-            except (TypeError, ValueError):
-                raise ValueError("provider dataframe index has non ImageId indices")
+            raise_if_wrong_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, BaseImageProvider):
