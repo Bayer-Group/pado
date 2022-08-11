@@ -21,7 +21,7 @@ from pado._compat import cached_property
 from pado.annotations.annotation import Annotations
 from pado.annotations.formats import AnnotationModel
 from pado.annotations.loaders import AnnotationsFromFileFunc
-from pado.collections import raise_if_wrong_dataframe_index
+from pado.collections import validate_dataframe_index
 from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
 from pado.images.ids import match_partial_image_ids_reversed
@@ -89,7 +89,7 @@ class AnnotationProvider(BaseAnnotationProvider):
             self._df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            raise_if_wrong_dataframe_index(provider)
+            validate_dataframe_index(provider)
             self._df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, (BaseAnnotationProvider, dict)):

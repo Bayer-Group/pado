@@ -34,7 +34,7 @@ __all__ = [
     "SerializableProviderMixin",
     "ProviderStoreMixin",
     "GroupedProviderMixin",
-    "raise_if_wrong_dataframe_index",
+    "validate_dataframe_index",
 ]
 
 _r = Repr()
@@ -64,7 +64,7 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            raise_if_wrong_dataframe_index(provider)
+            validate_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, dict):
@@ -301,7 +301,7 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            raise_if_wrong_dataframe_index(provider)
+            validate_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, dict):
@@ -536,7 +536,7 @@ class ProviderStoreMixin(Store):
 # === helpers =================================================================
 
 
-def raise_if_wrong_dataframe_index(df: pd.DataFrame) -> None:
+def validate_dataframe_index(df: pd.DataFrame) -> None:
     """raise if an incorrect index is used"""
     if not isinstance(df, pd.DataFrame):
         raise TypeError(f"expected pandas.DataFrame, got: {type(df).__name__!r}")

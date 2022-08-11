@@ -19,7 +19,7 @@ from typing import cast
 import pandas as pd
 
 from pado._compat import cached_property
-from pado.collections import raise_if_wrong_dataframe_index
+from pado.collections import validate_dataframe_index
 from pado.images import ImageId
 from pado.images.ids import GetImageIdFunc
 from pado.io.store import Store
@@ -82,7 +82,7 @@ class MetadataProvider(BaseMetadataProvider):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            raise_if_wrong_dataframe_index(provider)
+            validate_dataframe_index(provider)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, (BaseMetadataProvider, dict)):
