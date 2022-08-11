@@ -7,6 +7,7 @@ import pytest
 
 from pado.dataset import PadoDataset
 from pado.mock import mock_dataset
+from pado.mock import mock_images
 from pado.settings import settings
 
 
@@ -43,6 +44,16 @@ def mock_dataset_path(tmp_path):
     dataset_path = tmp_path / "my_dataset"
     mock_dataset(dataset_path)
     yield os.fspath(dataset_path)
+
+
+@pytest.fixture(scope="function")
+def dataset_and_images_path(tmp_path):
+    dataset_path = tmp_path / "my_dataset"
+    mock_dataset(dataset_path, num_images=3)
+    images_path = tmp_path / "other_images"
+    images_path.mkdir()
+    mock_images(images_path, number=3)
+    yield os.fspath(dataset_path), os.fspath(images_path)
 
 
 @pytest.fixture(scope="function")

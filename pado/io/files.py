@@ -557,7 +557,7 @@ def fsopen(
     path: [str, os.PathLike],
     *,
     mode: FsspecIOMode = "rb",
-) -> OpenFileLike:
+) -> OpenFile:
     """small helper to support mode 'x' for fsspec filesystems"""
     if mode not in typing.get_args(FsspecIOMode):
         raise ValueError("fsspec only supports a subset of IOModes")
