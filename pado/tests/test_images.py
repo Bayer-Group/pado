@@ -11,6 +11,8 @@ from pado.images.ids import load_image_ids_from_csv
 from pado.images.providers import update_image_provider_urlpaths
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.images.utils import MPP
+from pado.images.utils import FuzzyMPP
 from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
@@ -330,3 +332,11 @@ def test_image_get_chunk_sizes(dataset):
         with img:
             chunk_sizes = img.get_chunk_sizes(level=0)
             assert chunk_sizes.ndim == 2
+
+def test_fuzzy_mpp():
+    mpp0 = MPP(0.5, 0.5)
+    mpp1 = MPP(0.51, 0.51)
+    fmpp1 = FuzzyMPP(0.51, 0.51, rtol=0.05, atol=0)
+
+    assert mpp0 != mpp1
+    assert fmpp1 == mpp0
