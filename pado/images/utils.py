@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import total_ordering
 from math import floor
 from typing import Any
 from typing import Callable
@@ -37,6 +38,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
+@total_ordering
 class MPP:
     """micrometer per pixel scaling common in pathological images"""
 
@@ -57,6 +59,109 @@ class MPP:
 
     def as_tuple(self) -> Tuple[float, float]:
         return self.x, self.y
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, MPP):
+            return self.x == other.x and self.y == other.y
+        elif (
+            isinstance(other, (tuple, list))
+            and len(other) == 2
+            and isinstance(other[0], (float, int))
+            and isinstance(other[1], (float, int))
+        ):
+            return self.x == other[0] and self.y == other[1]
+        else:
+            raise TypeError(
+                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
+            )
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, MPP):
+            return self.x < other.x and self.y < other.y
+        elif (
+            isinstance(other, (tuple, list))
+            and len(other) == 2
+            and isinstance(other[0], (float, int))
+            and isinstance(other[1], (float, int))
+        ):
+            return self.x < other[0] and self.y < other[1]
+        else:
+            raise TypeError(
+                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
+            )
+
+
+@dataclass(frozen=True)
+class FuzzyMPP(MPP):
+
+    rtol: NonNegativeFloat = 0.05  # relative tolerance
+    atol: NonNegativeFloat = 0  # absolute tolerance
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, MPP):
+            return abs(self.x - other.x) < (
+                self.atol + self.rtol * abs(other.x)
+            ) and abs(self.y - other.y) < (self.atol + self.rtol * abs(other.y))
+        elif (
+            isinstance(other, (tuple, list))
+            and len(other) == 2
+            and isinstance(other[0], (float, int))
+            and isinstance(other[1], (float, int))
+        ):
+            return abs(self.x - other[0]) < (
+                self.atol + self.rtol * abs(other[0])
+            ) and abs(self.y - other[1]) < (self.atol + self.rtol * abs(other[1]))
+        else:
+            raise TypeError(
+                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
+            )
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, MPP):
+            tol_x = self.atol + self.rtol * abs(other.x)
+            tol_y = self.atol + self.rtol * abs(other.y)
+            return self.x < other.x - tol_x and self.y < other.y - tol_y
+        elif (
+            isinstance(other, (tuple, list))
+            and len(other) == 2
+            and isinstance(other[0], (float, int))
+            and isinstance(other[1], (float, int))
+        ):
+            tol_x = self.atol + self.rtol * abs(other[0])
+            tol_y = self.atol + self.rtol * abs(other[1])
+            return self.x < other[0] - tol_x and self.y < other[1] - tol_y
+        else:
+            raise TypeError(
+                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
+            )
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, MPP):
+            tol_x = self.atol + self.rtol * abs(other.x)
+            tol_y = self.atol + self.rtol * abs(other.y)
+            return self.x > other.x + tol_x and self.y > other.y + tol_y
+        elif (
+            isinstance(other, (tuple, list))
+            and len(other) == 2
+            and isinstance(other[0], (float, int))
+            and isinstance(other[1], (float, int))
+        ):
+            tol_x = self.atol + self.rtol * abs(other[0])
+            tol_y = self.atol + self.rtol * abs(other[1])
+            return self.x > other[0] + tol_x and self.y > other[1] + tol_y
+        else:
+            raise TypeError(
+                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
+            )
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __le__(self, other):
+        return self.__lt__(other) or self.__eq__(other)
+
+    def __ge__(self, other):
+        return self.__gt__(other) or self.__eq__(other)
 
 
 _P = TypeVar("_P", bound="Point")
