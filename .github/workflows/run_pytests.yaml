@@ -1,6 +1,11 @@
 name: pado ci
 
-on: [pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
 
 jobs:
   # RUN PYTEST ON PADO SOURCE
