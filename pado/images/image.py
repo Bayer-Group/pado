@@ -31,6 +31,7 @@ from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.io.files import urlpathlike_is_localfile
+from pado.io.files import urlpathlike_local_via_fs
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.types import UrlpathLike
@@ -170,10 +171,13 @@ class Image:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def open(self) -> Image:
+    def open(self, fs=None) -> Image:
         """open an image instance"""
         if not self._slide:
-            of = urlpathlike_to_fsspec(self.urlpath)
+            if fs is None:
+                of = urlpathlike_to_fsspec(self.urlpath)
+            else:
+                of = urlpathlike_local_via_fs(self.urlpath, fs)
             try:
                 self._slide = TiffSlide(of)
             except Exception as e:
