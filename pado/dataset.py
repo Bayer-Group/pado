@@ -86,12 +86,13 @@ class PadoDataset:
             an optional dictionary with options passed to fsspec for opening the urlpath
 
         """
+        self._mode: IOMode = mode
         self._storage_options: dict[str, Any] = storage_options or {}
 
         if urlpath is None:
             # enable in-memory pado datasets and change mode to enable write
             self._urlpath = f"memory://pado-{uuid.uuid4()}"
-            mode = "r+"
+            self._mode = "r+"
         else:
             try:
                 self._urlpath: str = urlpathlike_to_string(urlpath)
@@ -121,9 +122,6 @@ class PadoDataset:
                     self._get_fspath("*.image.parquet")
                 ):
                     raise FileExistsError(f"{self._urlpath!r} exists")
-
-        # file
-        self._mode: IOMode = mode
 
         # paths
         if not self.readonly:
@@ -370,7 +368,9 @@ class PadoDataset:
             elif on_empty == "ignore":
                 pass
             else:
-                raise ValueError(f"on_empty not one of {'error', 'warn', 'ignore'}, got: {on_empty!r}")
+                raise ValueError(
+                    f"on_empty not one of {'error', 'warn', 'ignore'}, got: {on_empty!r}"
+                )
 
         ds = PadoDataset(urlpath, mode="w")
         ds.ingest_obj(ImageProvider(ip, identifier=self.images.identifier))
