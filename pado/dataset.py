@@ -292,6 +292,9 @@ class PadoDataset:
         )
         return self[idx]
 
+    def __len__(self):
+        return len(self.images)
+
     # === filter functionality ===
 
     def filter(
