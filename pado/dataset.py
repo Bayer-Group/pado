@@ -686,7 +686,7 @@ class PadoDataset:
 
 
 class PadoItem(NamedTuple):
-    """A 'row' of a dataset as returned by PadoDataset.get_by_* methods"""
+    """A 'row' of a dataset as returned by PadoDataset.__getitem__"""
 
     id: Optional[ImageId]
     image: Optional[Image]
