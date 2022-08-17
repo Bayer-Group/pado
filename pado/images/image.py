@@ -29,7 +29,6 @@ from pydantic.color import Color
 from tifffile import ZarrTiffStore
 from tiffslide import TiffSlide
 
-from pado import PadoDataset
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
@@ -38,11 +37,14 @@ from pado.io.files import urlpathlike_is_localfile
 from pado.io.files import urlpathlike_local_via_fs
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
+from pado.io.paths import get_dataset_fs
 from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     import numpy as np
     import PIL.Image
+
+    from pado.dataset import PadoDataset
 
 _log = logging.getLogger(__name__)
 
@@ -233,11 +235,7 @@ class Image:
         self:
             returns the opened image instance
         """
-        if not isinstance(ds, PadoDataset):
-            raise TypeError(f"not a PadoDataset, got {type(ds).__name__}")
-
-        # noinspection PyProtectedMember
-        ds_fs = ds._fs
+        ds_fs = get_dataset_fs(ds)
         # check if we are accessing a dataset remotely, that has references to
         # files locally. For now access via ssh is the primary use case for this.
         if not isinstance(ds_fs, LocalFileSystem):

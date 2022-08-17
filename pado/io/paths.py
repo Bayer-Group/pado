@@ -8,9 +8,11 @@ from typing import Sequence
 from typing import Set
 from typing import Tuple
 
+from fsspec import AbstractFileSystem
 from fsspec.core import OpenFile
 from tqdm import tqdm
 
+import pado.dataset
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_path_parts
 from pado.types import FsspecIOMode
@@ -89,3 +91,11 @@ def search_dataset(
     # noinspection PyProtectedMember
     fs, get_fspath = ds._fs, ds._get_fspath
     return [fsopen(fs, p, mode=mode) for p in fs.glob(get_fspath(glob))]
+
+
+def get_dataset_fs(ds: PadoDataset) -> AbstractFileSystem:
+    """return the dataset's filesystem"""
+    if not isinstance(ds, pado.dataset.PadoDataset):
+        raise TypeError(f"not a PadoDataset, got {type(ds).__name__}")
+    # noinspection PyProtectedMember
+    return ds._fs
