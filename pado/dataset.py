@@ -650,7 +650,7 @@ class PadoDataset:
             }
             if store:
                 warnings.warn(
-                    "Pickling a `memory://` filesystem backed dataset.",
+                    "Pickling a `memory://` filesystem backed pado dataset.",
                     stacklevel=2,
                 )
                 state["__pado_fsspec_memory_store__"] = store
@@ -666,7 +666,7 @@ class PadoDataset:
             # warn if overwriting pseudo files in the MemoryFileSystem
             if not memory_store.keys().isdisjoint(MemoryFileSystem.store):
                 warnings.warn(
-                    "Key collision when unpickling a `memory://` filesystem backed dataset:"
+                    "Key collision when unpickling a `memory://` filesystem backed pado dataset:"
                     f" {set(memory_store).intersection(MemoryFileSystem.store)!r}",
                     stacklevel=2,
                 )
