@@ -4,14 +4,32 @@ from typing import Iterator
 
 from pado.dataset import PadoDataset
 from pado.dataset import PadoItem
+from pado.types import CollatedPadoItems
+
+try:
+    from torch.utils.data import Dataset
+except ImportError:
+    Dataset = object
 
 
-class SlideDataset:
+__all__ = [
+    "SlideDataset",
+]
+
+
+class SlideDataset(Dataset):
+    """A thin wrapper around a pado dataset for data loading
+
+    Provides map-style and iterable-style dataset interfaces
+    """
+
     def __init__(
         self,
         ds: PadoDataset,
+        *args,
+        **kwargs,
     ):
-        """iterate over slides in a pado dataset"""
+        super().__init__(*args, **kwargs)
         self._ds = ds
 
     def __getitem__(self, index: int) -> PadoItem:
@@ -28,30 +46,19 @@ class SlideDataset:
         return len(self._ds)
 
     @staticmethod
-    def collate_fn(batch):
-        collated = {
-            "image": [],
-            "metadata": [],
-            "annotations": [],
-        }
-        for x in batch:
-            collated["image"].append(x.image)
-            collated["metadata"].append(x.image)
-            collated["annotations"].append(x.image)
-        return collated
+    def collate_fn(batch: list[PadoItem]) -> CollatedPadoItems:
+        it = zip(PadoItem._fields, map(list, zip(*batch)))
+        # noinspection PyArgumentList
+        return CollatedPadoItems(it)
 
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
-    from torch.utils.data import Dataset
 
     from pado.mock import mock_dataset
 
-    class TorchSlideDataset(SlideDataset, Dataset):
-        pass
-
-    ds = mock_dataset("memory://somewhere", num_images=100)
-    sds = TorchSlideDataset(ds)
+    _ds = mock_dataset("memory://somewhere", num_images=97)
+    sds = SlideDataset(_ds)
 
     loader = DataLoader(
         sds,
@@ -76,6 +83,7 @@ if __name__ == "__main__":
             print(
                 idx,
                 {
+                    "id": len(xx["id"]),
                     "image": len(xx["image"]),
                     "metadata": len(xx["metadata"]),
                     "annotations": len(xx["annotations"]),
