@@ -113,14 +113,18 @@ class TileDataset:  # (Dataset):
             return self._tile_indexes[image_id]
 
     def __getitem__(self, index: int) -> PadoTileItem:
+        if index < 0:
+            raise NotImplementedError(index)
         slide_idx = int(
             np.searchsorted(self.cumulative_num_tiles, index, side="right", sorter=None)
-            - 1
         )
         pado_item = self._ds[slide_idx]
 
         tile_index = self.get_tile_index(pado_item.id)
-        idx = index - self.cumulative_num_tiles[slide_idx]
+        if slide_idx > 0:
+            idx = index - self.cumulative_num_tiles[slide_idx - 1]
+        else:
+            idx = index
         location, size, mpp = tile_index[idx]
 
         with pado_item.image.via(self._ds) as img:

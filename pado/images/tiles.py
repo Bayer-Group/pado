@@ -133,10 +133,12 @@ class GridTileIndex(TileIndex):
         num_x = math.floor(sw / dx)
         num_y = math.floor(sh / dy)
         num = num_x * num_y
-        if -num <= item < num:
-            raise IndexError(item)
-        if item < 0:
+        if 0 <= item < num:
+            pass
+        elif -num <= item < 0:
             item += num
+        else:
+            raise IndexError(item)
         x = item % num_x
         y = item // num_x
         return (
