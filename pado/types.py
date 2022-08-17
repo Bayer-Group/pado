@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from pado.annotations import Annotations
     from pado.images import Image
     from pado.images import ImageId
+    from pado.images.tiles import TileId
 
 
 # --- types ---
@@ -111,5 +112,14 @@ class CollatedPadoItems(TypedDict):
 
     id: list[ImageId]
     image: list[Image]
+    metadata: list[pd.DataFrame]
+    annotations: list[Annotations]
+
+
+class CollatedPadoTileItems(TypedDict):
+    """collected batch dictionary used in pado.itertools"""
+
+    id: list[TileId]
+    tile: list[npt.NDArray]
     metadata: list[pd.DataFrame]
     annotations: list[Annotations]
