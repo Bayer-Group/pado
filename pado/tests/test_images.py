@@ -3,11 +3,14 @@ from __future__ import annotations
 import os
 import pickle
 
+import fsspec
 import pytest
 
 from pado.images import ImageId
 from pado.images.ids import load_image_ids_from_csv
 from pado.images.providers import update_image_provider_urlpaths
+from pado.images.utils import IntPoint
+from pado.images.utils import IntSize
 from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
@@ -270,3 +273,43 @@ def test_update_image_provider_urlpaths(dataset, tmp_path, capsys):
     assert "provider has 3 images" in captured.err
     assert "trying to match new files" in captured.err
     assert "re-associated 2 images" in captured.err
+
+
+def test_image_open(dataset):
+    img = dataset[0].image
+    img.open()
+    try:
+        assert img.get_array(IntPoint(0, 0), IntSize(10, 10), 0).sum() != 0
+    finally:
+        img.close()
+
+
+def test_image_open_via_fs(dataset, tmp_path):
+    img = dataset[0].image
+
+    of = fsspec.open(f"simplecache::file:{tmp_path}")
+
+    img.open(via=of.fs)
+    try:
+        assert img.get_array(IntPoint(0, 0), IntSize(10, 10), 0).sum() != 0
+    finally:
+        img.close()
+
+
+def test_image_via(dataset):
+    img = dataset[0].image
+    img.via(dataset)
+    try:
+        assert img.get_array(IntPoint(0, 0), IntSize(10, 10), 0).sum() != 0
+    finally:
+        img.close()
+
+
+def test_image_ctx_manager(dataset):
+    with dataset[0].image as img:
+        _ = img.metadata
+
+
+def test_image_ctx_manager_via(dataset):
+    with dataset[0].image.via(dataset) as img:
+        _ = img.metadata

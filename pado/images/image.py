@@ -15,8 +15,10 @@ from typing import Tuple
 from typing import Union
 
 import tiffslide
+from fsspec import AbstractFileSystem
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
+from fsspec.implementations.local import LocalFileSystem
 from pydantic import BaseModel
 from pydantic import ByteSize
 from pydantic import Extra
@@ -30,14 +32,19 @@ from tiffslide import TiffSlide
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.io.files import urlpathlike_get_fs_cls
 from pado.io.files import urlpathlike_is_localfile
+from pado.io.files import urlpathlike_local_via_fs
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
+from pado.io.paths import get_dataset_fs
 from pado.types import UrlpathLike
 
 if TYPE_CHECKING:
     import numpy as np
     import PIL.Image
+
+    from pado.dataset import PadoDataset
 
 _log = logging.getLogger(__name__)
 
@@ -170,16 +177,74 @@ class Image:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def open(self) -> Image:
-        """open an image instance"""
+    def open(self, *, via: AbstractFileSystem | None = None) -> Image:
+        """open an image instance
+
+        This will instantiate the filesystem. Dependent on the
+        filesystem this will establish connections to servers, etc.
+        If open has been called, following calls will be no-ops.
+
+        Parameters
+        ----------
+        via:
+            allows to provide a filesystem that will be used instead of
+            the Image.urlpath's filesystem to access the path.
+
+        Returns
+        -------
+        self:
+            returns the opened image instance
+        """
         if not self._slide:
-            of = urlpathlike_to_fsspec(self.urlpath)
+            if via is None:
+                of = urlpathlike_to_fsspec(self.urlpath)
+            elif isinstance(via, AbstractFileSystem):
+                of = urlpathlike_local_via_fs(self.urlpath, fs=via)
+            else:
+                raise TypeError(
+                    f"via not an AbstractFileSystem, got {type(via).__name__}"
+                )
             try:
                 self._slide = TiffSlide(of)
             except Exception as e:
                 _log.error(f"{self.urlpath!r} with error {e!r}")
                 self.close()
                 raise
+        return self
+
+    def via(self, ds: PadoDataset) -> Image:
+        """open an image instance via a pado dataset
+
+        Similar behavior to .open() with the difference that only if
+        the dataset is accessed remotely and the images are referenced
+        locally (so on the same remote) will the image be accessed via
+        the dataset filesystem.
+
+        A common example is a pado dataset stored on a server with the
+        images stored next to it on the server filesystem. If this
+        dataset is now accessed via ssh, the images will be accessible
+        via ssh too.
+
+        Parameters
+        ----------
+        ds:
+            this pado dataset's filesystem will be used for access
+
+        Returns
+        -------
+        self:
+            returns the opened image instance
+        """
+        ds_fs = get_dataset_fs(ds)
+        # check if we are accessing a dataset remotely, that has references to
+        # files locally. For now access via ssh is the primary use case for this.
+        if not isinstance(ds_fs, LocalFileSystem):
+            im_fs_cls = urlpathlike_get_fs_cls(self.urlpath)
+            if issubclass(im_fs_cls, LocalFileSystem):
+                self.open(via=ds_fs)
+                return self
+
+        self.open()  # to make .via()'s behavior consistent we have to call open here
         return self
 
     def close(self):
