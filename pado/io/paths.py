@@ -12,7 +12,6 @@ from fsspec import AbstractFileSystem
 from fsspec.core import OpenFile
 from tqdm import tqdm
 
-import pado.dataset
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_path_parts
 from pado.types import FsspecIOMode
@@ -95,7 +94,8 @@ def search_dataset(
 
 def get_dataset_fs(ds: PadoDataset) -> AbstractFileSystem:
     """return the dataset's filesystem"""
-    if not isinstance(ds, pado.dataset.PadoDataset):
-        raise TypeError(f"not a PadoDataset, got {type(ds).__name__}")
     # noinspection PyProtectedMember
-    return ds._fs
+    try:
+        return ds._fs
+    except AttributeError:
+        raise TypeError(f"not a PadoDataset, got {type(ds).__name__}")
