@@ -19,6 +19,7 @@ from fsspec import AbstractFileSystem
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 from numpy.typing import NDArray
 from pydantic import BaseModel
 from pydantic import ByteSize
@@ -200,7 +201,7 @@ class Image:
             returns the opened image instance
         """
         if not self._slide:
-            if via is None:
+            if via is None or isinstance(via, MemoryFileSystem):
                 of = urlpathlike_to_fsspec(self.urlpath)
             elif isinstance(via, AbstractFileSystem):
                 of = urlpathlike_local_via_fs(self.urlpath, fs=via)
