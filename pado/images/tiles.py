@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterator
@@ -110,6 +111,7 @@ class GridTileIndex(TileIndex):
         tile_size: IntSize,
         overlap: int,
         target_mpp: MPP,
+        mask: NDArray[np.bool] | None = None,
     ):
         if tile_size.mpp is not None:
             assert tile_size.mpp == target_mpp
@@ -124,6 +126,18 @@ class GridTileIndex(TileIndex):
         assert 0 <= self._overlap < min(self._tile_size.x, self._tile_size.y)
         self._target_mpp = target_mpp
 
+        if mask is None:
+            self._masked_indices = None
+        else:
+            import cv2
+
+            size = self._get_size()
+            assert mask.ndim == 2 and mask.dtype == bool
+            _mask = cv2.resize(
+                mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST
+            ).astype(bool)
+            self._masked_indices = np.argwhere(_mask)
+
     def __getitem__(self, item: int) -> tuple[IntPoint, IntSize, MPP]:
         item = int(item)
         sw, sh = self._image_size
@@ -133,28 +147,40 @@ class GridTileIndex(TileIndex):
         num_x = math.floor(sw / dx)
         num_y = math.floor(sh / dy)
         num = num_x * num_y
-        if 0 <= item < num:
-            pass
-        elif -num <= item < 0:
-            item += num
+
+        if self._masked_indices is None:
+            if 0 <= item < num:
+                pass
+            elif -num <= item < 0:
+                item += num
+            else:
+                raise IndexError(item)
+            x = item % num_x
+            y = item // num_x
         else:
-            raise IndexError(item)
-        x = item % num_x
-        y = item // num_x
+            y, x = map(int, self._masked_indices[item])
+
         return (
             IntPoint(x * dx, y * dy, mpp=self._target_mpp),
             self._tile_size,
             self._target_mpp,
         )
 
-    def __len__(self):
+    def _get_size(self):
         sw, sh = self._image_size
         tw, th = self._tile_size.x, self._tile_size.y
         dx = tw - self._overlap
         dy = th - self._overlap
         num_x = math.floor(sw / dx)
         num_y = math.floor(sh / dy)
-        return num_x * num_y
+        return num_x, num_y
+
+    def __len__(self):
+        if self._masked_indices is not None:
+            return len(self._masked_indices)
+        else:
+            num_x, num_y = self._get_size()
+            return num_x * num_y
 
 
 class FastGridTiling(TilingStrategy):
@@ -162,9 +188,12 @@ class FastGridTiling(TilingStrategy):
 
     def __init__(
         self,
+        *,
         tile_size: IntSize | tuple[int, int],
         target_mpp: MPP | float,
         overlap: int = 0,
+        min_chunk_size: float | int | None,
+        normalize_chunk_sizes: bool,
     ) -> None:
         if isinstance(target_mpp, float):
             self._target_mpp = MPP.from_float(target_mpp)
@@ -187,6 +216,8 @@ class FastGridTiling(TilingStrategy):
             tw, th = tile_size
             self._tile_size = IntSize(tw, th, mpp=self._target_mpp)
         self._overlap = int(overlap)
+        self._min_chunk_size = min_chunk_size
+        self._normalize_chunk_size = normalize_chunk_sizes
 
     def precompute(self, image: Image) -> TileIndex:
         image_size = IntSize(
@@ -194,11 +225,23 @@ class FastGridTiling(TilingStrategy):
             image.metadata.height,
             mpp=MPP(image.metadata.mpp_x, image.metadata.mpp_y),
         )
+        if self._min_chunk_size is not None:
+            with image:
+                chunk_sizes = image.get_chunk_sizes(level=0)
+            if self._normalize_chunk_size:
+                if np.min(chunk_sizes) == np.max(chunk_sizes):
+                    warnings.warn("all chunksizes identical: {image!r}")
+                chunk_sizes = (chunk_sizes - np.min(chunk_sizes)) / np.max(chunk_sizes)
+            mask = chunk_sizes >= self._min_chunk_size
+        else:
+            mask = None
+
         return GridTileIndex(
             image_size=image_size,
             tile_size=self._tile_size,
             overlap=self._overlap,
             target_mpp=self._target_mpp,
+            mask=mask,
         )
 
     def serialize(self) -> str:
@@ -207,6 +250,8 @@ class FastGridTiling(TilingStrategy):
             tile_size=(self._tile_size.x, self._tile_size.y),
             target_mpp=(self._target_mpp.x, self._target_mpp.y),
             overlap=self._overlap,
+            min_chunk_size=self._min_chunk_size,
+            normalize_chunk_size=self._normalize_chunk_size,
         )
 
 

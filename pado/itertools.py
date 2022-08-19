@@ -171,7 +171,11 @@ if __name__ == "__main__":
         dataset = TileDataset(
             _ds,
             tiling_strategy=FastGridTiling(
-                tile_size=(10, 10), target_mpp=MPP(1, 1), overlap=0
+                tile_size=(10, 10),
+                target_mpp=MPP(1, 1),
+                overlap=0,
+                min_chunk_size=0.0,  # use 0.2 or so with real data
+                normalize_chunk_sizes=True,
             ),
         )
 
@@ -184,7 +188,7 @@ if __name__ == "__main__":
     loader = DataLoader(
         dataset,
         batch_size=10,
-        shuffle=False,
+        shuffle=True,
         sampler=None,
         batch_sampler=None,
         num_workers=3,

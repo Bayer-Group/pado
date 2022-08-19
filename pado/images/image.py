@@ -19,6 +19,7 @@ from fsspec import AbstractFileSystem
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
 from fsspec.implementations.local import LocalFileSystem
+from numpy.typing import NDArray
 from pydantic import BaseModel
 from pydantic import ByteSize
 from pydantic import Extra
@@ -28,6 +29,9 @@ from pydantic import validator
 from pydantic.color import Color
 from tifffile import ZarrTiffStore
 from tiffslide import TiffSlide
+
+# noinspection PyProtectedMember
+from tiffslide._zarr import _get_chunk_bytesize_array as get_chunk_bytesize_array
 
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
@@ -534,6 +538,13 @@ class Image:
             chunkmode=chunkmode,
             zattrs=zattrs,
         )
+
+    def get_chunk_sizes(
+        self,
+        level: int,
+    ) -> NDArray[np.int]:
+        """return a chunk bytesize array"""
+        return get_chunk_bytesize_array(self._slide.zarr_group, level)
 
     def is_local(self, must_exist=True) -> bool:
         """Return True if the image is stored locally"""
