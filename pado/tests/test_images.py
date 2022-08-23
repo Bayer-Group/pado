@@ -313,3 +313,10 @@ def test_image_ctx_manager(dataset):
 def test_image_ctx_manager_via(dataset):
     with dataset[0].image.via(dataset) as img:
         _ = img.metadata
+
+
+def test_image_get_chunk_sizes(dataset):
+    for img in dataset.images.values():
+        with img:
+            chunk_sizes = img.get_chunk_sizes(level=0)
+            assert chunk_sizes.ndim == 2
