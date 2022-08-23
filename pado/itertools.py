@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
+from typing import Callable
 from typing import Iterator
+from typing import Sequence
 
 import numpy as np
 from tqdm import tqdm
@@ -87,6 +89,7 @@ class TileDataset(Dataset):
         *,
         tiling_strategy: TilingStrategy,
         precompute_kw: dict | None = None,
+        transforms: Sequence[Callable[[PadoTileItem], PadoTileItem]] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -96,6 +99,12 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
+        if transforms is None:
+            self._transforms = []
+        elif callable(transforms):
+            self._transforms = [transforms]
+        else:
+            self._transforms = list(transforms)
 
     def precompute_tiling(self, workers: int | None = None):
         if self._cumulative_num_tiles is None and not self._tile_indexes:
@@ -145,12 +154,16 @@ class TileDataset(Dataset):
         with pado_item.image.via(self._ds) as img:
             arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
 
-        return PadoTileItem(
+        tile_item = PadoTileItem(
             id=TileId(image_id=pado_item.id, strategy=self._strategy_str, index=idx),
             tile=arr,
             metadata=pado_item.metadata,
             annotations=pado_item.annotations,
         )
+        if self._transforms:
+            for transform in self._transforms:
+                tile_item = transform(tile_item)
+        return tile_item
 
     def __iter__(self) -> Iterator[PadoTileItem]:
         # can be done faster by lazy evaluating the len of slides
