@@ -51,6 +51,12 @@ if TYPE_CHECKING:
 
     from pado.dataset import PadoDataset
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+
 _log = logging.getLogger(__name__)
 
 
@@ -491,6 +497,8 @@ class Image:
             )
 
         assert location.mpp.as_tuple() == target_mpp.as_tuple()
+        if region.mpp is not None:
+            assert region.mpp.as_tuple() == target_mpp.as_tuple()
 
         mpp_xy = target_mpp.as_tuple()
 
@@ -508,10 +516,11 @@ class Image:
                 f"than provided in the image {self.level_mpp.items()!r}"
             )
 
+        region_tuple = region.as_tuple()
         if mpp_xy == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                location=lvl0_xy, level=lvl_best, size=region.as_tuple(), as_array=True
+                location=lvl0_xy, level=lvl_best, size=region_tuple, as_array=True
             )
         else:
             # we need to rescale to the target_mpp
@@ -520,6 +529,10 @@ class Image:
             array = self._slide.read_region(
                 location=lvl0_xy, level=lvl_best, size=region_best, as_array=True
             )
+
+            if array.shape[0:2:-1] != region_tuple:
+                array = cv2.resize(array, dsize=region_tuple)
+
         return array
 
     def get_zarr_store(
