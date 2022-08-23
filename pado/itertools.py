@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 from typing import Iterator
 
@@ -73,7 +74,7 @@ class SlideDataset(Dataset):
 # === iterate over tiles ======================================================
 
 
-class TileDataset:  # (Dataset):
+class TileDataset(Dataset):
     """A thin wrapper around a pado dataset for data loading
 
     Provides map-style and iterable-style dataset interfaces
@@ -85,44 +86,58 @@ class TileDataset:  # (Dataset):
         ds: PadoDataset,
         *,
         tiling_strategy: TilingStrategy,
+        precompute_kw: dict | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._ds = ds
         self._ts = tiling_strategy
+        self._precompute_kw = precompute_kw or {}
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
 
-    @property
-    def cumulative_num_tiles(self) -> NDArray[np.int64]:
-        if self._cumulative_num_tiles is None:
-            _num_tiles = []
-            for image_id in tqdm(self._ds.index, desc="precomputing tile indices"):
-                num_tiles = len(self.get_tile_index(image_id))
-                _num_tiles.append(num_tiles)
-            self._cumulative_num_tiles = np.cumsum(_num_tiles, dtype=np.int64)
-        return self._cumulative_num_tiles
+    def precompute_tiling(self, workers: int | None = None):
+        if self._cumulative_num_tiles is None and not self._tile_indexes:
+            if workers is None:
+                for image_id in tqdm(self._ds.index, desc="precomputing tile indices"):
+                    image = self._ds.images[image_id]
+                    self._tile_indexes[image_id] = self._ts.precompute(image)
 
-    def get_tile_index(self, image_id: ImageId) -> TileIndex:
-        try:
-            return self._tile_indexes[image_id]
-        except KeyError:
-            image = self._ds.images[image_id]
-            self._tile_indexes[image_id] = self._ts.precompute(image)
-            return self._tile_indexes[image_id]
+            else:
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    for image_id, tile_index in tqdm(
+                        zip(
+                            self._ds.index,
+                            executor.map(self._ts.precompute, self._ds.images.values()),
+                        ),
+                        desc="precomputing tile indices",
+                    ):
+                        self._tile_indexes[image_id] = tile_index
+
+            self._cumulative_num_tiles = np.cumsum(
+                [len(self._tile_indexes[iid]) for iid in self._ds.index], dtype=np.int64
+            )
+        return
+
+    def _ensure_precompute(self):
+        if self._cumulative_num_tiles is None and not self._tile_indexes:
+            self.precompute_tiling(**self._precompute_kw)
 
     def __getitem__(self, index: int) -> PadoTileItem:
+        self._ensure_precompute()
         if index < 0:
             raise NotImplementedError(index)
         slide_idx = int(
-            np.searchsorted(self.cumulative_num_tiles, index, side="right", sorter=None)
+            np.searchsorted(
+                self._cumulative_num_tiles, index, side="right", sorter=None
+            )
         )
         pado_item = self._ds[slide_idx]
 
-        tile_index = self.get_tile_index(pado_item.id)
+        tile_index = self._tile_indexes[pado_item.id]
         if slide_idx > 0:
-            idx = index - self.cumulative_num_tiles[slide_idx - 1]
+            idx = index - self._cumulative_num_tiles[slide_idx - 1]
         else:
             idx = index
         location, size, mpp = tile_index[idx]
@@ -143,7 +158,8 @@ class TileDataset:  # (Dataset):
             yield self[idx]
 
     def __len__(self):
-        return self.cumulative_num_tiles[-1]
+        self._ensure_precompute()
+        return self._cumulative_num_tiles[-1]
 
     @staticmethod
     def collate_fn(batch: list[PadoTileItem]) -> CollatedPadoTileItems:
