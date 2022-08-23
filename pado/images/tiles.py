@@ -1,13 +1,21 @@
 """tile classes for pado images"""
 from __future__ import annotations
 
+import json
+import math
+import warnings
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import Iterator
+from typing import NamedTuple
 from typing import Optional
+from typing import Sequence
 
 import numpy as np
+import pandas as pd
 import zarr
 from shapely.geometry import Polygon
+from typing_extensions import TypeAlias
 
 from pado._compat import cached_property
 from pado.images.utils import MPP
@@ -17,7 +25,237 @@ from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from pado.annotations import Annotations
+    from pado.images.ids import ImageId
     from pado.images.image import Image
+
+
+class TileId(NamedTuple):
+    """a predictable tile id"""
+
+    image_id: ImageId
+    strategy: str
+    index: int
+
+
+class PadoTileItem(NamedTuple):
+    """A 'row' of a dataset of tiles generated from a PadoDataset"""
+
+    id: TileId
+    tile: NDArray
+    annotations: Optional[Annotations]
+    metadata: Optional[pd.DataFrame]
+
+
+class TilingStrategy:
+    name: str | None = None
+
+    def precompute(self, image: Image) -> TileIndex:
+        raise NotImplementedError
+
+    def serialize(self) -> str:
+        raise NotImplementedError
+
+    @staticmethod
+    def serialize_strategy_and_options(cls: type[TilingStrategy], **kwargs) -> str:
+        name = cls.name
+        assert name is not None
+        kws = []
+        for kw, kw_value in kwargs.items():
+            v = json.dumps(kw_value, separators=(",", ":"))
+            kws.append(f"{kw}={v}")
+        return f"{name}:{';'.join(kws)}"
+
+    @classmethod
+    def parse_serialized_strategy_options(cls, strategy: str) -> dict[str, Any]:
+        name, kwargs = strategy.split(":")
+        assert name == cls.name
+        kws = {}
+        for kw_val in kwargs.split(";"):
+            key, val = kw_val.split("=")
+            kws[key] = json.loads(val)
+
+        return kws
+
+    @classmethod
+    def deserialize(cls, strategy: str) -> TilingStrategy:
+        if not isinstance(strategy, str):
+            raise TypeError(f"expected str, got {type(strategy).__name__}")
+        name, kwargs = strategy.split(":")
+        for s_cls in cls.__subclasses__():
+            if s_cls.name == name:
+                break
+        else:
+            raise ValueError(f"could not find matching strategy: {strategy!r}")
+        s_cls, kwargs = cls.parse_serialized_strategy_options(strategy)
+        return s_cls(**kwargs)
+
+
+ReadTileTuple: TypeAlias = "tuple[IntPoint, IntSize, MPP]"
+
+
+class TileIndex(Sequence[ReadTileTuple]):
+    def __getitem__(self, i: int) -> ReadTileTuple:
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+
+class GridTileIndex(TileIndex):
+    def __init__(
+        self,
+        image_size: IntSize,
+        tile_size: IntSize,
+        overlap: int,
+        target_mpp: MPP,
+        mask: NDArray[np.bool] | None = None,
+    ):
+        if tile_size.mpp is not None:
+            assert tile_size.mpp == target_mpp
+
+        if image_size.mpp is not None and image_size.mpp != target_mpp:
+            self._image_size = image_size.scale(target_mpp).as_tuple()
+        else:
+            self._image_size = image_size.as_tuple()
+
+        self._tile_size = tile_size
+        self._overlap = int(overlap)
+        assert 0 <= self._overlap < min(self._tile_size.x, self._tile_size.y)
+        self._target_mpp = target_mpp
+
+        if mask is None:
+            self._masked_indices = None
+        else:
+            import cv2
+
+            size = self._get_size()
+            assert mask.ndim == 2 and mask.dtype == bool
+            _mask = cv2.resize(
+                mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST
+            ).astype(bool)
+            self._masked_indices = np.argwhere(_mask)
+
+    def __getitem__(self, item: int) -> tuple[IntPoint, IntSize, MPP]:
+        item = int(item)
+        sw, sh = self._image_size
+        tw, th = self._tile_size.x, self._tile_size.y
+        dx = tw - self._overlap
+        dy = th - self._overlap
+        num_x = math.floor(sw / dx)
+        num_y = math.floor(sh / dy)
+        num = num_x * num_y
+
+        if self._masked_indices is None:
+            if 0 <= item < num:
+                pass
+            elif -num <= item < 0:
+                item += num
+            else:
+                raise IndexError(item)
+            x = item % num_x
+            y = item // num_x
+        else:
+            y, x = map(int, self._masked_indices[item])
+
+        return (
+            IntPoint(x * dx, y * dy, mpp=self._target_mpp),
+            self._tile_size,
+            self._target_mpp,
+        )
+
+    def _get_size(self):
+        sw, sh = self._image_size
+        tw, th = self._tile_size.x, self._tile_size.y
+        dx = tw - self._overlap
+        dy = th - self._overlap
+        num_x = math.floor(sw / dx)
+        num_y = math.floor(sh / dy)
+        return num_x, num_y
+
+    def __len__(self):
+        if self._masked_indices is not None:
+            return len(self._masked_indices)
+        else:
+            num_x, num_y = self._get_size()
+            return num_x * num_y
+
+
+class FastGridTiling(TilingStrategy):
+    name = "fastgrid"
+
+    def __init__(
+        self,
+        *,
+        tile_size: IntSize | tuple[int, int],
+        target_mpp: MPP | float,
+        overlap: int = 0,
+        min_chunk_size: float | int | None,
+        normalize_chunk_sizes: bool,
+    ) -> None:
+        if isinstance(target_mpp, float):
+            self._target_mpp = MPP.from_float(target_mpp)
+        elif not isinstance(target_mpp, MPP):
+            raise TypeError(
+                f"target_mpp expected MPP | float, got {type(target_mpp).__name__!r}"
+            )
+        else:
+            self._target_mpp = target_mpp
+        if isinstance(tile_size, IntSize):
+            if tile_size.mpp is None:
+                self._tile_size = IntSize(
+                    tile_size.x, tile_size.y, mpp=self._target_mpp
+                )
+            elif tile_size.mpp != self._target_mpp:
+                raise NotImplementedError("Todo: warn and scale?")
+            else:
+                self._tile_size = tile_size
+        else:
+            tw, th = tile_size
+            self._tile_size = IntSize(tw, th, mpp=self._target_mpp)
+        self._overlap = int(overlap)
+        self._min_chunk_size = min_chunk_size
+        self._normalize_chunk_size = normalize_chunk_sizes
+
+    def precompute(self, image: Image) -> TileIndex:
+        image_size = IntSize(
+            image.metadata.width,
+            image.metadata.height,
+            mpp=MPP(image.metadata.mpp_x, image.metadata.mpp_y),
+        )
+        if self._min_chunk_size is not None:
+            with image:
+                chunk_sizes = image.get_chunk_sizes(level=0)
+            if self._normalize_chunk_size:
+                if np.min(chunk_sizes) == np.max(chunk_sizes):
+                    warnings.warn(f"all chunksizes identical: {image!r}")
+                chunk_sizes = (chunk_sizes - np.min(chunk_sizes)) / np.max(chunk_sizes)
+            mask = chunk_sizes >= self._min_chunk_size
+        else:
+            mask = None
+
+        return GridTileIndex(
+            image_size=image_size,
+            tile_size=self._tile_size,
+            overlap=self._overlap,
+            target_mpp=self._target_mpp,
+            mask=mask,
+        )
+
+    def serialize(self) -> str:
+        return self.serialize_strategy_and_options(
+            type(self),
+            tile_size=(self._tile_size.x, self._tile_size.y),
+            target_mpp=(self._target_mpp.x, self._target_mpp.y),
+            overlap=self._overlap,
+            min_chunk_size=self._min_chunk_size,
+            normalize_chunk_size=self._normalize_chunk_size,
+        )
+
+
+# === potentially obsolete =====================================
 
 
 class Tile:

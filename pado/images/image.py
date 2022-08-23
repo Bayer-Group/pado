@@ -19,6 +19,8 @@ from fsspec import AbstractFileSystem
 from fsspec import get_fs_token_paths
 from fsspec.core import OpenFile
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+from numpy.typing import NDArray
 from pydantic import BaseModel
 from pydantic import ByteSize
 from pydantic import Extra
@@ -28,6 +30,9 @@ from pydantic import validator
 from pydantic.color import Color
 from tifffile import ZarrTiffStore
 from tiffslide import TiffSlide
+
+# noinspection PyProtectedMember
+from tiffslide._zarr import get_zarr_chunk_sizes
 
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
@@ -45,6 +50,12 @@ if TYPE_CHECKING:
     import PIL.Image
 
     from pado.dataset import PadoDataset
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 
 _log = logging.getLogger(__name__)
 
@@ -196,7 +207,7 @@ class Image:
             returns the opened image instance
         """
         if not self._slide:
-            if via is None:
+            if via is None or isinstance(via, MemoryFileSystem):
                 of = urlpathlike_to_fsspec(self.urlpath)
             elif isinstance(via, AbstractFileSystem):
                 of = urlpathlike_local_via_fs(self.urlpath, fs=via)
@@ -486,6 +497,8 @@ class Image:
             )
 
         assert location.mpp.as_tuple() == target_mpp.as_tuple()
+        if region.mpp is not None:
+            assert region.mpp.as_tuple() == target_mpp.as_tuple()
 
         mpp_xy = target_mpp.as_tuple()
 
@@ -503,10 +516,11 @@ class Image:
                 f"than provided in the image {self.level_mpp.items()!r}"
             )
 
+        region_tuple = region.as_tuple()
         if mpp_xy == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                location=lvl0_xy, level=lvl_best, size=region.as_tuple(), as_array=True
+                location=lvl0_xy, level=lvl_best, size=region_tuple, as_array=True
             )
         else:
             # we need to rescale to the target_mpp
@@ -515,6 +529,10 @@ class Image:
             array = self._slide.read_region(
                 location=lvl0_xy, level=lvl_best, size=region_best, as_array=True
             )
+
+            if array.shape[0:2:-1] != region_tuple:
+                array = cv2.resize(array, dsize=region_tuple)
+
         return array
 
     def get_zarr_store(
@@ -533,6 +551,24 @@ class Image:
             level=level,
             chunkmode=chunkmode,
             zattrs=zattrs,
+        )
+
+    def get_chunk_sizes(
+        self,
+        level: int = 0,
+    ) -> NDArray[np.int]:
+        """return a chunk bytesize array"""
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
+        axes = self._slide.properties["tiffslide.series-axes"]
+        if axes == "YXS":
+            sum_axis = 2
+        elif axes == "CYX":
+            sum_axis = 0
+        else:
+            raise NotImplementedError(f"axes: {axes!r}")
+        return get_zarr_chunk_sizes(
+            self._slide.zarr_group, level=level, sum_axis=sum_axis
         )
 
     def is_local(self, must_exist=True) -> bool:

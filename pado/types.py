@@ -17,6 +17,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 from typing import Type
+from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
@@ -34,9 +35,13 @@ if TYPE_CHECKING:
     import os
 
     import numpy.typing as npt
+    import pandas as pd
     from fsspec import AbstractFileSystem
 
+    from pado.annotations import Annotations
+    from pado.images import Image
     from pado.images import ImageId
+    from pado.images.tiles import TileId
 
 
 # --- types ---
@@ -100,3 +105,21 @@ class FilterMissing(str, Enum):
     WARN = "warn"
     ERROR = "error"
     IGNORE = "ignore"
+
+
+class CollatedPadoItems(TypedDict):
+    """collected batch dictionary used in pado.itertools"""
+
+    id: list[ImageId]
+    image: list[Image]
+    metadata: list[pd.DataFrame]
+    annotations: list[Annotations]
+
+
+class CollatedPadoTileItems(TypedDict):
+    """collected batch dictionary used in pado.itertools"""
+
+    id: list[TileId]
+    tile: list[npt.NDArray]
+    metadata: list[pd.DataFrame]
+    annotations: list[Annotations]
