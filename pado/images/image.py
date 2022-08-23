@@ -32,7 +32,7 @@ from tifffile import ZarrTiffStore
 from tiffslide import TiffSlide
 
 # noinspection PyProtectedMember
-from tiffslide._zarr import _get_chunk_bytesize_array as get_chunk_bytesize_array
+from tiffslide._zarr import get_zarr_chunk_sizes
 
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
@@ -542,12 +542,21 @@ class Image:
 
     def get_chunk_sizes(
         self,
-        level: int,
+        level: int = 0,
     ) -> NDArray[np.int]:
         """return a chunk bytesize array"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")
-        return get_chunk_bytesize_array(self._slide.zarr_group, level)
+        axes = self._slide.properties["tiffslide.series-axes"]
+        if axes == "YXS":
+            sum_axis = 2
+        elif axes == "CYX":
+            sum_axis = 0
+        else:
+            raise NotImplementedError(f"axes: {axes!r}")
+        return get_zarr_chunk_sizes(
+            self._slide.zarr_group, level=level, sum_axis=sum_axis
+        )
 
     def is_local(self, must_exist=True) -> bool:
         """Return True if the image is stored locally"""
