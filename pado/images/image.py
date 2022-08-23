@@ -545,6 +545,8 @@ class Image:
         level: int,
     ) -> NDArray[np.int]:
         """return a chunk bytesize array"""
+        if self._slide is None:
+            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return get_chunk_bytesize_array(self._slide.zarr_group, level)
 
     def is_local(self, must_exist=True) -> bool:
