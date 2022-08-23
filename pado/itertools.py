@@ -48,16 +48,29 @@ class SlideDataset(Dataset):
     def __init__(
         self,
         ds: PadoDataset,
+        *,
+        transforms: Sequence[Callable[[PadoItem], PadoItem]] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._ds = ds
+        if transforms is None:
+            self._transforms = []
+        elif callable(transforms):
+            self._transforms = [transforms]
+        else:
+            self._transforms = list(transforms)
 
     def __getitem__(self, index: int) -> PadoItem:
         try:
-            return self._ds[index]
+            item = self._ds[index]
         except IndexError:
             raise KeyError
+
+        if self._transforms:
+            for transform in self._transforms:
+                item = transform(item)
+        return item
 
     def __iter__(self) -> Iterator[PadoItem]:
         for iid in self._ds.index:
