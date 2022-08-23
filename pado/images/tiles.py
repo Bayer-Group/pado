@@ -230,7 +230,7 @@ class FastGridTiling(TilingStrategy):
                 chunk_sizes = image.get_chunk_sizes(level=0)
             if self._normalize_chunk_size:
                 if np.min(chunk_sizes) == np.max(chunk_sizes):
-                    warnings.warn("all chunksizes identical: {image!r}")
+                    warnings.warn(f"all chunksizes identical: {image!r}")
                 chunk_sizes = (chunk_sizes - np.min(chunk_sizes)) / np.max(chunk_sizes)
             mask = chunk_sizes >= self._min_chunk_size
         else:
