@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 from typing import Callable
 from typing import Iterator
-from typing import Sequence
 
 import numpy as np
 from tqdm import tqdm
@@ -49,17 +48,17 @@ class SlideDataset(Dataset):
         self,
         ds: PadoDataset,
         *,
-        transforms: Sequence[Callable[[PadoItem], PadoItem]] | None = None,
+        transform: Callable[[PadoItem], PadoItem] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._ds = ds
-        if transforms is None:
-            self._transforms = []
-        elif callable(transforms):
-            self._transforms = [transforms]
+        if transform is None:
+            self._transform = None
+        elif not callable(transform):
+            raise ValueError("transform not callable")
         else:
-            self._transforms = list(transforms)
+            self._transform = transform
 
     def __getitem__(self, index: int) -> PadoItem:
         try:
@@ -67,9 +66,8 @@ class SlideDataset(Dataset):
         except IndexError:
             raise KeyError
 
-        if self._transforms:
-            for transform in self._transforms:
-                item = transform(item)
+        if self._transform:
+            item = self._transform(item)
         return item
 
     def __iter__(self) -> Iterator[PadoItem]:
@@ -102,7 +100,7 @@ class TileDataset(Dataset):
         *,
         tiling_strategy: TilingStrategy,
         precompute_kw: dict | None = None,
-        transforms: Sequence[Callable[[PadoTileItem], PadoTileItem]] | None = None,
+        transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -112,12 +110,12 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
-        if transforms is None:
-            self._transforms = []
-        elif callable(transforms):
-            self._transforms = [transforms]
+        if transform is None:
+            self._transform = None
+        elif not callable(transform):
+            raise ValueError("transform not callable")
         else:
-            self._transforms = list(transforms)
+            self._transform = transform
 
     def precompute_tiling(self, workers: int | None = None):
         if self._cumulative_num_tiles is None and not self._tile_indexes:
@@ -173,9 +171,8 @@ class TileDataset(Dataset):
             metadata=pado_item.metadata,
             annotations=pado_item.annotations,
         )
-        if self._transforms:
-            for transform in self._transforms:
-                tile_item = transform(tile_item)
+        if self._transform:
+            tile_item = self._transform(tile_item)
         return tile_item
 
     def __iter__(self) -> Iterator[PadoTileItem]:
