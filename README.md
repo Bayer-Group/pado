@@ -20,7 +20,16 @@ Development
 
 ## Documentation
 
-TBA
+The documentation is currently provided in this repository and has to be
+build via sphinx. It'll be available online soon.
+
+To build it, in the repository root, run
+```bash
+python -m pip install -e ".[docs]"
+cd docs
+make html
+```
+Access the documentation then at `docs/build/html/index.html`
 
 ## Development Installation
 
