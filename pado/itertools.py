@@ -17,9 +17,15 @@ from pado.types import CollatedPadoItems
 from pado.types import CollatedPadoTileItems
 
 try:
+    from torch import from_numpy
+    from torch import stack
     from torch.utils.data import Dataset
 except ImportError:
     Dataset = object
+
+    def from_numpy(x):
+        return x
+
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -102,6 +108,7 @@ class TileDataset(Dataset):
         tiling_strategy: TilingStrategy,
         precompute_kw: dict | None = None,
         transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
+        as_tensor: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -117,6 +124,7 @@ class TileDataset(Dataset):
             raise ValueError("transform not callable")
         else:
             self._transform = transform
+        self._as_tensor = bool(as_tensor)
 
     def precompute_tiling(self, workers: int | None = None):
         if self._cumulative_num_tiles is None and not self._tile_indexes:
@@ -166,6 +174,9 @@ class TileDataset(Dataset):
         with pado_item.image.via(self._ds) as img:
             arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
 
+        if self._as_tensor:
+            arr = from_numpy(arr)
+
         tile_item = PadoTileItem(
             id=TileId(image_id=pado_item.id, strategy=self._strategy_str, index=idx),
             tile=arr,
@@ -189,7 +200,14 @@ class TileDataset(Dataset):
     def collate_fn(batch: list[PadoTileItem]) -> CollatedPadoTileItems:
         it = zip(PadoTileItem._fields, map(list, zip(*batch)))
         # noinspection PyArgumentList
-        return CollatedPadoTileItems(it)
+        dct = CollatedPadoTileItems(it)
+        tile = dct["tile"]
+        # collate tiles
+        if tile and isinstance(tile[0], np.ndarray):
+            dct["tile"] = np.stack(tile)  # type: ignore
+        else:
+            dct["tile"] = stack(tile)  # type: ignore
+        return dct
 
 
 if __name__ == "__main__":
