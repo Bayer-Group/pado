@@ -23,7 +23,7 @@ from typing import overload
 import pandas as pd
 
 from pado._compat import cached_property
-from pado.images import ImageId
+from pado.images.ids import ImageId
 from pado.io.store import Store
 from pado.types import SerializableItem
 from pado.types import UrlpathLike

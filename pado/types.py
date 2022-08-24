@@ -38,9 +38,9 @@ if TYPE_CHECKING:
     import pandas as pd
     from fsspec import AbstractFileSystem
 
-    from pado.annotations import Annotations
-    from pado.images import Image
-    from pado.images import ImageId
+    from pado.annotations.annotation import Annotations
+    from pado.images.ids import ImageId
+    from pado.images.image import Image
     from pado.images.tiles import TileId
 
 
