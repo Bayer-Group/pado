@@ -16,8 +16,8 @@ from pado.collections import PadoMutableSequence
 from pado.collections import PadoMutableSequenceMapping
 from pado.collections import ProviderStoreMixin
 from pado.collections import SerializableProviderMixin
-from pado.images import Image
-from pado.images import ImageId
+from pado.images.ids import ImageId
+from pado.images.image import Image
 from pado.images.utils import Bounds
 from pado.io.store import Store
 from pado.io.store import StoreType
