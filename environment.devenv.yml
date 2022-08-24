@@ -19,7 +19,7 @@ channels:
 
 dependencies:
   # python relevant things
-  - python>=3.6
+  - python>=3.7
   - pip
   - typing_extensions
   - importlib_resources
