@@ -18,6 +18,34 @@ Development
 [happens on github](https://github.com/Bayer-Group/pado)
 :octocat:
 
+## Quickstart
+
+To quickly get a pado dataset, for testing and familiarizing with the interface
+you can create a fake dataset, that's also used in the internal tests.
+
+```pycon
+>>> from pado.mock import mock_dataset
+>>> ds = mock_dataset(None)
+>>> ds
+PadoDataset('memory://pado-f5869e41-5246-4378-9057-96fda1c40edf', mode='r+')
+```
+
+This creates a test dataset in memory with 3 images and some fake metadata
+
+```pycon
+>>> len(ds)
+3
+>>> ds.index
+(ImageId('mock_image_0.svs', site='mock'),
+ ImageId('mock_image_1.svs', site='mock'),
+ ImageId('mock_image_2.svs', site='mock'))
+>>> ds[0].image
+Image(...)
+>>> ds[0].metadata
+                                          A  B  C  D
+ImageId('mock_image_0.svs', site='mock')  a  2  c  4
+```
+
 ## Documentation
 
 The documentation is currently provided in this repository and has to be
