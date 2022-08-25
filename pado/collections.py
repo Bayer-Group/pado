@@ -1,6 +1,7 @@
 """some common pado classes"""
 from __future__ import annotations
 
+import re
 import uuid
 from collections import deque
 from itertools import repeat
@@ -558,3 +559,14 @@ def validate_dataframe_index(df: pd.DataFrame) -> None:
                 >>> df = pd.DataFrame(index=[iid.to_str() for iid in image_ids], data=...)
             """
         raise ValueError(dedent(msg))
+
+
+IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9_])?$")
+
+
+def is_valid_identifier(identifier: str) -> bool:
+    """check if an identifier is a valid identifier"""
+    if IDENTIFIER_RE.match(identifier):
+        return True
+    else:
+        return False
