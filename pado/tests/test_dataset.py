@@ -15,9 +15,9 @@ from pado.annotations import AnnotationProvider
 from pado.dataset import DescribeFormat
 from pado.dataset import PadoDataset
 from pado.dataset import PadoItem
-from pado.images import Image
-from pado.images import ImageId
-from pado.images import ImageProvider
+from pado.images.ids import ImageId
+from pado.images.image import Image
+from pado.images.providers import ImageProvider
 from pado.metadata import MetadataProvider
 from pado.mock import mock_dataset
 

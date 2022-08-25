@@ -16,7 +16,7 @@ from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 from shapely.wkt import loads as wkt_loads
 
-from pado.images import ImageId
+from pado.images.ids import ImageId
 
 # === PADO annotation model ===
 

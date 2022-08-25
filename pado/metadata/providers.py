@@ -20,8 +20,8 @@ import pandas as pd
 
 from pado._compat import cached_property
 from pado.collections import validate_dataframe_index
-from pado.images import ImageId
 from pado.images.ids import GetImageIdFunc
+from pado.images.ids import ImageId
 from pado.io.store import Store
 from pado.io.store import StoreType
 from pado.types import UrlpathLike

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from pado.annotations import AnnotationProvider
-from pado.images import ImageId
+from pado.images.ids import ImageId
 
 
 @pytest.fixture(scope="function")

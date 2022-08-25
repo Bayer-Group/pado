@@ -16,7 +16,7 @@ from pado.annotations.formats import AnnotationModel
 from pado.annotations.formats import AnnotationState
 from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import Annotator
-from pado.images import ImageId
+from pado.images.ids import ImageId
 
 
 class Annotation:

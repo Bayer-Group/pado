@@ -18,8 +18,8 @@ import zarr.hierarchy
 import zarr.storage
 from tifffile import tifffile
 
-from pado.images import Image
-from pado.images import ImageId
+from pado.images.ids import ImageId
+from pado.images.image import Image
 from pado.images.utils import MPP
 from pado.images.utils import Bounds
 from pado.images.utils import IntBounds

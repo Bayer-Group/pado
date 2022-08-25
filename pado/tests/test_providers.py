@@ -20,8 +20,8 @@ from pado.annotations import AnnotationState
 from pado.annotations import Annotator
 from pado.annotations import AnnotatorType
 from pado.dataset import PadoDataset
-from pado.images import ImageId
-from pado.images import ImageProvider
+from pado.images.ids import ImageId
+from pado.images.providers import ImageProvider
 from pado.images.providers import copy_image
 from pado.images.providers import create_image_provider
 from pado.images.utils import IntBounds

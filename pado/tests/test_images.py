@@ -6,7 +6,7 @@ import pickle
 import fsspec
 import pytest
 
-from pado.images import ImageId
+from pado.images.ids import ImageId
 from pado.images.ids import load_image_ids_from_csv
 from pado.images.providers import update_image_provider_urlpaths
 from pado.images.utils import IntPoint

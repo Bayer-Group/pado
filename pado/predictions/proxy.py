@@ -18,7 +18,7 @@ from pado.predictions.providers import MetadataPredictionProvider
 
 if TYPE_CHECKING:
     from pado.dataset import PadoDataset
-    from pado.images import ImageId
+    from pado.images.ids import ImageId
 
 __all__ = [
     "PredictionProxy",

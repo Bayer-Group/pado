@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pado.dataset import PadoDataset
-    from pado.images import ImageId
+    from pado.images.ids import ImageId
     from pado.images.utils import MPP
 
 

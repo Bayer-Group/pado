@@ -34,10 +34,10 @@ from pado._repr import number
 from pado.annotations import AnnotationProvider
 from pado.annotations import Annotations
 from pado.annotations import GroupedAnnotationProvider
-from pado.images import GroupedImageProvider
-from pado.images import Image
-from pado.images import ImageId
-from pado.images import ImageProvider
+from pado.images.ids import ImageId
+from pado.images.image import Image
+from pado.images.providers import GroupedImageProvider
+from pado.images.providers import ImageProvider
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_get_path
 from pado.io.files import urlpathlike_to_fs_and_path

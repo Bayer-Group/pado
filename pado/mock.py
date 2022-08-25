@@ -26,10 +26,10 @@ from pado.annotations import Annotator
 from pado.annotations import AnnotatorType
 from pado.annotations.providers import BaseAnnotationProvider
 from pado.dataset import PadoDataset
-from pado.images import Image
-from pado.images import ImageId
-from pado.images import ImageProvider
+from pado.images.ids import ImageId
+from pado.images.image import Image
 from pado.images.providers import BaseImageProvider
+from pado.images.providers import ImageProvider
 from pado.io.files import fsopen
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_fsspec
