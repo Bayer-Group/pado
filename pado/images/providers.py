@@ -3,6 +3,7 @@ from __future__ import annotations
 import os.path
 import sys
 import uuid
+import warnings
 from abc import ABC
 from reprlib import Repr
 from typing import Any
@@ -10,7 +11,6 @@ from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Iterator
-from typing import Mapping
 from typing import MutableMapping
 from typing import Optional
 from typing import Set
@@ -30,9 +30,7 @@ from tqdm import tqdm
 
 from pado._compat import cached_property
 from pado.collections import validate_dataframe_index
-from pado.images.ids import GetImageIdFunc
 from pado.images.ids import ImageId
-from pado.images.ids import image_id_from_parts
 from pado.images.image import Image
 from pado.io.files import find_files
 from pado.io.files import urlpathlike_to_fs_and_path
@@ -42,6 +40,23 @@ from pado.io.paths import match_partial_paths_reversed
 from pado.io.store import Store
 from pado.io.store import StoreType
 from pado.types import UrlpathLike
+
+
+def __getattr__(name):
+    """compatibility"""
+    if name == "create_image_provider":
+        from pado.create import create_image_provider
+
+        warnings.warn(
+            "moved: `from pado.create import create_image_provider`",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        return create_image_provider
+    else:
+        raise AttributeError(name)
+
 
 # === storage =================================================================
 
@@ -399,60 +414,6 @@ def image_cached_percentage(image: Image) -> float:
 
 
 # === manipulation ============================================================
-
-
-def create_image_provider(
-    search_urlpath: UrlpathLike,
-    search_glob: str,
-    *,
-    output_urlpath: Optional[UrlpathLike],
-    identifier: Optional[str] = None,
-    checksum: bool | Mapping[ImageId, str] = True,
-    resume: bool = False,
-    ignore_broken: bool = True,
-    image_id_func: GetImageIdFunc = image_id_from_parts,
-    progress: bool = False,
-) -> ImageProvider:
-    """create an image provider from a directory containing images"""
-    files_and_parts = find_files(search_urlpath, glob=search_glob)
-
-    if resume:
-        try:
-            ip = ImageProvider.from_parquet(urlpath=output_urlpath)
-        except FileNotFoundError:
-            ip = ImageProvider(identifier=identifier)
-    else:
-        ip = ImageProvider(identifier=identifier)
-
-    if progress:
-        files_and_parts = tqdm(files_and_parts)
-
-    try:
-        for fp in files_and_parts:
-            image_id = image_id_func(fp.file, fp.parts, ip.identifier)
-            if resume and image_id in ip:
-                continue
-            if isinstance(checksum, Mapping):
-                chk = checksum[image_id]
-            else:
-                chk = checksum
-            try:
-                image = Image(
-                    fp.file, load_metadata=True, load_file_info=True, checksum=chk
-                )
-            except KeyboardInterrupt:
-                raise
-            except BaseException as e:
-                if not ignore_broken:
-                    raise e
-            else:
-                ip[image_id] = image
-
-    finally:
-        if output_urlpath is not None:
-            ip.to_parquet(output_urlpath)
-
-    return ip
 
 
 _PT = TypeVar("_PT", bound="ImageProvider")
