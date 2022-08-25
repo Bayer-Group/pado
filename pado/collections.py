@@ -36,6 +36,7 @@ __all__ = [
     "ProviderStoreMixin",
     "GroupedProviderMixin",
     "validate_dataframe_index",
+    "is_valid_identifier",
 ]
 
 _r = Repr()
@@ -440,6 +441,7 @@ class GroupedProviderMixin:
     def to_parquet(
         self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
     ) -> None:
+        # noinspection PyUnresolvedReferences
         super().to_parquet(urlpath, storage_options=storage_options)
 
     @classmethod
@@ -473,7 +475,12 @@ class SerializableProviderMixin:
         self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
     ) -> None:
         store = self.__store_class__()
-        store.to_urlpath(self.df, urlpath, identifier=self.identifier)
+        store.to_urlpath(
+            self.df,
+            urlpath,
+            identifier=self.identifier,
+            storage_options=storage_options,
+        )
 
     @classmethod
     def from_parquet(cls: Type[PC], urlpath: UrlpathLike) -> PC:
