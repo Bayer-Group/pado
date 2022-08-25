@@ -31,6 +31,31 @@ if TYPE_CHECKING:
     from pado.images.ids import ImageId
     from pado.images.image import Image
 
+__all__ = [
+    "FastGridTiling",
+    "GridTileIndex",
+    "PadoTileItem",
+    "TileId",
+    "TileIndex",
+    "TilingStrategy",
+]
+
+
+def __getattr__(name):
+    if name == "Tile":
+        cls = _DeprecatedTile
+    elif name == "TileIterator":
+        cls = _DeprecatedTileIterator
+    else:
+        raise AttributeError(name)
+    warnings.warn(
+        f"`pado.images.tiles.{name}` will be removed in the next major version of pado."
+        " Please checkout `pado.itertools.TileDataset`!",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return cls
+
 
 class TileId(NamedTuple):
     """a predictable tile id"""
@@ -255,10 +280,10 @@ class FastGridTiling(TilingStrategy):
         )
 
 
-# === potentially obsolete =====================================
+# === obsolete ========================================================
 
 
-class Tile:
+class _DeprecatedTile:
     """pado.img.Tile abstracts rectangular regions in whole slide image data"""
 
     def __init__(
@@ -303,7 +328,7 @@ class Tile:
             )
 
 
-class TileIterator:
+class _DeprecatedTileIterator:
     """helper class to iterate over tiles
 
     Note: we should subclass to enable all sorts of fancy tile iteration
@@ -337,7 +362,7 @@ class TileIterator:
         with self.image:
             self.level0_mpp_xy = self.image.level_mpp[0]
 
-    def __iter__(self) -> Iterator[Tile]:
+    def __iter__(self) -> Iterator[_DeprecatedTile]:
         """return a plain iterator with no overlap over all tiles of the image
 
         Note: boundary tiles that don't meet the size requirements are discarded
@@ -369,7 +394,7 @@ class TileIterator:
             with s:
                 z_array = zarr.open_array(s, mode="r")
                 for x0, x1, y0, y1 in bounds:
-                    yield Tile(
+                    yield _DeprecatedTile(
                         mpp=mpp_xy,
                         lvl0_mpp=self.level0_mpp_xy,
                         bounds=Bounds.from_tuple((x0, x1, y0, y1), mpp=mpp_xy),
