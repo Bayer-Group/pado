@@ -5,16 +5,19 @@ in pado datasets.
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import sys
 import uuid
 import warnings
-from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
+from functools import partial
 from itertools import repeat
 from typing import Any
 from typing import Container
 from typing import Mapping
+
+from rich.progress import Progress
 
 from pado.collections import is_valid_identifier
 from pado.images.ids import GetImageIdFunc
@@ -39,6 +42,11 @@ except ImportError:
 __all__ = [
     "create_image_provider",
 ]
+
+
+def _star_call(fn, args):
+    """helper to use with multiprocessing.Pool.imap"""
+    return fn(*args)
 
 
 def _open_image_from_file_and_parts(
@@ -184,65 +192,86 @@ def create_image_provider(
         )
 
     if workers > 0:
-        pool = ProcessPoolExecutor(max_workers=workers)
+        _pool = multiprocessing.Pool(processes=workers)
     else:
-        e = type("_executor", (), {"map": map})
-        pool = nullcontext(e)
+        e = type("_executor", (), {"imap_unordered": map})
+        _pool = nullcontext(e)
 
     broken = []
-    try:
-        with pool as executor:
-            iid_img_err = executor.map(
-                _open_image_from_file_and_parts,
-                files_and_parts,
-                repeat(identifier),
-                repeat(image_id_func),
-                repeat(set(ip)),
-                repeat(checksum),
-            )
 
-            if progress:
-                iid_img_err = track(
-                    iid_img_err,
-                    description="Gathering Images...",
-                    total=len(files_and_parts),
+    if progress:
+        _progress = Progress(
+            rich.progress.TextColumn("[progress.description]{task.description}"),
+            rich.progress.BarColumn(),
+            rich.progress.MofNCompleteColumn(),
+            rich.progress.TimeRemainingColumn(),
+        )
+    else:
+        _progress = nullcontext(None)
+
+    with _progress as _p:
+        if _p:
+            task_id = _p.add_task(
+                "[cyan]Gathering Images...", total=len(files_and_parts)
+            )
+        else:
+            task_id = None
+
+        try:
+            with _pool as pool:
+                iid_img_err = pool.imap_unordered(
+                    partial(_star_call, _open_image_from_file_and_parts),
+                    zip(
+                        files_and_parts,
+                        repeat(identifier),
+                        repeat(image_id_func),
+                        repeat(set(ip)),
+                        repeat(checksum),
+                    ),
                 )
 
-            for image_id, image, err in iid_img_err:
-                # catch errors
-                if err is not None:
-                    if image_id is None:
-                        raise err
-                    elif not ignore_broken:
-                        raise RuntimeError(f"{image_id!r}") from err
+                for image_id, image, err in iid_img_err:
+                    # catch errors
+                    if err is not None:
+                        if image_id is None:
+                            raise err
+                        elif not ignore_broken:
+                            raise RuntimeError(f"{image_id!r}") from err
+                        else:
+                            if _p:
+                                _p.console.print("[red]{image_id!s}: {err!r}")
+                            broken.append((image_id, err))
                     else:
-                        broken.append((image_id, err))
-                        continue
+                        if image_id is not None:
+                            ip[image_id] = image
+                    if _p:
+                        _p.advance(task_id)
 
-                if image_id is not None:
-                    ip[image_id] = image
+        finally:
+            if output_urlpath is not None:
+                if progress and rich:
+                    console = rich.console.Console(stderr=True)
+                    console.print(
+                        f"[yellow]storing ImageProvider at {output_urlpath!r}"
+                    )
+                elif progress:
+                    print(
+                        f"Storing ImageProvider at {output_urlpath!r}", file=sys.stderr
+                    )
 
-    finally:
-        if output_urlpath is not None:
-            if progress and rich:
-                console = rich.console.Console(stderr=True)
-                console.print(f"[yellow]storing ImageProvider at {output_urlpath!r}")
-            elif progress:
-                print(f"Storing ImageProvider at {output_urlpath!r}", file=sys.stderr)
-
-            fs, pth = urlpathlike_to_fs_and_path(
-                output_urlpath, storage_options=output_storage_options
-            )
-            if fs.isdir(pth):
-                pth = os.path.join(pth, f"{identifier}.image.parquet")
-                output_urlpath = fsopen(fs, pth, mode="wb")
-            ip.to_parquet(output_urlpath)
-        if broken:
-            if rich:
-                console = rich.console.Console(stderr=True)
-                for image_id, err in broken:
-                    console.print(f"[red] {image_id!s}: {err!r}")
-            else:
-                print(f"ERROR: {image_id!s}: {err!r}", file=sys.stderr)
+                fs, pth = urlpathlike_to_fs_and_path(
+                    output_urlpath, storage_options=output_storage_options
+                )
+                if fs.isdir(pth):
+                    pth = os.path.join(pth, f"{identifier}.image.parquet")
+                    output_urlpath = fsopen(fs, pth, mode="wb")
+                ip.to_parquet(output_urlpath)
+            if broken:
+                if rich:
+                    console = rich.console.Console(stderr=True)
+                    for image_id, err in broken:
+                        console.print(f"[red] {image_id!s}: {err!r}")
+                else:
+                    print(f"ERROR: {image_id!s}: {err!r}", file=sys.stderr)
 
     return ip
