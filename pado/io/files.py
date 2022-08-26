@@ -83,7 +83,7 @@ def find_files(
     if storage_options is None:
         storage_options = {}
 
-    ofile = urlpathlike_to_fsspec(urlpath, **storage_options)
+    ofile = urlpathlike_to_fsspec(urlpath, storage_options=storage_options)
     fs = ofile.fs
     pth = ofile.path
     if not fs.isdir(pth):
