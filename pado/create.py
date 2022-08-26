@@ -1,3 +1,8 @@
+"""pado.create: tools to create pado datasets
+
+This module provides functions for creating the various providers used
+in pado datasets.
+"""
 from __future__ import annotations
 
 import os
@@ -195,7 +200,11 @@ def create_image_provider(
             )
 
             if progress:
-                iid_img_err = track(iid_img_err, description="Gathering Images...")
+                iid_img_err = track(
+                    iid_img_err,
+                    description="Gathering Images...",
+                    total=len(files_and_parts),
+                )
 
             for image_id, image, err in iid_img_err:
                 # catch errors
