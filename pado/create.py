@@ -6,6 +6,7 @@ in pado datasets.
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 import warnings
 from concurrent.futures import ProcessPoolExecutor
@@ -28,6 +29,7 @@ from pado.types import UrlpathLike
 
 try:
     import rich
+    import rich.console
     from rich.progress import track
 except ImportError:
     rich = None
@@ -59,7 +61,7 @@ def _open_image_from_file_and_parts(
     # return early
     if image_id is None:
         return None, None, None
-    elif image_id in available_ids or set():
+    elif image_id in available_ids:
         return image_id, None, None
 
     # get checksum
@@ -212,9 +214,10 @@ def create_image_provider(
                     if image_id is None:
                         raise err
                     elif not ignore_broken:
-                        raise err
+                        raise RuntimeError(f"{image_id!r}") from err
                     else:
                         broken.append((image_id, err))
+                        continue
 
                 if image_id is not None:
                     ip[image_id] = image
@@ -222,18 +225,24 @@ def create_image_provider(
     finally:
         if output_urlpath is not None:
             if progress and rich:
-                console = rich.get_console()
-                spinner = console.status("[bold green]Saving ImageProvider...")
-            else:
-                spinner = nullcontext()
+                console = rich.console.Console(stderr=True)
+                console.print(f"[yellow]storing ImageProvider at {output_urlpath!r}")
+            elif progress:
+                print(f"Storing ImageProvider at {output_urlpath!r}", file=sys.stderr)
 
-            with spinner:
-                fs, pth = urlpathlike_to_fs_and_path(
-                    output_urlpath, storage_options=output_storage_options
-                )
-                if fs.isdir(pth):
-                    pth = os.path.join(pth, f"{identifier}.image.parquet")
-                    output_urlpath = fsopen(fs, pth, mode="wb")
-                ip.to_parquet(output_urlpath)
+            fs, pth = urlpathlike_to_fs_and_path(
+                output_urlpath, storage_options=output_storage_options
+            )
+            if fs.isdir(pth):
+                pth = os.path.join(pth, f"{identifier}.image.parquet")
+                output_urlpath = fsopen(fs, pth, mode="wb")
+            ip.to_parquet(output_urlpath)
+        if broken:
+            if rich:
+                console = rich.console.Console(stderr=True)
+                for image_id, err in broken:
+                    console.print(f"[red] {image_id!s}: {err!r}")
+            else:
+                print(f"ERROR: {image_id!s}: {err!r}", file=sys.stderr)
 
     return ip
