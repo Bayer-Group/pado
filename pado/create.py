@@ -17,6 +17,7 @@ from typing import Any
 from typing import Container
 from typing import Mapping
 
+import fsspec.asyn
 from rich.progress import Progress
 
 from pado.collections import is_valid_identifier
@@ -42,6 +43,12 @@ except ImportError:
 __all__ = [
     "create_image_provider",
 ]
+
+
+def _subprocess_init():
+    """fix fsspec hanging on subprocesses"""
+    # https://github.com/fsspec/filesystem_spec/pull/963/files
+    fsspec.asyn.reset_lock()
 
 
 def _star_call(fn, args):
@@ -192,7 +199,10 @@ def create_image_provider(
         )
 
     if workers > 0:
-        _pool = multiprocessing.Pool(processes=workers)
+        _pool = multiprocessing.Pool(
+            processes=workers,
+            initializer=_subprocess_init,
+        )
     else:
         e = type("_executor", (), {"imap_unordered": map})
         _pool = nullcontext(e)
