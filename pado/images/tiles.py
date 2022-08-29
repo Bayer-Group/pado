@@ -77,7 +77,12 @@ class PadoTileItem(NamedTuple):
 class TilingStrategy:
     name: str | None = None
 
-    def precompute(self, image: Image) -> TileIndex:
+    def precompute(
+        self,
+        image: Image,
+        *,
+        storage_options: dict[str, Any] | None = None,
+    ) -> TileIndex:
         raise NotImplementedError
 
     def serialize(self) -> str:
@@ -244,14 +249,19 @@ class FastGridTiling(TilingStrategy):
         self._min_chunk_size = min_chunk_size
         self._normalize_chunk_size = normalize_chunk_sizes
 
-    def precompute(self, image: Image) -> TileIndex:
+    def precompute(
+        self,
+        image: Image,
+        *,
+        storage_options: dict[str, Any] | None = None,
+    ) -> TileIndex:
         image_size = IntSize(
             image.metadata.width,
             image.metadata.height,
             mpp=MPP(image.metadata.mpp_x, image.metadata.mpp_y),
         )
         if self._min_chunk_size is not None:
-            with image:
+            with image.open(storage_options=storage_options):
                 chunk_sizes = image.get_chunk_sizes(level=0)
             if self._normalize_chunk_size:
                 if np.min(chunk_sizes) == np.max(chunk_sizes):

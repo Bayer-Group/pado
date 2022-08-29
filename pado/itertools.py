@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from itertools import repeat
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import Callable
 from typing import Iterator
 
@@ -94,6 +96,10 @@ class SlideDataset(Dataset):
 # === iterate over tiles ======================================================
 
 
+def call_precompute(ts, args, kwargs):
+    return ts.precompute(*args, **kwargs)
+
+
 class TileDataset(Dataset):
     """A thin wrapper around a pado dataset for data loading
 
@@ -109,6 +115,7 @@ class TileDataset(Dataset):
         precompute_kw: dict | None = None,
         transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
         as_tensor: bool = True,
+        image_storage_options: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -125,20 +132,30 @@ class TileDataset(Dataset):
         else:
             self._transform = transform
         self._as_tensor = bool(as_tensor)
+        self._image_so = image_storage_options
 
     def precompute_tiling(self, workers: int | None = None):
         if self._cumulative_num_tiles is None and not self._tile_indexes:
             if workers is None:
                 for image_id in tqdm(self._ds.index, desc="precomputing tile indices"):
                     image = self._ds.images[image_id]
-                    self._tile_indexes[image_id] = self._ts.precompute(image)
+                    self._tile_indexes[image_id] = call_precompute(
+                        self._ts, (image,), {"storage_options": self._image_so}
+                    )
 
             else:
                 with ThreadPoolExecutor(max_workers=workers) as executor:
                     for image_id, tile_index in tqdm(
                         zip(
                             self._ds.index,
-                            executor.map(self._ts.precompute, self._ds.images.values()),
+                            executor.map(
+                                call_precompute,
+                                (
+                                    repeat(self._ts),
+                                    self._ds.images.values(),
+                                    repeat({"storage_options": self._image_so}),
+                                ),
+                            ),
                         ),
                         desc="precomputing tile indices",
                     ):
@@ -171,7 +188,7 @@ class TileDataset(Dataset):
             idx = index
         location, size, mpp = tile_index[idx]
 
-        with pado_item.image.via(self._ds) as img:
+        with pado_item.image.via(self._ds, storage_options=self._image_so) as img:
             arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
 
         if self._as_tensor:
