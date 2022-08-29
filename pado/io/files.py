@@ -50,6 +50,7 @@ else:
 __all__ = [
     "find_files",
     "is_fsspec_open_file_like",
+    "update_fs_storage_options",
     "urlpathlike_local_via_fs",
     "urlpathlike_get_fs_cls",
     "urlpathlike_get_path",
@@ -550,6 +551,17 @@ def urlpathlike_to_localpath(
         raise ValueError("FileSystem does not have attribute .local_file=True")
     with of as f:
         return f.name
+
+
+def update_fs_storage_options(
+    fs: AbstractFileSystem, *, storage_options: dict[str, Any] | None
+) -> AbstractFileSystem:
+    """update the storage_options of an existing filesystem"""
+    if not storage_options:
+        return fs
+    make_instance, (cls, fs_args, fs_so) = fs.__reduce__()
+    fs_so.update(storage_options)
+    return make_instance(cls, fs_args, fs_so)
 
 
 def fsopen(

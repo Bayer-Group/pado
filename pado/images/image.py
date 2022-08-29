@@ -37,6 +37,7 @@ from tiffslide._zarr import get_zarr_chunk_sizes
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.io.files import update_fs_storage_options
 from pado.io.files import urlpathlike_get_fs_cls
 from pado.io.files import urlpathlike_is_localfile
 from pado.io.files import urlpathlike_local_via_fs
@@ -188,7 +189,12 @@ class Image:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def open(self, *, via: AbstractFileSystem | None = None) -> Image:
+    def open(
+        self,
+        *,
+        via: AbstractFileSystem | None = None,
+        storage_options: dict[str, Any] | None = None,
+    ) -> Image:
         """open an image instance
 
         This will instantiate the filesystem. Dependent on the
@@ -200,6 +206,9 @@ class Image:
         via:
             allows to provide a filesystem that will be used instead of
             the Image.urlpath's filesystem to access the path.
+        storage_options:
+            allows providing storage options for the filesystem used to
+            access the image.
 
         Returns
         -------
@@ -208,9 +217,14 @@ class Image:
         """
         if not self._slide:
             if via is None or isinstance(via, MemoryFileSystem):
-                of = urlpathlike_to_fsspec(self.urlpath)
+                of = urlpathlike_to_fsspec(
+                    self.urlpath, storage_options=storage_options
+                )
             elif isinstance(via, AbstractFileSystem):
-                of = urlpathlike_local_via_fs(self.urlpath, fs=via)
+                of = urlpathlike_local_via_fs(
+                    self.urlpath,
+                    fs=update_fs_storage_options(via, storage_options=storage_options),
+                )
             else:
                 raise TypeError(
                     f"via not an AbstractFileSystem, got {type(via).__name__}"
@@ -223,7 +237,12 @@ class Image:
                 raise
         return self
 
-    def via(self, ds: PadoDataset) -> Image:
+    def via(
+        self,
+        ds: PadoDataset,
+        *,
+        storage_options: dict[str, Any] | None = None,
+    ) -> Image:
         """open an image instance via a pado dataset
 
         Similar behavior to .open() with the difference that only if
@@ -240,6 +259,9 @@ class Image:
         ----------
         ds:
             this pado dataset's filesystem will be used for access
+        storage_options:
+            allows providing storage options for the filesystem used to
+            access the image.
 
         Returns
         -------
@@ -252,7 +274,7 @@ class Image:
         if not isinstance(ds_fs, LocalFileSystem):
             im_fs_cls = urlpathlike_get_fs_cls(self.urlpath)
             if issubclass(im_fs_cls, LocalFileSystem):
-                self.open(via=ds_fs)
+                self.open(via=ds_fs, storage_options=storage_options)
                 return self
 
         self.open()  # to make .via()'s behavior consistent we have to call open here
