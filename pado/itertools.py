@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
+from logging import getLogger
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
@@ -42,6 +44,7 @@ __all__ = [
     "TileDataset",
 ]
 
+_log = getLogger("pado.itertools")
 
 # === iterate over slides =====================================================
 
@@ -96,6 +99,40 @@ class SlideDataset(Dataset):
 # === iterate over tiles ======================================================
 
 
+def default_error_handler(
+    td: TileDataset, index: int, exception: BaseException
+) -> bool:
+    return False
+
+
+class RetryErrorHandler:
+    def __init__(
+        self,
+        retry: int,
+        retry_delay: int,
+        exception_type: Tuple[type[BaseException]] | type[BaseException],
+    ):
+        self._retry = retry
+        self._retry_delay = retry_delay
+        self._exception_type = exception_type
+
+        self.retried = 0
+        self.last_retried_index = None
+
+    def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
+        if self.last_retried_index != index:
+            self.retried = 0
+            self.last_retried_index = index
+
+        if isinstance(exception, self._exception_type):
+            if self.retried < self._retry:
+                self.retried += 1
+                time.sleep(self._retry_delay)
+                return True
+
+        return False
+
+
 def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
@@ -116,6 +153,8 @@ class TileDataset(Dataset):
         transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
         as_tensor: bool = True,
         image_storage_options: dict[str, Any] | None = None,
+        error_handler: Callable[["TileDataset", int, BaseException], bool]
+        | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -125,6 +164,10 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
+        self._error_handler = (
+            error_handler if error_handler is not None else default_error_handler
+        )
+
         if transform is None:
             self._transform = None
         elif not callable(transform):
@@ -169,38 +212,55 @@ class TileDataset(Dataset):
             self.precompute_tiling(**self._precompute_kw)
 
     def __getitem__(self, index: int) -> PadoTileItem:
-        self._ensure_precompute()
-        if index < 0:
-            raise NotImplementedError(index)
-        slide_idx = int(
-            np.searchsorted(
-                self._cumulative_num_tiles, index, side="right", sorter=None
-            )
-        )
-        pado_item = self._ds[slide_idx]
+        while True:
 
-        tile_index = self._tile_indexes[pado_item.id]
-        if slide_idx > 0:
-            idx = index - self._cumulative_num_tiles[slide_idx - 1]
-        else:
-            idx = index
-        location, size, mpp = tile_index[idx]
+            try:
+                self._ensure_precompute()
+                if index < 0:
+                    raise NotImplementedError(index)
+                slide_idx = int(
+                    np.searchsorted(
+                        self._cumulative_num_tiles, index, side="right", sorter=None
+                    )
+                )
+                pado_item = self._ds[slide_idx]
 
-        with pado_item.image.via(self._ds, storage_options=self._image_so) as img:
-            arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
+                tile_index = self._tile_indexes[pado_item.id]
+                if slide_idx > 0:
+                    idx = index - self._cumulative_num_tiles[slide_idx - 1]
+                else:
+                    idx = index
+                location, size, mpp = tile_index[idx]
 
-        if self._as_tensor:
-            arr = from_numpy(arr)
+                with pado_item.image.via(
+                    self._ds, storage_options=self._image_so
+                ) as img:
+                    arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
 
-        tile_item = PadoTileItem(
-            id=TileId(image_id=pado_item.id, strategy=self._strategy_str, index=idx),
-            tile=arr,
-            metadata=pado_item.metadata,
-            annotations=pado_item.annotations,
-        )
-        if self._transform:
-            tile_item = self._transform(tile_item)
-        return tile_item
+                if self._as_tensor:
+                    arr = from_numpy(arr)
+
+                tile_item = PadoTileItem(
+                    id=TileId(
+                        image_id=pado_item.id, strategy=self._strategy_str, index=idx
+                    ),
+                    tile=arr,
+                    metadata=pado_item.metadata,
+                    annotations=pado_item.annotations,
+                )
+                if self._transform:
+                    tile_item = self._transform(tile_item)
+                return tile_item
+            except KeyboardInterrupt:
+                raise
+
+            except BaseException as e:
+                should_retry = self._error_handler(self, index, e)
+                if should_retry:
+                    _log.exception(f"Retrying {self!r}[{index}] ...")
+                    continue
+                else:
+                    raise e
 
     def __iter__(self) -> Iterator[PadoTileItem]:
         # can be done faster by lazy evaluating the len of slides
