@@ -150,11 +150,9 @@ class TileDataset(Dataset):
                             self._ds.index,
                             executor.map(
                                 call_precompute,
-                                (
-                                    repeat(self._ts),
-                                    self._ds.images.values(),
-                                    repeat({"storage_options": self._image_so}),
-                                ),
+                                repeat(self._ts),
+                                map(lambda x: (x,), self._ds.images.values()),
+                                repeat({"storage_options": self._image_so}),
                             ),
                         ),
                         desc="precomputing tile indices",
