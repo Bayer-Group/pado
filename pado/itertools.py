@@ -293,15 +293,15 @@ class RetryErrorHandler:
             exception and match if any item in the chain is a match.
 
         """
-        if isinstance(exception_type, BaseException):
+        if issubclass(exception_type, BaseException):
             exception_type = (exception_type,)
         if not isinstance(exception_type, tuple):
             raise TypeError(
-                f"expected tuple[BaseException], got {type(exception_type).__name__!r}"
+                f"expected tuple[type[BaseException]], got {type(exception_type).__name__!r}"
             )
-        if not all(isinstance(e, BaseException) for e in exception_type):
+        if not all(issubclass(e, BaseException) for e in exception_type):
             _types = tuple(type(e).__name__ for e in exception_type)
-            raise TypeError(f"expected tuple[BaseException], got {_types}")
+            raise TypeError(f"expected tuple[type[BaseException]], got {_types}")
         if num_retries is None and total_delay is None:
             raise ValueError("must provide one of `num_retries` or `timeout_sec`")
         self._exception_type = exception_type
