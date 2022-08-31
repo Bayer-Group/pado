@@ -120,6 +120,6 @@ class CollatedPadoTileItems(TypedDict):
     """collected batch dictionary used in pado.itertools"""
 
     id: list[TileId]
-    tile: list[npt.NDArray]
+    tile: Union[list[npt.ArrayLike], npt.ArrayLike]
     metadata: list[pd.DataFrame]
     annotations: list[Annotations]

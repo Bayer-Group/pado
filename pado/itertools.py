@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
+from logging import getLogger
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
+from typing import Generator
 from typing import Iterator
 
 import numpy as np
@@ -23,6 +27,7 @@ try:
     from torch import stack
     from torch.utils.data import Dataset
 except ImportError:
+    stack = None
     Dataset = object
 
     def from_numpy(x):
@@ -40,8 +45,10 @@ if TYPE_CHECKING:
 __all__ = [
     "SlideDataset",
     "TileDataset",
+    "RetryErrorHandler",
 ]
 
+_log = getLogger("pado.itertools")
 
 # === iterate over slides =====================================================
 
@@ -116,6 +123,7 @@ class TileDataset(Dataset):
         transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
         as_tensor: bool = True,
         image_storage_options: dict[str, Any] | None = None,
+        error_handler: Callable[[TileDataset, int, BaseException], bool] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -125,6 +133,8 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
+        self._error_handler = error_handler or (lambda td, idx, exc: False)
+
         if transform is None:
             self._transform = None
         elif not callable(transform):
@@ -169,38 +179,55 @@ class TileDataset(Dataset):
             self.precompute_tiling(**self._precompute_kw)
 
     def __getitem__(self, index: int) -> PadoTileItem:
-        self._ensure_precompute()
-        if index < 0:
-            raise NotImplementedError(index)
-        slide_idx = int(
-            np.searchsorted(
-                self._cumulative_num_tiles, index, side="right", sorter=None
-            )
-        )
-        pado_item = self._ds[slide_idx]
+        while True:
 
-        tile_index = self._tile_indexes[pado_item.id]
-        if slide_idx > 0:
-            idx = index - self._cumulative_num_tiles[slide_idx - 1]
-        else:
-            idx = index
-        location, size, mpp = tile_index[idx]
+            try:
+                self._ensure_precompute()
+                if index < 0:
+                    raise NotImplementedError(index)
+                slide_idx = int(
+                    np.searchsorted(
+                        self._cumulative_num_tiles, index, side="right", sorter=None
+                    )
+                )
+                pado_item = self._ds[slide_idx]
 
-        with pado_item.image.via(self._ds, storage_options=self._image_so) as img:
-            arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
+                tile_index = self._tile_indexes[pado_item.id]
+                if slide_idx > 0:
+                    idx = index - self._cumulative_num_tiles[slide_idx - 1]
+                else:
+                    idx = index
+                location, size, mpp = tile_index[idx]
 
-        if self._as_tensor:
-            arr = from_numpy(arr)
+                with pado_item.image.via(
+                    self._ds, storage_options=self._image_so
+                ) as img:
+                    arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
 
-        tile_item = PadoTileItem(
-            id=TileId(image_id=pado_item.id, strategy=self._strategy_str, index=idx),
-            tile=arr,
-            metadata=pado_item.metadata,
-            annotations=pado_item.annotations,
-        )
-        if self._transform:
-            tile_item = self._transform(tile_item)
-        return tile_item
+                if self._as_tensor:
+                    arr = from_numpy(arr)
+
+                tile_item = PadoTileItem(
+                    id=TileId(
+                        image_id=pado_item.id, strategy=self._strategy_str, index=idx
+                    ),
+                    tile=arr,
+                    metadata=pado_item.metadata,
+                    annotations=pado_item.annotations,
+                )
+                if self._transform:
+                    tile_item = self._transform(tile_item)
+                return tile_item
+            except KeyboardInterrupt:
+                raise
+
+            except BaseException as e:
+                should_retry = self._error_handler(self, index, e)
+                if should_retry:
+                    _log.exception(f"Retrying {self!r}[{index}] ...")
+                    continue
+                else:
+                    raise e
 
     def __iter__(self) -> Iterator[PadoTileItem]:
         # can be done faster by lazy evaluating the len of slides
@@ -218,11 +245,107 @@ class TileDataset(Dataset):
         dct = CollatedPadoTileItems(it)
         tile = dct["tile"]
         # collate tiles
-        if tile and isinstance(tile[0], np.ndarray):
-            dct["tile"] = np.stack(tile)  # type: ignore
-        else:
-            dct["tile"] = stack(tile)  # type: ignore
+        if tile:
+            if isinstance(tile[0], np.ndarray):
+                dct["tile"] = np.stack(tile)
+            else:
+                dct["tile"] = stack(tile)
         return dct
+
+
+# === helpers =================================================================
+
+
+def iter_exc_chain(exc: BaseException | None) -> Generator[BaseException]:
+    if exc:
+        yield exc
+        yield from iter_exc_chain(exc.__cause__ or exc.__context__)
+
+
+class RetryErrorHandler:
+    def __init__(
+        self,
+        exception_type: tuple[type[BaseException], ...] | type[BaseException],
+        *,
+        retry_delay: float = 0.1,
+        num_retries: int | None = None,
+        total_delay: float | None = None,
+        exponential_backoff: bool = False,
+        check_exception_chain: bool = False,
+    ) -> None:
+        """a retry error handler
+
+        Parameters
+        ----------
+        exception_type:
+            the exception classes which should be used for retrying
+        retry_delay:
+            the retry wait delay in seconds
+        num_retries:
+            the maximum amount of retries (infinite if `None`)
+        total_delay:
+            the maximum total delay added via retries in seconds
+        exponential_backoff:
+            makes the n-th delay wait retry_delay * 2**n seconds.
+            By default, each delay waits retry_delay.
+        check_exception_chain:
+            also check the __cause__ and __context__ chain of the
+            exception and match if any item in the chain is a match.
+
+        """
+        if issubclass(exception_type, BaseException):
+            exception_type = (exception_type,)
+        if not isinstance(exception_type, tuple):
+            raise TypeError(
+                f"expected tuple[type[BaseException]], got {type(exception_type).__name__!r}"
+            )
+        if not all(issubclass(e, BaseException) for e in exception_type):
+            _types = tuple(type(e).__name__ for e in exception_type)
+            raise TypeError(f"expected tuple[type[BaseException]], got {_types}")
+        if num_retries is None and total_delay is None:
+            raise ValueError("must provide one of `num_retries` or `timeout_sec`")
+        self._exception_type = exception_type
+        self._num_retries = int(num_retries) if num_retries else None
+        self._retry_delay = float(retry_delay)
+        self._total_delay = float(total_delay) if total_delay else None
+        self._exp_backoff = bool(exponential_backoff)
+        self._check_exc_chain = bool(check_exception_chain)
+        self._call_counter = Counter()
+        self._sleep = time.sleep
+
+    def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
+        """return if the action should be retried"""
+        if index not in self._call_counter:
+            # we reset the counter if a new index is requested
+            self._call_counter.clear()
+
+        # get sleep delays
+        call_cnt = n = self._call_counter[index]
+        if self._exp_backoff:
+            current_sleep = self._retry_delay * 2**n
+            total_sleep = self._retry_delay * (2 ** (n + 1) - 1)
+        else:
+            current_sleep = self._retry_delay
+            total_sleep = self._retry_delay * (n + 1)
+
+        if self._check_exc_chain:
+            matches = any(
+                isinstance(e, self._exception_type) for e in iter_exc_chain(exception)
+            )
+        else:
+            matches = isinstance(exception, self._exception_type)
+
+        # check if we should retry
+        if (
+            matches
+            and (self._num_retries is None or call_cnt < self._num_retries)
+            and (self._total_delay is None or total_sleep < self._total_delay)
+        ):
+            self._sleep(current_sleep)
+            self._call_counter[index] += 1
+            return True
+        else:
+            return False
 
 
 if __name__ == "__main__":
@@ -249,6 +372,12 @@ if __name__ == "__main__":
                 overlap=0,
                 min_chunk_size=0.0,  # use 0.2 or so with real data
                 normalize_chunk_sizes=True,
+            ),
+            error_handler=RetryErrorHandler(
+                TimeoutError,
+                retry_delay=0.1,
+                total_delay=30.0,
+                exponential_backoff=True,
             ),
         )
 
