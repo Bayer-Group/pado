@@ -8,6 +8,7 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
+from typing import Generator
 from typing import Iterator
 
 import numpy as np
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 __all__ = [
     "SlideDataset",
     "TileDataset",
+    "RetryErrorHandler",
 ]
 
 _log = getLogger("pado.itertools")
@@ -254,6 +256,12 @@ class TileDataset(Dataset):
 # === helpers =================================================================
 
 
+def iter_exc_chain(exc: BaseException | None) -> Generator[BaseException]:
+    if exc:
+        yield exc
+        yield from iter_exc_chain(exc.__cause__ or exc.__context__)
+
+
 class RetryErrorHandler:
     def __init__(
         self,
@@ -263,6 +271,7 @@ class RetryErrorHandler:
         num_retries: int | None = None,
         total_delay: float | None = None,
         exponential_backoff: bool = False,
+        check_exception_chain: bool = False,
     ) -> None:
         """a retry error handler
 
@@ -279,6 +288,9 @@ class RetryErrorHandler:
         exponential_backoff:
             makes the n-th delay wait retry_delay * 2**n seconds.
             By default, each delay waits retry_delay.
+        check_exception_chain:
+            also check the __cause__ and __context__ chain of the
+            exception and match if any item in the chain is a match.
 
         """
         if isinstance(exception_type, BaseException):
@@ -297,6 +309,7 @@ class RetryErrorHandler:
         self._retry_delay = float(retry_delay)
         self._total_delay = float(total_delay) if total_delay else None
         self._exp_backoff = bool(exponential_backoff)
+        self._check_exc_chain = bool(check_exception_chain)
         self._call_counter = Counter()
         self._sleep = time.sleep
 
@@ -310,14 +323,21 @@ class RetryErrorHandler:
         call_cnt = n = self._call_counter[index]
         if self._exp_backoff:
             current_sleep = self._retry_delay * 2**n
-            total_sleep = self._retry_delay * n * (n + 1) * (2 * n + 1) / 6
+            total_sleep = self._retry_delay * (2 ** (n + 1) - 1)
         else:
             current_sleep = self._retry_delay
-            total_sleep = self._retry_delay * n
+            total_sleep = self._retry_delay * (n + 1)
+
+        if self._check_exc_chain:
+            matches = any(
+                isinstance(e, self._exception_type) for e in iter_exc_chain(exception)
+            )
+        else:
+            matches = isinstance(exception, self._exception_type)
 
         # check if we should retry
         if (
-            isinstance(exception, self._exception_type)
+            matches
             and (self._num_retries is None or call_cnt < self._num_retries)
             and (self._total_delay is None or total_sleep < self._total_delay)
         ):
