@@ -26,6 +26,7 @@ try:
     from torch import stack
     from torch.utils.data import Dataset
 except ImportError:
+    stack = None
     Dataset = object
 
     def from_numpy(x):
@@ -242,10 +243,11 @@ class TileDataset(Dataset):
         dct = CollatedPadoTileItems(it)
         tile = dct["tile"]
         # collate tiles
-        if tile and isinstance(tile[0], np.ndarray):
-            dct["tile"] = np.stack(tile)  # type: ignore
-        else:
-            dct["tile"] = stack(tile)  # type: ignore
+        if tile:
+            if isinstance(tile[0], np.ndarray):
+                dct["tile"] = np.stack(tile)
+            else:
+                dct["tile"] = stack(tile)
         return dct
 
 
