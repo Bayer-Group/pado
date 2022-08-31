@@ -100,79 +100,6 @@ class SlideDataset(Dataset):
 # === iterate over tiles ======================================================
 
 
-class RetryErrorHandler:
-    def __init__(
-        self,
-        exception_type: tuple[type[BaseException]] | type[BaseException],
-        *,
-        retry_delay: float = 0.1,
-        num_retries: int | None = None,
-        total_delay: float | None = None,
-        exponential_backoff: bool = False,
-    ) -> None:
-        """a retry error handler
-
-        Parameters
-        ----------
-        exception_type:
-            the exception classes which should be used for retrying
-        retry_delay:
-            the retry wait delay in seconds
-        num_retries:
-            the maximum amount of retries (infinite if `None`)
-        total_delay:
-            the maximum total delay added via retries in seconds
-        exponential_backoff:
-            makes the n-th delay wait retry_delay * 2**n seconds.
-            By default, each delay waits retry_delay.
-
-        """
-        if isinstance(exception_type, BaseException):
-            exception_type = (exception_type,)
-        if not isinstance(exception_type, tuple):
-            raise TypeError(
-                f"expected tuple[BaseException], got {type(exception_type).__name__!r}"
-            )
-        if not all(isinstance(e, BaseException) for e in exception_type):
-            _types = tuple(type(e).__name__ for e in exception_type)
-            raise TypeError(f"expected tuple[BaseException], got {_types}")
-        if num_retries is None and total_delay is None:
-            raise ValueError("must provide one of `num_retries` or `timeout_sec`")
-        self._exception_type = exception_type
-        self._num_retries = int(num_retries) if num_retries else None
-        self._retry_delay = float(retry_delay)
-        self._total_delay = float(total_delay) if total_delay else None
-        self._exp_backoff = bool(exponential_backoff)
-        self._call_counter = Counter()
-
-    def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
-        """return if the action should be retried"""
-        if index not in self._call_counter:
-            # we reset the counter if a new index is requested
-            self._call_counter.clear()
-
-        # get sleep delays
-        call_cnt = n = self._call_counter[index]
-        if self._exp_backoff:
-            current_sleep = self._retry_delay * 2**n
-            total_sleep = self._retry_delay * n * (n + 1) * (2 * n + 1) / 6
-        else:
-            current_sleep = self._retry_delay
-            total_sleep = self._retry_delay * n
-
-        # check if we should retry
-        if (
-            isinstance(exception, self._exception_type)
-            and (self._num_retries is None or call_cnt < self._num_retries)
-            and (self._total_delay is None or total_sleep < self._total_delay)
-        ):
-            time.sleep(current_sleep)
-            self._call_counter[index] += 1
-            return True
-        else:
-            return False
-
-
 def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
@@ -322,6 +249,83 @@ class TileDataset(Dataset):
         return dct
 
 
+# === helpers =================================================================
+
+
+class RetryErrorHandler:
+    def __init__(
+        self,
+        exception_type: tuple[type[BaseException], ...] | type[BaseException],
+        *,
+        retry_delay: float = 0.1,
+        num_retries: int | None = None,
+        total_delay: float | None = None,
+        exponential_backoff: bool = False,
+    ) -> None:
+        """a retry error handler
+
+        Parameters
+        ----------
+        exception_type:
+            the exception classes which should be used for retrying
+        retry_delay:
+            the retry wait delay in seconds
+        num_retries:
+            the maximum amount of retries (infinite if `None`)
+        total_delay:
+            the maximum total delay added via retries in seconds
+        exponential_backoff:
+            makes the n-th delay wait retry_delay * 2**n seconds.
+            By default, each delay waits retry_delay.
+
+        """
+        if isinstance(exception_type, BaseException):
+            exception_type = (exception_type,)
+        if not isinstance(exception_type, tuple):
+            raise TypeError(
+                f"expected tuple[BaseException], got {type(exception_type).__name__!r}"
+            )
+        if not all(isinstance(e, BaseException) for e in exception_type):
+            _types = tuple(type(e).__name__ for e in exception_type)
+            raise TypeError(f"expected tuple[BaseException], got {_types}")
+        if num_retries is None and total_delay is None:
+            raise ValueError("must provide one of `num_retries` or `timeout_sec`")
+        self._exception_type = exception_type
+        self._num_retries = int(num_retries) if num_retries else None
+        self._retry_delay = float(retry_delay)
+        self._total_delay = float(total_delay) if total_delay else None
+        self._exp_backoff = bool(exponential_backoff)
+        self._call_counter = Counter()
+        self._sleep = time.sleep
+
+    def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
+        """return if the action should be retried"""
+        if index not in self._call_counter:
+            # we reset the counter if a new index is requested
+            self._call_counter.clear()
+
+        # get sleep delays
+        call_cnt = n = self._call_counter[index]
+        if self._exp_backoff:
+            current_sleep = self._retry_delay * 2**n
+            total_sleep = self._retry_delay * n * (n + 1) * (2 * n + 1) / 6
+        else:
+            current_sleep = self._retry_delay
+            total_sleep = self._retry_delay * n
+
+        # check if we should retry
+        if (
+            isinstance(exception, self._exception_type)
+            and (self._num_retries is None or call_cnt < self._num_retries)
+            and (self._total_delay is None or total_sleep < self._total_delay)
+        ):
+            self._sleep(current_sleep)
+            self._call_counter[index] += 1
+            return True
+        else:
+            return False
+
+
 if __name__ == "__main__":
     import sys
 
@@ -346,6 +350,12 @@ if __name__ == "__main__":
                 overlap=0,
                 min_chunk_size=0.0,  # use 0.2 or so with real data
                 normalize_chunk_sizes=True,
+            ),
+            error_handler=RetryErrorHandler(
+                TimeoutError,
+                retry_delay=0.1,
+                total_delay=30.0,
+                exponential_backoff=True,
             ),
         )
 
