@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
 from logging import getLogger
@@ -99,38 +100,77 @@ class SlideDataset(Dataset):
 # === iterate over tiles ======================================================
 
 
-def default_error_handler(
-    td: TileDataset, index: int, exception: BaseException
-) -> bool:
-    return False
-
-
 class RetryErrorHandler:
     def __init__(
         self,
-        retry: int,
-        retry_delay: int,
-        exception_type: Tuple[type[BaseException]] | type[BaseException],
-    ):
-        self._retry = retry
-        self._retry_delay = retry_delay
-        self._exception_type = exception_type
+        exception_type: tuple[type[BaseException]] | type[BaseException],
+        *,
+        retry_delay: float = 0.1,
+        num_retries: int | None = None,
+        total_delay: float | None = None,
+        exponential_backoff: bool = False,
+    ) -> None:
+        """a retry error handler
 
-        self.retried = 0
-        self.last_retried_index = None
+        Parameters
+        ----------
+        exception_type:
+            the exception classes which should be used for retrying
+        retry_delay:
+            the retry wait delay in seconds
+        num_retries:
+            the maximum amount of retries (infinite if `None`)
+        total_delay:
+            the maximum total delay added via retries in seconds
+        exponential_backoff:
+            makes the n-th delay wait retry_delay * 2**n seconds.
+            By default, each delay waits retry_delay.
+
+        """
+        if isinstance(exception_type, BaseException):
+            exception_type = (exception_type,)
+        if not isinstance(exception_type, tuple):
+            raise TypeError(
+                f"expected tuple[BaseException], got {type(exception_type).__name__!r}"
+            )
+        if not all(isinstance(e, BaseException) for e in exception_type):
+            _types = tuple(type(e).__name__ for e in exception_type)
+            raise TypeError(f"expected tuple[BaseException], got {_types}")
+        if num_retries is None and total_delay is None:
+            raise ValueError("must provide one of `num_retries` or `timeout_sec`")
+        self._exception_type = exception_type
+        self._num_retries = int(num_retries) if num_retries else None
+        self._retry_delay = float(retry_delay)
+        self._total_delay = float(total_delay) if total_delay else None
+        self._exp_backoff = bool(exponential_backoff)
+        self._call_counter = Counter()
 
     def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
-        if self.last_retried_index != index:
-            self.retried = 0
-            self.last_retried_index = index
+        """return if the action should be retried"""
+        if index not in self._call_counter:
+            # we reset the counter if a new index is requested
+            self._call_counter.clear()
 
-        if isinstance(exception, self._exception_type):
-            if self.retried < self._retry:
-                self.retried += 1
-                time.sleep(self._retry_delay)
-                return True
+        # get sleep delays
+        call_cnt = n = self._call_counter[index]
+        if self._exp_backoff:
+            current_sleep = self._retry_delay * 2**n
+            total_sleep = self._retry_delay * n * (n + 1) * (2 * n + 1) / 6
+        else:
+            current_sleep = self._retry_delay
+            total_sleep = self._retry_delay * n
 
-        return False
+        # check if we should retry
+        if (
+            isinstance(exception, self._exception_type)
+            and (self._num_retries is None or call_cnt < self._num_retries)
+            and (self._total_delay is None or total_sleep < self._total_delay)
+        ):
+            time.sleep(current_sleep)
+            self._call_counter[index] += 1
+            return True
+        else:
+            return False
 
 
 def call_precompute(ts, args, kwargs):
@@ -153,8 +193,7 @@ class TileDataset(Dataset):
         transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
         as_tensor: bool = True,
         image_storage_options: dict[str, Any] | None = None,
-        error_handler: Callable[["TileDataset", int, BaseException], bool]
-        | None = None,
+        error_handler: Callable[[TileDataset, int, BaseException], bool] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -164,9 +203,7 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
-        self._error_handler = (
-            error_handler if error_handler is not None else default_error_handler
-        )
+        self._error_handler = error_handler or (lambda td, idx, exc: False)
 
         if transform is None:
             self._transform = None
