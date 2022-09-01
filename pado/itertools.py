@@ -219,7 +219,7 @@ class TileDataset(Dataset):
                         self._ts, (image,), {"storage_options": self._image_so}
                     )
 
-                image_ids = set(self._ds.annotations)
+                image_ids = set(self._ds.annotations).intersection(self._ds.index)
                 if not force:
                     image_ids -= set(self._annotation_trees)
 
