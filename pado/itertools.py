@@ -14,6 +14,8 @@ from typing import Iterator
 
 import numpy as np
 import orjson
+from shapely.geometry import box
+from shapely.geometry.base import BaseGeometry
 from shapely.strtree import STRtree
 from shapely.wkt import loads as wkt_loads
 from tqdm import tqdm
@@ -112,15 +114,29 @@ def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
 
-def build_str_tree(annotations: Annotations) -> STRtree | None:
-    if annotations:
+class IndexedSTRtree:
+    def __init__(self, geometries: list[BaseGeometry]) -> None:
+        self.geometries = geometries
+        self._strtree = STRtree(geometries)
+        self._index_by_id = {id(geom): idx for idx, geom in enumerate(geometries)}
+
+    @classmethod
+    def from_annotations(cls, annotations: Annotations) -> IndexedSTRtree:
         geometries = [a.geometry for a in annotations]
-        return STRtree(geometries)
+        return cls(geometries)
+
+    def query(self, geom: BaseGeometry) -> list[int]:
+        return [self._index_by_id[id(g)] for g in self._strtree.query(geom)]
+
+
+def build_str_tree(annotations: Annotations) -> IndexedSTRtree | None:
+    if annotations:
+        return IndexedSTRtree.from_annotations(annotations)
     else:
         return None
 
 
-def load_annotation_tree(obj: dict | None) -> STRtree | None:
+def load_annotation_tree(obj: dict | None) -> IndexedSTRtree | None:
     if obj is None:
         return None
 
@@ -128,22 +144,16 @@ def load_annotation_tree(obj: dict | None) -> STRtree | None:
     if t != "shapely.strtree.STRtree":
         raise NotImplementedError(t)
     geometries = obj["geometries"]
-    return STRtree([wkt_loads(o) for o in geometries])
+    return IndexedSTRtree([wkt_loads(o) for o in geometries])
 
 
-def dump_annotation_tree(obj: STRtree | None) -> dict | None:
+def dump_annotation_tree(obj: IndexedSTRtree | None) -> dict | None:
     if obj is None:
         return None
 
-    if hasattr(obj, "_geoms"):
-        # shapely < 2.0.0
-        geometries = getattr(obj, "_geoms")
-    else:
-        # shapely >= 2.0.0
-        geometries = getattr(obj, "geometries")
     return {
         "type": "shapely.strtree.STRtree",
-        "geometries": [o.wkt for o in geometries],
+        "geometries": [o.wkt for o in obj.geometries],
     }
 
 
@@ -173,7 +183,7 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
-        self._annotation_trees: dict[ImageId, STRtree | None] = {}
+        self._annotation_trees: dict[ImageId, IndexedSTRtree | None] = {}
         self._error_handler = error_handler or (lambda td, idx, exc: False)
 
         if transform is None:
@@ -270,6 +280,8 @@ class TileDataset(Dataset):
                 self._ensure_precompute()
                 if index < 0:
                     raise NotImplementedError(index)
+
+                # retrieve the pado item
                 slide_idx = int(
                     np.searchsorted(
                         self._cumulative_num_tiles, index, side="right", sorter=None
@@ -277,6 +289,7 @@ class TileDataset(Dataset):
                 )
                 pado_item = self._ds[slide_idx]
 
+                # get the tile location
                 tile_index = self._tile_indexes[pado_item.id]
                 if slide_idx > 0:
                     idx = index - self._cumulative_num_tiles[slide_idx - 1]
@@ -284,35 +297,52 @@ class TileDataset(Dataset):
                     idx = index
                 location, size, mpp = tile_index[idx]
 
+                # get the tile array
                 with pado_item.image.via(
                     self._ds, storage_options=self._image_so
                 ) as img:
+                    lvl0_mpp = img.mpp
                     arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
-
                 if self._as_tensor:
                     arr = from_numpy(arr)
 
+                # filter the annotations
+                slide_annotations = pado_item.annotations
+                str_tree = self._annotation_trees.get(pado_item.id, None)
+                if str_tree is not None:
+                    x0, y0 = location.scale(lvl0_mpp)
+                    tw, th = size.scale(lvl0_mpp)
+                    tile_box = box(x0, y0, x0 + tw, y0 + th)
+                    idxs = str_tree.query(tile_box)
+                    tile_annotations = [slide_annotations[i] for i in idxs]
+                else:
+                    tile_annotations = None
+
+                # create the tile item
                 tile_item = PadoTileItem(
                     id=TileId(
                         image_id=pado_item.id, strategy=self._strategy_str, index=idx
                     ),
                     tile=arr,
                     metadata=pado_item.metadata,
-                    annotations=pado_item.annotations,
+                    annotations=tile_annotations,
                 )
+
+                # apply user transforms
                 if self._transform:
                     tile_item = self._transform(tile_item)
+
                 return tile_item
+
             except KeyboardInterrupt:
                 raise
-
             except BaseException as e:
                 should_retry = self._error_handler(self, index, e)
                 if should_retry:
                     _log.exception(f"Retrying {self!r}[{index}] ...")
                     continue
                 else:
-                    raise e
+                    raise
 
     def __iter__(self) -> Iterator[PadoTileItem]:
         # can be done faster by lazy evaluating the len of slides
