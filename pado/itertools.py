@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -12,17 +13,23 @@ from typing import Callable
 from typing import Generator
 from typing import Iterator
 
+if sys.version_info < (3, 10):
+    from typing_extensions import TypeAlias
+else:
+    from typing import TypeAlias
+
 import numpy as np
 import orjson
 from shapely.geometry import box
 from tqdm import tqdm
 
 from pado.annotations.annotation import AnnotationIndex
+from pado.annotations.annotation import scale_annotation
+from pado.annotations.annotation import translate_annotation
 from pado.dataset import PadoItem
 from pado.images.tiles import PadoTileItem
 from pado.images.tiles import TileId
 from pado.images.tiles import TileIndex
-from pado.images.tiles import TilingStrategy
 from pado.types import CollatedPadoItems
 from pado.types import CollatedPadoTileItems
 
@@ -41,9 +48,12 @@ except ImportError:
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from pado.annotations import Annotation  # noqa
     from pado.dataset import PadoDataset
     from pado.images.ids import ImageId
+    from pado.images.tiles import TilingStrategy
     from pado.images.utils import MPP
+    from pado.images.utils import IntSize  # noqa
 
 
 __all__ = [
@@ -111,6 +121,21 @@ def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
 
+def ensure_callable(func: Any) -> Callable[..., Any] | None:
+    if func is None:
+        return None
+    elif not callable(func):
+        raise ValueError(f"{func!r} not callable")
+    else:
+        return func
+
+
+TransformCallable: TypeAlias = "Callable[[PadoTileItem], PadoTileItem]"
+ErrorHandlerCallable: TypeAlias = "Callable[[TileDataset, int, BaseException], bool]"
+AnnotationsMaskMapper: TypeAlias = "Callable[[list[Annotation], IntSize], NDArray]"
+AnnotationsPolyMapper: TypeAlias = "Callable[[Annotation], Annotation | None]"
+
+
 class TileDataset(Dataset):
     """A thin wrapper around a pado dataset for data loading
 
@@ -124,30 +149,34 @@ class TileDataset(Dataset):
         *,
         tiling_strategy: TilingStrategy,
         precompute_kw: dict | None = None,
-        transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
+        transform: TransformCallable | None = None,
         as_tensor: bool = True,
         image_storage_options: dict[str, Any] | None = None,
-        error_handler: Callable[[TileDataset, int, BaseException], bool] | None = None,
-        **kwargs,
-    ):
+        error_handler: ErrorHandlerCallable | None = None,
+        annotations_crop: bool = False,
+        annotations_mpp_scale: bool = False,
+        annotations_mask_mapper: AnnotationsMaskMapper | None = None,
+        annotations_poly_mapper: AnnotationsPolyMapper | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._ds = ds
         self._ts = tiling_strategy
-        self._precompute_kw = precompute_kw or {}
         self._strategy_str = self._ts.serialize()
+        self._precompute_kw = precompute_kw or {}
+        self._transform = ensure_callable(transform)
+        self._as_tensor = bool(as_tensor)
+        self._image_so = image_storage_options
+        self._error_handler = error_handler or (lambda td, idx, exc: False)
+        self._annotations_crop = bool(annotations_crop)
+        self._annotations_mpp_scale = bool(annotations_mpp_scale)
+        self._annotations_mask_mapper = ensure_callable(annotations_mask_mapper)
+        self._annotations_poly_mapper = ensure_callable(annotations_poly_mapper)
+
+        # internal caches
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
         self._annotation_trees: dict[ImageId, AnnotationIndex | None] = {}
-        self._error_handler = error_handler or (lambda td, idx, exc: False)
-
-        if transform is None:
-            self._transform = None
-        elif not callable(transform):
-            raise ValueError("transform not callable")
-        else:
-            self._transform = transform
-        self._as_tensor = bool(as_tensor)
-        self._image_so = image_storage_options
 
     def precompute_tiling(self, workers: int | None = None, *, force: bool = False):
         compute_tile_indexes = (
@@ -272,7 +301,33 @@ class TileDataset(Dataset):
                     idxs = str_tree.query_items(tile_box)
                     tile_annotations = [slide_annotations[i] for i in idxs]
                 else:
+                    tile_box = None
                     tile_annotations = None
+
+                # postprocess annotations
+                if tile_annotations:
+                    for a_idx, a in zip(
+                        reversed(range(len(tile_annotations))),
+                        reversed(tile_annotations),
+                    ):
+                        if self._annotations_poly_mapper:
+                            a = self._annotations_poly_mapper(a)
+                            if a is None:
+                                tile_annotations.pop(a_idx)
+                                continue
+                        if self._annotations_crop:
+                            a = tile_box.intersection(a)
+                        if self._annotations_mpp_scale:
+                            a = scale_annotation(a, level0_mpp=lvl0_mpp, target_mpp=mpp)
+
+                        a = translate_annotation(a, location=location)
+                        tile_annotations[a_idx] = a
+
+                # convert to mask if wanted
+                if self._annotations_mask_mapper:
+                    tile_annotations = self._annotations_mask_mapper(
+                        tile_annotations, size
+                    )
 
                 # create the tile item
                 tile_item = PadoTileItem(

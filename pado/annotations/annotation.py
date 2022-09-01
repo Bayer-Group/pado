@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from reprlib import Repr
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterable
 from typing import MutableSequence
@@ -12,6 +13,8 @@ from typing import overload
 import orjson
 import pandas as pd
 from pydantic.color import Color
+from shapely.affinity import scale as shapely_scale
+from shapely.affinity import translate as shapely_translate
 from shapely.geometry.base import BaseGeometry
 from shapely.strtree import STRtree
 from shapely.wkt import loads as wkt_loads
@@ -21,6 +24,10 @@ from pado.annotations.formats import AnnotationState
 from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import Annotator
 from pado.images.ids import ImageId
+
+if TYPE_CHECKING:
+    from pado.images.utils import MPP
+    from pado.images.utils import IntPoint
 
 
 class Annotation:
@@ -235,7 +242,8 @@ class AnnotationIndex:
 
     def to_json(self, *, as_string: bool = False) -> str | dict:
         obj = {
-            "type": "shapely.strtree.STRtree",
+            "type": "pado.annotations.annotation.AnnotationIndex",
+            "version": 1,
             "geometries": [o.wkt for o in self.geometries],
         }
         if as_string:
@@ -253,7 +261,51 @@ class AnnotationIndex:
             raise TypeError("expected json str or dict")
 
         t = obj["type"]
-        if t != "shapely.strtree.STRtree":
+        if t != "pado.annotations.annotation.AnnotationIndex":
             raise NotImplementedError(t)
         geometries = obj["geometries"]
         return cls([wkt_loads(o) for o in geometries])
+
+
+def shapely_fix_shape(
+    shape: BaseGeometry, buffer_size: tuple[int, int]
+) -> BaseGeometry:
+    shape = shape.buffer(buffer_size[0])
+    if not shape.is_valid:
+        shape = shape.buffer(buffer_size[1])
+    return shape
+
+
+def scale_annotation(
+    annotation: Annotation,
+    *,
+    level0_mpp: MPP,
+    target_mpp: MPP,
+) -> Annotation:
+    rescale = None
+    # We rescale if target_mpp differs from slide_mpp
+    if target_mpp != level0_mpp:
+        rescale = dict(
+            factor_x=level0_mpp.x / target_mpp.x,
+            factor_y=level0_mpp.y / target_mpp.y,
+            origin=(0, 0),
+        )
+
+    geom = annotation.geometry
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+
+    if rescale:
+        geom = shapely_scale(geom, **rescale)
+
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+
+    annotation.geometry = geom
+    return annotation
+
+
+def translate_annotation(annotation: Annotation, *, location: IntPoint) -> Annotation:
+    geom = shapely_translate(annotation.geometry, xoff=-location.x, yoff=-location.y)
+    annotation.geometry = geom
+    return annotation
