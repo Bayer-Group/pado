@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 import time
 from collections import Counter
@@ -116,17 +117,16 @@ def call_precompute(ts, args, kwargs):
 
 class IndexedSTRtree:
     def __init__(self, geometries: list[BaseGeometry]) -> None:
-        self.geometries = geometries
+        self.geometries = copy.copy(geometries)
         self._strtree = STRtree(geometries)
-        self._index_by_id = {id(geom): idx for idx, geom in enumerate(geometries)}
 
     @classmethod
     def from_annotations(cls, annotations: Annotations) -> IndexedSTRtree:
         geometries = [a.geometry for a in annotations]
         return cls(geometries)
 
-    def query(self, geom: BaseGeometry) -> list[int]:
-        return [self._index_by_id[id(g)] for g in self._strtree.query(geom)]
+    def query_items(self, geom: BaseGeometry) -> list[int]:
+        return list(self._strtree.query_items(geom))
 
 
 def build_str_tree(annotations: Annotations) -> IndexedSTRtree | None:
@@ -313,7 +313,7 @@ class TileDataset(Dataset):
                     x0, y0 = location.scale(lvl0_mpp).as_tuple()
                     tw, th = size.scale(lvl0_mpp).as_tuple()
                     tile_box = box(x0, y0, x0 + tw, y0 + th)
-                    idxs = str_tree.query(tile_box)
+                    idxs = str_tree.query_items(tile_box)
                     tile_annotations = [slide_annotations[i] for i in idxs]
                 else:
                     tile_annotations = None
