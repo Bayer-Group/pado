@@ -115,46 +115,48 @@ def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
 
-class IndexedSTRtree:
+class AnnotationIndex:
     def __init__(self, geometries: list[BaseGeometry]) -> None:
         self.geometries = copy.copy(geometries)
         self._strtree = STRtree(geometries)
 
+    # noinspection PyShadowingNames
     @classmethod
-    def from_annotations(cls, annotations: Annotations) -> IndexedSTRtree:
+    def from_annotations(
+        cls, annotations: Annotations | None
+    ) -> AnnotationIndex | None:
+        if annotations is None:
+            return None
         geometries = [a.geometry for a in annotations]
         return cls(geometries)
 
     def query_items(self, geom: BaseGeometry) -> list[int]:
         return list(self._strtree.query_items(geom))
 
+    def to_json(self, *, as_string: bool = False) -> str | dict:
+        obj = {
+            "type": "shapely.strtree.STRtree",
+            "geometries": [o.wkt for o in self.geometries],
+        }
+        if as_string:
+            return orjson.dumps(obj).decode()
+        else:
+            return obj
 
-def build_str_tree(annotations: Annotations) -> IndexedSTRtree | None:
-    if annotations:
-        return IndexedSTRtree.from_annotations(annotations)
-    else:
-        return None
+    @classmethod
+    def from_json(cls, obj: str | dict | None) -> AnnotationIndex | None:
+        if obj is None:
+            return None
+        if isinstance(obj, str):
+            obj = orjson.loads(obj.encode())
+        if not isinstance(obj, dict):
+            raise TypeError("expected json str or dict")
 
-
-def load_annotation_tree(obj: dict | None) -> IndexedSTRtree | None:
-    if obj is None:
-        return None
-
-    t = obj["type"]
-    if t != "shapely.strtree.STRtree":
-        raise NotImplementedError(t)
-    geometries = obj["geometries"]
-    return IndexedSTRtree([wkt_loads(o) for o in geometries])
-
-
-def dump_annotation_tree(obj: IndexedSTRtree | None) -> dict | None:
-    if obj is None:
-        return None
-
-    return {
-        "type": "shapely.strtree.STRtree",
-        "geometries": [o.wkt for o in obj.geometries],
-    }
+        t = obj["type"]
+        if t != "shapely.strtree.STRtree":
+            raise NotImplementedError(t)
+        geometries = obj["geometries"]
+        return cls([wkt_loads(o) for o in geometries])
 
 
 class TileDataset(Dataset):
@@ -183,7 +185,7 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
-        self._annotation_trees: dict[ImageId, IndexedSTRtree | None] = {}
+        self._annotation_trees: dict[ImageId, AnnotationIndex | None] = {}
         self._error_handler = error_handler or (lambda td, idx, exc: False)
 
         if transform is None:
@@ -225,7 +227,9 @@ class TileDataset(Dataset):
 
                 for image_id in tqdm(image_ids, desc="precomputing annotation trees"):
                     _annotations = self._ds.annotations[image_id]
-                    self._annotation_trees[image_id] = build_str_tree(_annotations)
+                    self._annotation_trees[image_id] = AnnotationIndex.from_annotations(
+                        _annotations
+                    )
 
             else:
                 with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -256,7 +260,7 @@ class TileDataset(Dataset):
                         zip(
                             image_ids,
                             executor.map(
-                                build_str_tree,
+                                AnnotationIndex.from_annotations,
                                 (self._ds.annotations[iid] for iid in image_ids),
                             ),
                         ),
@@ -383,7 +387,7 @@ class TileDataset(Dataset):
         for iid, tile_index in self._tile_indexes.items():
             tile_indexes[iid.to_str()] = tile_index.to_json(as_string=False)
         for iid, str_tree in self._annotation_trees.items():
-            annotation_trees[iid.to_str()] = dump_annotation_tree(str_tree)
+            annotation_trees[iid.to_str()] = str_tree.to_json(as_string=False)
 
         with open(fn, mode="wb") as f:
             f.write(orjson.dumps(dct))
@@ -408,7 +412,7 @@ class TileDataset(Dataset):
         )
         self._annotation_trees.update(
             {
-                ImageId.from_str(key): load_annotation_tree(value)
+                ImageId.from_str(key): AnnotationIndex.from_json(value)
                 for key, value in annotation_trees_json.items()
             }
         )
