@@ -145,5 +145,6 @@ def _transfer(
             ds1.ingest_obj(_p)
         except FileExistsError:
             progress_callback(". PROVIDER EXISTED ALREADY, OVERWRITING")
-            assert isinstance(_p, ImagePredictionProvider)
+            if not isinstance(_p, ImagePredictionProvider):
+                raise RuntimeError("provider not an image provider")
             ds1.ingest_obj(_p, overwrite=True)

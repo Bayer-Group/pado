@@ -40,7 +40,8 @@ class AnnotationProviderStore(Store):
     ANNOTATION_VERSION = 1
 
     def __init__(self, version: int = 1, store_type: StoreType = StoreType.ANNOTATION):
-        assert store_type == StoreType.ANNOTATION
+        if store_type != StoreType.ANNOTATION:
+            raise ValueError("changing store_type in subclasses unsupported")
         super().__init__(version=version, store_type=store_type)
 
     def __metadata_set_hook__(
@@ -223,14 +224,15 @@ class AnnotationProvider(BaseAnnotationProvider):
     def from_parquet(cls, urlpath: UrlpathLike) -> AnnotationProvider:
         store = AnnotationProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
-        assert {
+        if {
             store.METADATA_KEY_STORE_TYPE,
             store.METADATA_KEY_STORE_VERSION,
             store.METADATA_KEY_PADO_VERSION,
+            store.METADATA_KEY_PROVIDER_VERSION,
             store.METADATA_KEY_CREATED_AT,
             store.METADATA_KEY_CREATED_BY,
-            store.METADATA_KEY_PROVIDER_VERSION,
-        } == set(user_metadata), f"currently unused {user_metadata!r}"
+        } != set(user_metadata):
+            raise NotImplementedError(f"currently unused {user_metadata!r}")
         inst = cls({}, identifier=identifier)
         inst._df = df
         return inst

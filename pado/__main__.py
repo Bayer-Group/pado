@@ -422,7 +422,9 @@ def ops_update_images(
     parts = list(PurePath(pth).parts)
     base_parts = list(itertools.takewhile(lambda x: "*" not in x, parts))
     glob_parts = parts[len(base_parts) :]
-    assert base_parts and glob_parts, f"base={base_parts}, glob={glob_parts}"
+    if not (base_parts and glob_parts):
+        typer.secho(f"ERROR: base={base_parts}, glob={glob_parts}", err=True, fg="red")
+        raise typer.Exit(2)
     idx = search_urlpath.find(glob_parts[0])
     if idx >= 0:
         search_urlpath = search_urlpath[:idx]

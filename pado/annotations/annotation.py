@@ -117,7 +117,8 @@ class Annotations(MutableSequence[Annotation]):
         if self.df.empty:
             return
         ids = set(self.df["image_id"].unique())
-        assert len(ids) <= 2
+        if len(ids) > 2:
+            raise ValueError(f"image_ids in provider not unique: {ids!r}")
         if None not in ids and image_id.to_str() in ids:
             return
         elif {None, image_id.to_str()}.issuperset(ids):

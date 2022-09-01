@@ -344,9 +344,8 @@ class StoreMigrationInfo(NamedTuple):
             if (a is None and b is not None) or (b is None and a is not None):
                 raise ValueError(f"either both of {name} must be None or none")
 
-        assert not any(
-            x is None for x in origin[:2]
-        ), "fixme: currently assumed to be provided..."
+        if any(x is None for x in origin[:2]):
+            raise NotImplementedError("fixme: currently assumed to be provided...")
 
         for a, b, name in zip(origin, target, ["store", "provider", "data"]):
             if b is not None:
@@ -515,9 +514,8 @@ def migrate_store(
         # we need to load the data with the correct store_version
         current_store_info = get_store_info(_up, storage_options=storage_options)
         target_store_info = info.can_migrate(current_store_info)
-        assert (
-            target_store_info is not None
-        ), "can_migrate should not have returned None"
+        if target_store_info is None:
+            raise RuntimeError("can_migrate should not have returned None")
         load_store = store_cls(
             version=current_store_info.store_version.store, store_type=store_type
         )

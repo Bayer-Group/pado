@@ -36,7 +36,8 @@ class MetadataProviderStore(Store):
     DATASET_VERSION = 1
 
     def __init__(self, version: int = 1, store_type: StoreType = StoreType.METADATA):
-        assert store_type == StoreType.METADATA
+        if store_type != StoreType.METADATA:
+            raise ValueError("changing store_type in subclasses unsupported")
         super().__init__(version=version, store_type=store_type)
 
     def __metadata_set_hook__(
@@ -96,7 +97,8 @@ class MetadataProvider(BaseMetadataProvider):
                     if df.empty:
                         continue
                     ids = set(df.index.unique())
-                    assert len(ids) <= 2
+                    if len(ids) > 2:
+                        raise ValueError(f"image_ids in provider not unique: {ids!r}")
                     image_id_str = image_id.to_str()
                     if {image_id_str} == ids:
                         pass
@@ -107,9 +109,10 @@ class MetadataProvider(BaseMetadataProvider):
                         raise AssertionError(f"{image_id_str} with Index: {ids!r}")
                     dfs.append(df)
                     columns.add(frozenset(df.columns))
-                assert (
-                    len(columns) == 1
-                ), f"dataframe columns in provider don't match {columns!r}"
+                if len(columns) != 1:
+                    raise RuntimeError(
+                        f"dataframe columns in provider don't match {columns!r}"
+                    )
                 self.df = pd.concat(dfs)
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:
@@ -172,14 +175,15 @@ class MetadataProvider(BaseMetadataProvider):
     def from_parquet(cls, urlpath: UrlpathLike) -> MetadataProvider:
         store = MetadataProviderStore()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
-        assert {
+        if {
             store.METADATA_KEY_STORE_TYPE,
             store.METADATA_KEY_STORE_VERSION,
             store.METADATA_KEY_PADO_VERSION,
             store.METADATA_KEY_PROVIDER_VERSION,
             store.METADATA_KEY_CREATED_AT,
             store.METADATA_KEY_CREATED_BY,
-        } == set(user_metadata), f"currently unused {user_metadata!r}"
+        } != set(user_metadata):
+            raise NotImplementedError(f"currently unused {user_metadata!r}")
         inst = cls.__new__(cls)
         inst.df = df
         inst.identifier = identifier

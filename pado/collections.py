@@ -182,7 +182,8 @@ class PadoMutableSequence(MutableSequence[PI]):
         if self.df.empty:
             return
         ids = set(self.df["image_id"].unique())
-        assert len(ids) <= 2
+        if len(ids) > 2:
+            raise ValueError(f"image_ids in provider not unique: {ids!r}")
         if None not in ids and image_id.to_str() in ids:
             return
         elif {None, image_id.to_str()}.issuperset(ids):
@@ -486,14 +487,15 @@ class SerializableProviderMixin:
     def from_parquet(cls: Type[PC], urlpath: UrlpathLike) -> PC:
         store = cls.__store_class__()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
-        assert {
+        if {
             store.METADATA_KEY_STORE_TYPE,
             store.METADATA_KEY_STORE_VERSION,
             store.METADATA_KEY_PADO_VERSION,
             store.METADATA_KEY_PROVIDER_VERSION,
             store.METADATA_KEY_CREATED_AT,
             store.METADATA_KEY_CREATED_BY,
-        } == set(user_metadata), f"currently unused {user_metadata!r}"
+        } != set(user_metadata):
+            raise NotImplementedError(f"currently unused {user_metadata!r}")
         inst = cls(identifier=identifier)
         inst.df = df
         return inst

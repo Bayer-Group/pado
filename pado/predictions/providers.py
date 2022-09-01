@@ -99,7 +99,8 @@ class ImagePredictionsProviderStore(ProviderStoreMixin, Store):
     def __init__(
         self, version: int = 1, store_type: StoreType = StoreType.IMAGE_PREDICTIONS
     ):
-        assert store_type == StoreType.IMAGE_PREDICTIONS
+        if store_type != StoreType.IMAGE_PREDICTIONS:
+            raise ValueError("changing store_type in subclasses unsupported")
         super().__init__(version=version, store_type=store_type)
 
 
@@ -135,7 +136,8 @@ class MetadataPredictionsProviderStore(ProviderStoreMixin, Store):
     def __init__(
         self, version: int = 1, store_type: StoreType = StoreType.METADATA_PREDICTIONS
     ):
-        assert store_type == StoreType.METADATA_PREDICTIONS
+        if store_type != StoreType.ANNOTATION:
+            raise ValueError("changing store_type in subclasses unsupported")
         super().__init__(version=version, store_type=store_type)
 
 
@@ -174,7 +176,8 @@ class MetadataPredictionProvider(
                         continue
                     df = df.loc[:, list(MetadataPrediction.__fields__)]
                     ids = set(df.index.unique())
-                    assert len(ids) <= 2
+                    if len(ids) > 2:
+                        raise ValueError(f"image_ids in provider not unique: {ids!r}")
                     image_id_str = image_id.to_str()
                     if {image_id_str} == ids:
                         pass
@@ -185,9 +188,10 @@ class MetadataPredictionProvider(
                         raise AssertionError(f"{image_id_str} with Index: {ids!r}")
                     dfs.append(df)
                     columns.add(frozenset(df.columns))
-                assert (
-                    len(columns) == 1
-                ), f"dataframe columns in provider don't match {columns!r}"
+                if len(columns) != 1:
+                    raise RuntimeError(
+                        f"dataframe columns in provider don't match {columns!r}"
+                    )
                 self.df = pd.concat(dfs)
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         else:

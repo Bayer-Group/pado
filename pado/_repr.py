@@ -121,7 +121,7 @@ def number(
     v: Iterable[Number] | Number,
     name: str | None = None,
     agg: Literal["sum", "avg", "id"] = "id",
-    cast: Callable[[Any], Any] = int,
+    cast_to: Callable[[Any], Any] = int,
     unit: str | None = None,
 ) -> dict[str, Any] | Number:
     """create a number with some meta information"""
@@ -134,16 +134,14 @@ def number(
     else:
         raise ValueError(f"{v!r}")
 
-    assert isinstance(v, pd.Series)
-
     x = {}
     if agg == "id":
-        x["val"] = cast(v.item())
+        x["val"] = cast_to(v.item())
     elif agg == "sum":
-        x["val"] = cast(v.sum())  # type: ignore
+        x["val"] = cast_to(v.sum())  # type: ignore
     elif agg == "avg":
-        x["val"] = cast(v.mean())
-        x["std"] = cast(v.std())
+        x["val"] = cast_to(v.mean())
+        x["std"] = cast_to(v.std())
     else:
         raise ValueError(f"agg={agg!r}")
 

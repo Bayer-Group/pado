@@ -178,7 +178,7 @@ class Bounds:
     p0: Point(x0, y0)
     p1: Point(x1, y1)
 
-    assert p0.x < p1.x and p0.y < p1.y
+    with: p0.x < p1.x and p0.y < p1.y
 
     """
 
@@ -255,7 +255,8 @@ class Bounds:
         return self.x0, self.y0, self.x1, self.y1
 
     def as_record(self) -> dict[str, float]:
-        assert self.mpp is not None
+        if self.mpp is None:
+            raise ValueError("won't serialize without MPP")
         return {
             "x0": self.x0,
             "y0": self.y0,

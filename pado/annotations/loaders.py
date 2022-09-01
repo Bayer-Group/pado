@@ -46,7 +46,8 @@ def qupath_geojson_annotations_loader(
             data = data["features"]
         elif "annotations" in data:
             data = data["annotations"]
-    assert isinstance(data, list)
+    if not isinstance(data, list):
+        raise ValueError(f"expected list: data={data!r}")
 
     records = []
     errors = defaultdict(list)

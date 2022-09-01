@@ -55,10 +55,12 @@ def create_image_prediction_tiff(
         raise TypeError(f"expected ndarray, got {type(input_data)}: {input_data!r}")
     data = input_data
 
-    assert data.ndim == 3 and data.shape[2] == 3, f"shape={data.shape!r}"
+    if not (data.ndim == 3 and data.shape[2] == 3):
+        raise NotImplementedError(f"shape={data.shape!r} currently not implemented")
 
     def _num_pyramids(ldim: int, tsize: int) -> int:
-        assert ldim > 0 and tsize > 0
+        if not (ldim > 0 and tsize > 0):
+            raise RuntimeError("incorrect dim and size")
         n = 0
         while ldim > tsize:
             ldim //= 2
@@ -136,27 +138,30 @@ def _multichannel_to_rgb(
     # assume:
     # - every channel stores some sort of score/probability for a single class
     # -
-    assert arr.ndim == 3
+    if not arr.ndim == 3:
+        raise NotImplementedError(f"incorrect array={arr.shape}")
     num_channels = arr.shape[2]
 
     colors = np.array(channel_colors, dtype=np.uint8)
 
-    assert colors.ndim == 2 and colors.shape[1] == 3, "requires rgb colors"
+    if not (colors.ndim == 2 and colors.shape[1] == 3):
+        raise ValueError("requires rgb colors")
     if num_channels != colors.shape[0]:
         raise ValueError("need as many colors as channels")
 
     if num_channels == 1:
-        assert (
-            single_channel_threshold is not None
-        ), "single channel requires to define a single_channel_threshold"
+        if single_channel_threshold is None:
+            raise ValueError(
+                "single channel requires to define a single_channel_threshold"
+            )
         arr = (arr > single_channel_threshold).astype(int)[:, :, 0]
         colors = np.array([BACKGROUND_COLOR, colors[0]], dtype=np.uint8)
 
     else:
-        assert (
-            single_channel_threshold is None
-        ), "multi channel will just use the max across channels"
-        assert BACKGROUND_COLOR in colors
+        if single_channel_threshold is not None:
+            raise ValueError("multi channel will just use the max across channels")
+        if BACKGROUND_COLOR not in colors:
+            raise ValueError("must provide colors including background_color")
         arr = np.argmax(arr, axis=2)
 
     # todo:
@@ -229,7 +234,8 @@ class ImagePredictionWriter:
         # color conversion kwargs
         self._color_conversion_kwargs = {}
 
-        assert isinstance(extra_metadata, dict) and json.dumps(extra_metadata)
+        if not (isinstance(extra_metadata, dict) and json.dumps(extra_metadata)):
+            raise ValueError("no extra_metadata")
         self._extra_metadata = extra_metadata
 
     def set_size_map(self, smap: dict[ImageId, IntSize]):
@@ -243,7 +249,8 @@ class ImagePredictionWriter:
     ):
         self._image_id = image_id
         if image_size is None:
-            assert image_id in self._size_map
+            if image_id not in self._size_map:
+                raise KeyError(image_id)
         else:
             self._size_map[image_id] = image_size
 
@@ -278,7 +285,8 @@ class ImagePredictionWriter:
 
         """
         s = tuple(tile_shape)
-        assert len(s) == 3 and all(isinstance(x, int) and x > 0 for x in s)
+        if not (len(s) == 3 and all(isinstance(x, int) and x > 0 for x in s)):
+            raise ValueError("must provide 3D tile_shape")
         self._chunk_size = s
         self._output_dtype = tile_dtype
 
@@ -287,10 +295,14 @@ class ImagePredictionWriter:
             self._fill_value = fill_value
 
         else:
-            assert s[2] == 3, f"not an RBG tile: {s!r} need 3 color channels"
-            assert tile_dtype == np.uint8, f"needs to be uint8 dtype, got: {tile_dtype}"
-            assert channel_colors == ()
-            assert single_channel_threshold is None
+            if s[2] != 3:
+                raise ValueError(f"not an RBG tile: {s!r} need 3 color channels")
+            if tile_dtype != np.uint8:
+                raise ValueError(f"needs to be uint8 dtype, got: {tile_dtype}")
+            if channel_colors != ():
+                raise ValueError("can't provide channel_colors for non-rgb prediction")
+            if single_channel_threshold is not None:
+                raise ValueError("must provide single_channel_threshold")
 
         self._color_conversion_kwargs["channel_colors"] = channel_colors
         self._color_conversion_kwargs[
@@ -314,7 +326,10 @@ class ImagePredictionWriter:
 
     def add_prediction(self, prediction_data: ArrayLike, *, bounds: IntBounds) -> None:
         """add a tile prediction to the writer"""
-        assert self._image_id is not None  # todo: lift restriction
+        if self._image_id is None:
+            raise NotImplementedError(
+                "requires self._image_id"
+            )  # todo: lift restriction
 
         iid = self._image_id
         size = self._size_map[iid]
@@ -327,7 +342,10 @@ class ImagePredictionWriter:
             )
             bounds = bounds.floor()
 
-        assert size.mpp == bounds.mpp  # todo: lift restriction
+        if size.mpp != bounds.mpp:
+            raise NotImplementedError(
+                "current restriction of the system"
+            )  # todo: lift restriction
 
         x0, y0, x1, y1 = b = tuple(map(int, bounds.as_tuple()))
 
@@ -345,9 +363,8 @@ class ImagePredictionWriter:
                 # could merge adjacent tiles if this becomes a bottleneck
                 written_bounds.add(b)
 
-        assert (
-            prediction_data.shape == self._chunk_size
-        ), f"{prediction_data.shape!r} == {self._chunk_size!r}"
+        if prediction_data.shape != self._chunk_size:
+            raise RuntimeError(f"{prediction_data.shape!r} == {self._chunk_size!r}")
 
         ah, aw = arr.shape[:2]
         # todo: manage in Bounds class
@@ -368,7 +385,8 @@ class ImagePredictionWriter:
             rgb_arr = zarray[:]
         else:
             rgb_arr = _multichannel_to_rgb(zarray[:], **self._color_conversion_kwargs)
-        assert rgb_arr.ndim == 3 and rgb_arr.shape[2] == 3
+        if not (rgb_arr.ndim == 3 and rgb_arr.shape[2] == 3):
+            raise ValueError("array not of correct shape")
 
         # save as pyramidal tiff
         create_image_prediction_tiff(
@@ -449,8 +467,10 @@ class ImagePredictionWriter:
         predictions_path: str = "../predictions",
     ) -> None:
         """store the collected prediction data in the pado dataset"""
-        assert not ds.readonly
-        assert ds.persistent, "you provided an in-memory filesystem"
+        if ds.readonly:
+            raise ValueError("dataset is readonly")
+        if not ds.persistent:
+            raise ValueError("you provided an in-memory filesystem")
 
         def _get_image_prediction_urlpath(iid: ImageId) -> UrlpathLike:
             # noinspection PyProtectedMember

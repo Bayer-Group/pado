@@ -37,8 +37,12 @@ class FilenamePartsMapper:
 
 def register_filename_mapper(site, mapper):
     """used internally to register new mappers for ImageIds"""
-    assert isinstance(mapper.id_field_names, tuple) and len(mapper.id_field_names) >= 1
-    assert callable(mapper.fs_parts)
+    if not (
+        isinstance(mapper.id_field_names, tuple) and len(mapper.id_field_names) >= 1
+    ):
+        raise RuntimeError("called on non-internal mapper?")
+    if not callable(mapper.fs_parts):
+        raise TypeError("expected a callable")
     if site in ImageId.site_mapper:
         raise RuntimeError(f"mapper: {site} -> {repr(mapper)} already registered")
     ImageId.site_mapper[site] = mapper()

@@ -91,7 +91,8 @@ class TilingStrategy:
     @staticmethod
     def serialize_strategy_and_options(cls: type[TilingStrategy], **kwargs) -> str:
         name = cls.name
-        assert name is not None
+        if name is None:
+            raise RuntimeError("cls.name must be set")
         kws = []
         for kw, kw_value in kwargs.items():
             v = json.dumps(kw_value, separators=(",", ":"))
@@ -101,7 +102,8 @@ class TilingStrategy:
     @classmethod
     def parse_serialized_strategy_options(cls, strategy: str) -> dict[str, Any]:
         name, kwargs = strategy.split(":")
-        assert name == cls.name
+        if name != cls.name:
+            raise RuntimeError(f"{cls!r} can't be used to parse: {strategy!r}")
         kws = {}
         for kw_val in kwargs.split(";"):
             key, val = kw_val.split("=")
@@ -144,7 +146,8 @@ class GridTileIndex(TileIndex):
         mask: NDArray[np.bool] | None = None,
     ):
         if tile_size.mpp is not None:
-            assert tile_size.mpp == target_mpp
+            if tile_size.mpp != target_mpp:
+                raise NotImplementedError("tile_size.mpp must equal target_mpp")
 
         if image_size.mpp is not None and image_size.mpp != target_mpp:
             self._image_size = image_size.scale(target_mpp).as_tuple()
@@ -153,7 +156,8 @@ class GridTileIndex(TileIndex):
 
         self._tile_size = tile_size
         self._overlap = int(overlap)
-        assert 0 <= self._overlap < min(self._tile_size.x, self._tile_size.y)
+        if not (0 <= self._overlap < min(self._tile_size.x, self._tile_size.y)):
+            raise ValueError(f"overlap is out of bounds: {self._overlap!r}")
         self._target_mpp = target_mpp
 
         if mask is None:
@@ -162,7 +166,10 @@ class GridTileIndex(TileIndex):
             import cv2
 
             size = self._get_size()
-            assert mask.ndim == 2 and mask.dtype == bool
+            if not (mask.ndim == 2 and mask.dtype == bool):
+                raise RuntimeError(
+                    f"expected 2D boolean mask, got: {mask.shape!r} {mask.dtype!r}"
+                )
             _mask = cv2.resize(
                 mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST
             ).astype(bool)
@@ -304,9 +311,10 @@ class _DeprecatedTile:
         data: Optional[np.ndarray] = None,
         parent: Optional[Image] = None,
     ):
-        assert (
-            mpp.as_tuple() == bounds.mpp.as_tuple()
-        ), f"tile mpp does not coincide with bounds mpp: {mpp} vs {bounds.mpp}"
+        if mpp.as_tuple() != bounds.mpp.as_tuple():
+            raise NotImplementedError(
+                f"tile mpp does not coincide with bounds mpp: {mpp} vs {bounds.mpp}"
+            )
         self.mpp = mpp
         self.level0_mpp = lvl0_mpp
         self.bounds = bounds

@@ -570,7 +570,7 @@ class PadoDataset:
             "avg_annotations_per_image": number(
                 adf.groupby("image_id")["geometry"].count(),
                 agg="avg",
-                cast=make_replace_nan_cast(int, default=0),
+                cast_to=make_replace_nan_cast(int, default=0),
             ),
             "metadata_columns": md_columns,
             "total_size_images": number(idf["size_bytes"], agg="sum", unit="b"),
@@ -581,7 +581,7 @@ class PadoDataset:
                 agg_annotations["count"].sort_values(ascending=False)[:5].items()
             ),
             "common_classes_area": {
-                k: number(v, cast=float, unit="px")
+                k: number(v, cast_to=float, unit="px")
                 for k, v in agg_annotations["sum"]
                 .sort_values(ascending=False)[:5]
                 .items()
@@ -643,7 +643,8 @@ class PadoDataset:
         if type(self._fs).__name__ == "MemoryFileSystem":
             from fsspec.implementations.memory import MemoryFileSystem
 
-            assert isinstance(self._fs, MemoryFileSystem)
+            if not isinstance(self._fs, MemoryFileSystem):
+                raise RuntimeError(f"unexpected error: {self._fs!r}")
             path = urlpathlike_get_path(self._urlpath, fs_cls=type(self._fs))
             store = {
                 k: v for k, v in MemoryFileSystem.store.items() if k.startswith(path)

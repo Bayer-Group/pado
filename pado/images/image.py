@@ -518,9 +518,16 @@ class Image:
                 round(pos_y * mpp_y_current / mpp_y_target)
             )
 
-        assert location.mpp.as_tuple() == target_mpp.as_tuple()
-        if region.mpp is not None:
-            assert region.mpp.as_tuple() == target_mpp.as_tuple()
+        if location.mpp.as_tuple() != target_mpp.as_tuple():
+            raise ValueError(
+                f"location.mpp != target_mpp -> {location.mpp!r} != {target_mpp!r}"
+            )
+        if region.mpp is None:
+            pass
+        elif region.mpp.as_tuple() != target_mpp.as_tuple():
+            raise ValueError(
+                f"region.mpp != target_mpp -> {region.mpp!r} != {target_mpp!r}"
+            )
 
         mpp_xy = target_mpp.as_tuple()
 
@@ -528,7 +535,8 @@ class Image:
         # we find the corresponding location at level0
         lvl0_xy = _scale_xy(location, mpp_current=target_mpp, mpp_target=lvl0_mpp)
 
-        assert mpp_xy[0] == mpp_xy[1]
+        if mpp_xy[0] != mpp_xy[1]:
+            raise NotImplementedError("currently missing support for non symmetric MPP")
         for lvl_best, mpp_best in self.level_mpp.items():
             if mpp_xy[0] >= mpp_best.as_tuple()[0]:
                 break
