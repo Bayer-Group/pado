@@ -293,7 +293,9 @@ class RetryErrorHandler:
             exception and match if any item in the chain is a match.
 
         """
-        if issubclass(exception_type, BaseException):
+        if isinstance(exception_type, type) and issubclass(
+            exception_type, BaseException
+        ):
             exception_type = (exception_type,)
         if not isinstance(exception_type, tuple):
             raise TypeError(
