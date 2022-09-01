@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import time
 from collections import Counter
@@ -14,6 +13,7 @@ from typing import Generator
 from typing import Iterator
 
 import numpy as np
+import orjson
 from shapely.strtree import STRtree
 from shapely.wkt import loads as wkt_loads
 from tqdm import tqdm
@@ -120,14 +120,6 @@ def build_str_tree(annotations: Annotations) -> STRtree | None:
         return None
 
 
-def load_tile_index(obj: dict) -> TileIndex:
-    raise NotImplementedError
-
-
-def dump_tile_index(obj: TileIndex) -> dict:
-    raise NotImplementedError
-
-
 def load_annotation_tree(obj: dict | None) -> STRtree | None:
     if obj is None:
         return None
@@ -145,9 +137,10 @@ def dump_annotation_tree(obj: STRtree | None) -> dict | None:
 
     if hasattr(obj, "_geoms"):
         # shapely < 2.0.0
-        geometries = obj._geoms
+        geometries = getattr(obj, "_geoms")
     else:
-        geometries = obj.geometries
+        # shapely >= 2.0.0
+        geometries = getattr(obj, "geometries")
     return {
         "type": "shapely.strtree.STRtree",
         "geometries": [o.wkt for o in geometries],
@@ -349,7 +342,7 @@ class TileDataset(Dataset):
         tile_indexes = {}
         annotation_trees = {}
         dct = {
-            "type": "pado_tiledataset_cache",
+            "type": "pado.itertools.TileDataset:cache",
             "version": 1,
             "ds_urlpath": self._ds.urlpath,
             "caches": {
@@ -358,25 +351,28 @@ class TileDataset(Dataset):
             },
         }
         for iid, tile_index in self._tile_indexes.items():
-            tile_indexes[iid.to_str()] = dump_tile_index(tile_index)
+            tile_indexes[iid.to_str()] = tile_index.to_json(as_string=False)
         for iid, str_tree in self._annotation_trees.items():
             annotation_trees[iid.to_str()] = dump_annotation_tree(str_tree)
 
-        with open(fn, mode="w") as f:
-            json.dump(dct, f)
+        with open(fn, mode="wb") as f:
+            f.write(orjson.dumps(dct))
         return dct
 
     def caches_load(self, fn: os.PathLike | str) -> dict:
         """load caches from disk"""
-        with open(fn) as f:
-            dct = json.load(f)
+        with open(fn, mode="rb") as f:
+            dct = orjson.loads(f.read())
+
+        if dct["type"] != "pado.itertools.TileDataset:cache":
+            raise ValueError("incorrect type cache json")
 
         tile_indexes_json = dct["caches"]["tile_indexes"]
         annotation_trees_json = dct["caches"]["annotation_trees"]
 
         self._tile_indexes.update(
             {
-                ImageId.from_str(key): load_tile_index(value)
+                ImageId.from_str(key): TileIndex.from_json(value)
                 for key, value in tile_indexes_json.items()
             }
         )
