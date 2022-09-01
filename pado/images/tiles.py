@@ -256,8 +256,8 @@ class GridTileIndex(TileIndex):
 
     def __getitem__(self, item: int) -> tuple[IntPoint, IntSize, MPP]:
         item = int(item)
-        sw, sh = self._image_size
-        tw, th = self._tile_size.x, self._tile_size.y
+        sw, sh = self._image_size.as_tuple()
+        tw, th = self._tile_size.as_tuple()
         dx = tw - self._overlap
         dy = th - self._overlap
         num_x = math.floor(sw / dx)
@@ -288,8 +288,8 @@ class GridTileIndex(TileIndex):
     ) -> tuple[int, int]:
         if image_size.mpp is None or image_size.mpp != tile_size.mpp:
             raise ValueError("image_size and tile_size must have same mpp")
-        sw, sh = image_size
-        tw, th = tile_size
+        sw, sh = image_size.as_tuple()
+        tw, th = tile_size.as_tuple()
         dx = tw - overlap
         dy = th - overlap
         num_x = math.floor(sw / dx)
