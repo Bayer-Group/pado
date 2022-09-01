@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +14,8 @@ from typing import Generator
 from typing import Iterator
 
 import numpy as np
+from shapely.strtree import STRtree
+from shapely.wkt import loads as wkt_loads
 from tqdm import tqdm
 
 from pado.dataset import PadoItem
@@ -37,6 +41,7 @@ except ImportError:
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from pado.annotations import Annotations
     from pado.dataset import PadoDataset
     from pado.images.ids import ImageId
     from pado.images.utils import MPP
@@ -107,6 +112,48 @@ def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
 
+def build_str_tree(annotations: Annotations) -> STRtree | None:
+    if annotations:
+        geometries = [a.geometry for a in annotations]
+        return STRtree(geometries)
+    else:
+        return None
+
+
+def load_tile_index(obj: dict) -> TileIndex:
+    raise NotImplementedError
+
+
+def dump_tile_index(obj: TileIndex) -> dict:
+    raise NotImplementedError
+
+
+def load_annotation_tree(obj: dict | None) -> STRtree | None:
+    if obj is None:
+        return None
+
+    t = obj["type"]
+    if t != "shapely.strtree.STRtree":
+        raise NotImplementedError(t)
+    geometries = obj["geometries"]
+    return STRtree([wkt_loads(o) for o in geometries])
+
+
+def dump_annotation_tree(obj: STRtree | None) -> dict | None:
+    if obj is None:
+        return None
+
+    if hasattr(obj, "_geoms"):
+        # shapely < 2.0.0
+        geometries = obj._geoms
+    else:
+        geometries = obj.geometries
+    return {
+        "type": "shapely.strtree.STRtree",
+        "geometries": [o.wkt for o in geometries],
+    }
+
+
 class TileDataset(Dataset):
     """A thin wrapper around a pado dataset for data loading
 
@@ -133,6 +180,7 @@ class TileDataset(Dataset):
         self._strategy_str = self._ts.serialize()
         self._cumulative_num_tiles: NDArray[np.int64] | None = None
         self._tile_indexes: dict[ImageId, TileIndex] = {}
+        self._annotation_trees: dict[ImageId, STRtree | None] = {}
         self._error_handler = error_handler or (lambda td, idx, exc: False)
 
         if transform is None:
@@ -144,30 +192,74 @@ class TileDataset(Dataset):
         self._as_tensor = bool(as_tensor)
         self._image_so = image_storage_options
 
-    def precompute_tiling(self, workers: int | None = None):
-        if self._cumulative_num_tiles is None and not self._tile_indexes:
+    def precompute_tiling(self, workers: int | None = None, *, force: bool = False):
+        compute_tile_indexes = (
+            self._cumulative_num_tiles is None
+            or len(self._cumulative_num_tiles) != len(self._ds.index)
+            or not set(self._ds.index).issubset(self._tile_indexes)
+        )
+        compute_annotation_indexes = not set(self._ds.annotations).issubset(
+            self._annotation_trees
+        )
+
+        if compute_tile_indexes or compute_annotation_indexes or force:
+
             if workers is None:
-                for image_id in tqdm(self._ds.index, desc="precomputing tile indices"):
+                # single worker sequential
+                image_ids = set(self._ds.index)
+                if not force:
+                    image_ids -= set(self._tile_indexes)
+
+                for image_id in tqdm(image_ids, desc="precomputing tile indices"):
                     image = self._ds.images[image_id]
                     self._tile_indexes[image_id] = call_precompute(
                         self._ts, (image,), {"storage_options": self._image_so}
                     )
 
+                image_ids = set(self._ds.annotations)
+                if not force:
+                    image_ids -= set(self._annotation_trees)
+
+                for image_id in tqdm(image_ids, desc="precomputing annotation trees"):
+                    _annotations = self._ds.annotations[image_id]
+                    self._annotation_trees[image_id] = build_str_tree(_annotations)
+
             else:
                 with ThreadPoolExecutor(max_workers=workers) as executor:
+                    image_ids = set(self._ds.index)
+                    if not force:
+                        image_ids -= set(self._tile_indexes)
+
                     for image_id, tile_index in tqdm(
                         zip(
-                            self._ds.index,
+                            image_ids,
                             executor.map(
                                 call_precompute,
                                 repeat(self._ts),
-                                map(lambda x: (x,), self._ds.images.values()),
+                                ((self._ds.images[iid],) for iid in image_ids),
                                 repeat({"storage_options": self._image_so}),
                             ),
                         ),
                         desc="precomputing tile indices",
                     ):
                         self._tile_indexes[image_id] = tile_index
+
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    image_ids = set(self._ds.annotations)
+                    if not force:
+                        image_ids -= set(self._annotation_trees)
+
+                    for image_id, str_tree in tqdm(
+                        zip(
+                            image_ids,
+                            executor.map(
+                                build_str_tree,
+                                (self._ds.annotations[iid] for iid in image_ids),
+                            ),
+                        ),
+                        desc="precomputing annotation trees",
+                    ):
+                        self._annotation_trees[image_id] = str_tree
 
             self._cumulative_num_tiles = np.cumsum(
                 [len(self._tile_indexes[iid]) for iid in self._ds.index], dtype=np.int64
@@ -250,6 +342,50 @@ class TileDataset(Dataset):
                 dct["tile"] = np.stack(tile)
             else:
                 dct["tile"] = stack(tile)
+        return dct
+
+    def caches_dump(self, fn: os.PathLike | str) -> dict:
+        """dump caches to disk"""
+        tile_indexes = {}
+        annotation_trees = {}
+        dct = {
+            "type": "pado_tiledataset_cache",
+            "version": 1,
+            "ds_urlpath": self._ds.urlpath,
+            "caches": {
+                "tile_indexes": tile_indexes,
+                "annotation_trees": annotation_trees,
+            },
+        }
+        for iid, tile_index in self._tile_indexes.items():
+            tile_indexes[iid.to_str()] = dump_tile_index(tile_index)
+        for iid, str_tree in self._annotation_trees.items():
+            annotation_trees[iid.to_str()] = dump_annotation_tree(str_tree)
+
+        with open(fn, mode="w") as f:
+            json.dump(dct, f)
+        return dct
+
+    def caches_load(self, fn: os.PathLike | str) -> dict:
+        """load caches from disk"""
+        with open(fn) as f:
+            dct = json.load(f)
+
+        tile_indexes_json = dct["caches"]["tile_indexes"]
+        annotation_trees_json = dct["caches"]["annotation_trees"]
+
+        self._tile_indexes.update(
+            {
+                ImageId.from_str(key): load_tile_index(value)
+                for key, value in tile_indexes_json.items()
+            }
+        )
+        self._annotation_trees.update(
+            {
+                ImageId.from_str(key): load_annotation_tree(value)
+                for key, value in annotation_trees_json.items()
+            }
+        )
         return dct
 
 
