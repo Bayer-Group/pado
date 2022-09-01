@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from reprlib import Repr
 from typing import Any
 from typing import Iterable
@@ -8,9 +9,12 @@ from typing import Optional
 from typing import Union
 from typing import overload
 
+import orjson
 import pandas as pd
 from pydantic.color import Color
 from shapely.geometry.base import BaseGeometry
+from shapely.strtree import STRtree
+from shapely.wkt import loads as wkt_loads
 
 from pado.annotations.formats import AnnotationModel
 from pado.annotations.formats import AnnotationState
@@ -209,3 +213,47 @@ class Annotations(MutableSequence[Annotation]):
     ) -> Annotations:
         df = pd.DataFrame(list(annotation_records), columns=AnnotationModel.__fields__)
         return Annotations(df, image_id=image_id)
+
+
+class AnnotationIndex:
+    def __init__(self, geometries: list[BaseGeometry]) -> None:
+        self.geometries = copy.copy(geometries)
+        self._strtree = STRtree(geometries)
+
+    # noinspection PyShadowingNames
+    @classmethod
+    def from_annotations(
+        cls, annotations: Annotations | None
+    ) -> AnnotationIndex | None:
+        if annotations is None:
+            return None
+        geometries = [a.geometry for a in annotations]
+        return cls(geometries)
+
+    def query_items(self, geom: BaseGeometry) -> list[int]:
+        return list(self._strtree.query_items(geom))
+
+    def to_json(self, *, as_string: bool = False) -> str | dict:
+        obj = {
+            "type": "shapely.strtree.STRtree",
+            "geometries": [o.wkt for o in self.geometries],
+        }
+        if as_string:
+            return orjson.dumps(obj).decode()
+        else:
+            return obj
+
+    @classmethod
+    def from_json(cls, obj: str | dict | None) -> AnnotationIndex | None:
+        if obj is None:
+            return None
+        if isinstance(obj, str):
+            obj = orjson.loads(obj.encode())
+        if not isinstance(obj, dict):
+            raise TypeError("expected json str or dict")
+
+        t = obj["type"]
+        if t != "shapely.strtree.STRtree":
+            raise NotImplementedError(t)
+        geometries = obj["geometries"]
+        return cls([wkt_loads(o) for o in geometries])

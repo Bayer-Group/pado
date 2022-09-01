@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import os
 import time
 from collections import Counter
@@ -16,11 +15,9 @@ from typing import Iterator
 import numpy as np
 import orjson
 from shapely.geometry import box
-from shapely.geometry.base import BaseGeometry
-from shapely.strtree import STRtree
-from shapely.wkt import loads as wkt_loads
 from tqdm import tqdm
 
+from pado.annotations.annotation import AnnotationIndex
 from pado.dataset import PadoItem
 from pado.images.tiles import PadoTileItem
 from pado.images.tiles import TileId
@@ -44,7 +41,6 @@ except ImportError:
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from pado.annotations import Annotations
     from pado.dataset import PadoDataset
     from pado.images.ids import ImageId
     from pado.images.utils import MPP
@@ -113,50 +109,6 @@ class SlideDataset(Dataset):
 
 def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
-
-
-class AnnotationIndex:
-    def __init__(self, geometries: list[BaseGeometry]) -> None:
-        self.geometries = copy.copy(geometries)
-        self._strtree = STRtree(geometries)
-
-    # noinspection PyShadowingNames
-    @classmethod
-    def from_annotations(
-        cls, annotations: Annotations | None
-    ) -> AnnotationIndex | None:
-        if annotations is None:
-            return None
-        geometries = [a.geometry for a in annotations]
-        return cls(geometries)
-
-    def query_items(self, geom: BaseGeometry) -> list[int]:
-        return list(self._strtree.query_items(geom))
-
-    def to_json(self, *, as_string: bool = False) -> str | dict:
-        obj = {
-            "type": "shapely.strtree.STRtree",
-            "geometries": [o.wkt for o in self.geometries],
-        }
-        if as_string:
-            return orjson.dumps(obj).decode()
-        else:
-            return obj
-
-    @classmethod
-    def from_json(cls, obj: str | dict | None) -> AnnotationIndex | None:
-        if obj is None:
-            return None
-        if isinstance(obj, str):
-            obj = orjson.loads(obj.encode())
-        if not isinstance(obj, dict):
-            raise TypeError("expected json str or dict")
-
-        t = obj["type"]
-        if t != "shapely.strtree.STRtree":
-            raise NotImplementedError(t)
-        geometries = obj["geometries"]
-        return cls([wkt_loads(o) for o in geometries])
 
 
 class TileDataset(Dataset):
