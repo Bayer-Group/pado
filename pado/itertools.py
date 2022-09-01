@@ -316,7 +316,7 @@ class TileDataset(Dataset):
                                 tile_annotations.pop(a_idx)
                                 continue
                         if self._annotations_crop:
-                            a = tile_box.intersection(a)
+                            a.geometry = tile_box.intersection(a.geometry)
                         if self._annotations_mpp_scale:
                             a = scale_annotation(a, level0_mpp=lvl0_mpp, target_mpp=mpp)
 
