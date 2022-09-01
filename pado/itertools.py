@@ -24,6 +24,7 @@ from shapely.geometry import box
 from tqdm import tqdm
 
 from pado.annotations.annotation import AnnotationIndex
+from pado.annotations.annotation import ensure_validity
 from pado.annotations.annotation import scale_annotation
 from pado.annotations.annotation import translate_annotation
 from pado.dataset import PadoItem
@@ -310,17 +311,20 @@ class TileDataset(Dataset):
                         reversed(range(len(tile_annotations))),
                         reversed(tile_annotations),
                     ):
+                        a.__dict__["_readonly"] = False
                         if self._annotations_poly_mapper:
                             a = self._annotations_poly_mapper(a)
                             if a is None:
                                 tile_annotations.pop(a_idx)
                                 continue
+                        a = ensure_validity(a)
                         if self._annotations_crop:
                             a.geometry = tile_box.intersection(a.geometry)
                         if self._annotations_mpp_scale:
                             a = scale_annotation(a, level0_mpp=lvl0_mpp, target_mpp=mpp)
 
                         a = translate_annotation(a, location=location)
+                        a._readonly = True
                         tile_annotations[a_idx] = a
 
                 # convert to mask if wanted

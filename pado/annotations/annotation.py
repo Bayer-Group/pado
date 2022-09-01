@@ -276,6 +276,16 @@ def shapely_fix_shape(
     return shape
 
 
+def ensure_validity(
+    annotation: Annotation,
+) -> Annotation:
+    geom = annotation.geometry
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+    annotation.geometry = geom
+    return annotation
+
+
 def scale_annotation(
     annotation: Annotation,
     *,
@@ -286,8 +296,8 @@ def scale_annotation(
     # We rescale if target_mpp differs from slide_mpp
     if target_mpp != level0_mpp:
         rescale = dict(
-            factor_x=level0_mpp.x / target_mpp.x,
-            factor_y=level0_mpp.y / target_mpp.y,
+            xfact=level0_mpp.x / target_mpp.x,
+            yfact=level0_mpp.y / target_mpp.y,
             origin=(0, 0),
         )
 
