@@ -310,8 +310,8 @@ class TileDataset(Dataset):
                 slide_annotations = pado_item.annotations
                 str_tree = self._annotation_trees.get(pado_item.id, None)
                 if str_tree is not None:
-                    x0, y0 = location.scale(lvl0_mpp)
-                    tw, th = size.scale(lvl0_mpp)
+                    x0, y0 = location.scale(lvl0_mpp).as_tuple()
+                    tw, th = size.scale(lvl0_mpp).as_tuple()
                     tile_box = box(x0, y0, x0 + tw, y0 + th)
                     idxs = str_tree.query(tile_box)
                     tile_annotations = [slide_annotations[i] for i in idxs]
