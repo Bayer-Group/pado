@@ -67,6 +67,26 @@ __all__ = [
 
 
 _PADO_FSSPEC_PICKLE_PROTOCOL = 4
+_PADO_ALLOW_PICKLED_URLPATHS = None
+
+
+def _pado_pickle_load(obj: Any):
+    """load a pickled urlpath fs"""
+    global _PADO_ALLOW_PICKLED_URLPATHS
+
+    if _PADO_ALLOW_PICKLED_URLPATHS is None:
+        from pado.settings import settings
+
+        _PADO_ALLOW_PICKLED_URLPATHS = settings.allow_pickled_urlpaths
+
+    if not _PADO_ALLOW_PICKLED_URLPATHS:
+        raise Exception(
+            "Loading pickled urlpaths is disabled. "
+            "Use PADO_ALLOW_PICKLED_URLPATHS=1 to enable, or set in your"
+            ".pado.toml config file."
+        )
+    else:
+        return pickle.loads(literal_eval(obj))
 
 
 class _OpenFileAndParts(NamedTuple):
@@ -135,7 +155,7 @@ def _get_fsspec_cls_from_serialized_fs(fs_obj: str) -> type[AbstractFileSystem]:
         fs_dct = json.loads(fs_obj)
     except json.JSONDecodeError:
         # json_obj["fs"] is not json ...
-        fs = pickle.loads(literal_eval(fs_obj))
+        fs = _pado_pickle_load(fs_obj)
         return type(fs)
     else:
         # json_obj["fs"] is json
@@ -158,7 +178,7 @@ def _get_fsspec_storage_args_options_from_serialized_fs(
         fs_dct = json.loads(fs_obj)
     except json.JSONDecodeError:
         # json_obj["fs"] is not json ...
-        fs = pickle.loads(literal_eval(fs_obj))
+        fs = _pado_pickle_load(fs_obj)
         return fs.storage_args, fs.storage_options
     else:
         # json_obj["fs"] is json
@@ -384,7 +404,7 @@ def urlpathlike_to_fsspec(
                 raise NotImplementedError(
                     "pickled filesystems can't change storage_options"
                 )
-            fs = pickle.loads(literal_eval(json_obj["fs"]))
+            fs = _pado_pickle_load(json_obj["fs"])
         else:
             # json_obj["fs"] is json
             if not isinstance(_fs, dict):
@@ -426,7 +446,7 @@ def urlpathlike_to_fs_and_path(
                 raise NotImplementedError(
                     "pickled filesystems can't change storage_options"
                 )
-            fs = pickle.loads(literal_eval(json_obj["fs"]))
+            fs = _pado_pickle_load(json_obj["fs"])
         else:
             # json_obj["fs"] is json
             if not isinstance(_fs, dict):
