@@ -90,3 +90,34 @@ def test_retry_handler(ds_iter, monkeypatch):
     called_delays = [c[0][0] for c in sleep_mock.call_args_list]
     assert sleep_mock.call_count == 4
     assert called_delays == [1.0, 2.0, 4.0, 8.0]
+
+
+def test_retry_handler_multiple_exceptions(monkeypatch):
+    retry_handler = RetryErrorHandler(
+        (ZeroDivisionError, TimeoutError),
+        num_retries=0,
+        check_exception_chain=False,
+    )
+
+    assert retry_handler(..., 0, ZeroDivisionError()) is True
+    assert retry_handler(..., 0, TimeoutError()) is True
+    assert retry_handler(..., 0, ValueError()) is False
+    # check_exception_chain=False
+    exc = Exception()
+    exc.__cause__ = TimeoutError()
+    assert retry_handler(..., 0, exc) is False
+
+
+def test_retry_handler_exception_chains():
+    retry_handler = RetryErrorHandler(
+        ZeroDivisionError,
+        num_retries=1,
+        check_exception_chain=True,
+    )
+    assert retry_handler(..., 0, Exception()) is False
+    exc_cause = Exception()
+    exc_cause.__cause__ = ZeroDivisionError()
+    assert retry_handler(..., 1, exc_cause) is True
+    exc_context = Exception()
+    exc_context.__context__ = ZeroDivisionError()
+    assert retry_handler(..., 2, exc_context) is True
