@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import floor
+from typing import Any
 from typing import Callable
 from typing import Optional
 from typing import Tuple
@@ -24,6 +25,7 @@ __all__ = [
     "Bounds",
     "IntBounds",
     "Geometry",
+    "ensure_type",
 ]
 
 # NOTE:
@@ -359,3 +361,17 @@ class Geometry:
     @classmethod
     def from_geometry(cls: Type[_G], geometry: BaseGeometry, *, mpp: MPP) -> _G:
         return cls(geometry=geometry, mpp=mpp)
+
+
+T = TypeVar("T")
+
+
+def ensure_type(obj: Any, cls: type[T]) -> T:
+    if isinstance(obj, cls):
+        return obj
+    elif isinstance(obj, dict):
+        return cls(**obj)
+    elif isinstance(obj, tuple):
+        return cls(*obj)
+    else:
+        raise ValueError(f"could not cast {obj!r} to {cls.__name__}")

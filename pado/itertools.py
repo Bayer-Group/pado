@@ -28,6 +28,7 @@ from pado.annotations.annotation import ensure_validity
 from pado.annotations.annotation import scale_annotation
 from pado.annotations.annotation import translate_annotation
 from pado.dataset import PadoItem
+from pado.images.ids import ImageId
 from pado.images.tiles import PadoTileItem
 from pado.images.tiles import TileId
 from pado.images.tiles import TileIndex
@@ -51,7 +52,6 @@ if TYPE_CHECKING:
 
     from pado.annotations import Annotation  # noqa
     from pado.dataset import PadoDataset
-    from pado.images.ids import ImageId
     from pado.images.tiles import TilingStrategy
     from pado.images.utils import MPP
     from pado.images.utils import IntSize  # noqa

@@ -26,6 +26,7 @@ from pado.images.utils import Bounds
 from pado.images.utils import Geometry
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.images.utils import ensure_type
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -186,7 +187,7 @@ class TileIndex(Sequence[ReadTileTuple]):
             raise TypeError("expected json str or dict")
         if obj["type"] != "pado.images.tiles.TileIndex":
             raise ValueError("not a tile index json")
-        mod, cls_name = obj["cls"].rsplit(".")
+        mod, cls_name = obj["cls"].rsplit(".", maxsplit=1)
         sub_cls = cls._registry[cls_name]
         return sub_cls(**obj["kwargs"])
 
@@ -203,6 +204,9 @@ class GridTileIndex(TileIndex):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        image_size = ensure_type(image_size, IntSize)
+        tile_size = ensure_type(tile_size, IntSize)
+        target_mpp = ensure_type(target_mpp, MPP)
         if tile_size.mpp is not None:
             if tile_size.mpp != target_mpp:
                 raise NotImplementedError("tile_size.mpp must equal target_mpp")
