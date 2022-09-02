@@ -405,7 +405,11 @@ class TileDataset(Dataset):
             annotation_trees[iid.to_str()] = str_tree.to_json(as_string=False)
 
         with open(fn, mode="wb") as f:
-            f.write(orjson.dumps(dct))
+            f.write(
+                orjson.dumps(
+                    dct, option=orjson.OPT_INDENT_2 | orjson.OPT_SERIALIZE_NUMPY
+                )
+            )
         return dct
 
     def caches_load(self, fn: os.PathLike | str) -> dict:

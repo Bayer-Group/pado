@@ -174,7 +174,7 @@ class TileIndex(Sequence[ReadTileTuple]):
             },
         }
         if as_string:
-            return orjson.dumps(obj).decode()
+            return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
         else:
             return obj
 
@@ -220,7 +220,7 @@ class GridTileIndex(TileIndex):
         if masked_indices is None:
             self._masked_indices = None
         else:
-            self._masked_indices = np.array(masked_indices, dtype=np.int64)
+            self._masked_indices = np.array(masked_indices, dtype=np.int64, order="C")
 
     @classmethod
     def from_mask(

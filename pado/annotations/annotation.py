@@ -247,7 +247,7 @@ class AnnotationIndex:
             "geometries": [o.wkt for o in self.geometries],
         }
         if as_string:
-            return orjson.dumps(obj).decode()
+            return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
         else:
             return obj
 
