@@ -95,17 +95,17 @@ def test_retry_handler(ds_iter, monkeypatch):
 def test_retry_handler_multiple_exceptions(monkeypatch):
     retry_handler = RetryErrorHandler(
         (ZeroDivisionError, TimeoutError),
-        num_retries=0,
+        num_retries=1,
         check_exception_chain=False,
     )
 
     assert retry_handler(..., 0, ZeroDivisionError()) is True
-    assert retry_handler(..., 0, TimeoutError()) is True
-    assert retry_handler(..., 0, ValueError()) is False
+    assert retry_handler(..., 1, TimeoutError()) is True
+    assert retry_handler(..., 2, ValueError()) is False
     # check_exception_chain=False
     exc = Exception()
     exc.__cause__ = TimeoutError()
-    assert retry_handler(..., 0, exc) is False
+    assert retry_handler(..., 3, exc) is False
 
 
 def test_retry_handler_exception_chains():
