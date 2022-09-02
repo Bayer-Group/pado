@@ -1,9 +1,11 @@
 """tile classes for pado images"""
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import warnings
+from itertools import islice
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterator
@@ -12,6 +14,7 @@ from typing import Optional
 from typing import Sequence
 
 import numpy as np
+import orjson
 import pandas as pd
 import zarr
 from shapely.geometry import Polygon
@@ -129,43 +132,112 @@ ReadTileTuple: TypeAlias = "tuple[IntPoint, IntSize, MPP]"
 
 
 class TileIndex(Sequence[ReadTileTuple]):
+    _registry = {}
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        init_sig = inspect.signature(cls.__init__)
+        for parameter in islice(init_sig.parameters.values(), 1, None):
+            if parameter.kind not in {
+                inspect.Parameter.KEYWORD_ONLY,
+                inspect.Parameter.VAR_KEYWORD,
+            }:
+                raise ValueError(
+                    f"subclass of TileIndex `{cls.__name__}`"
+                    " must only use kw-only and **kwargs in __init__"
+                )
+        TileIndex._registry[cls.__name__] = cls
+
     def __getitem__(self, i: int) -> ReadTileTuple:
         raise NotImplementedError
 
     def __len__(self) -> int:
         raise NotImplementedError
 
+    def to_json(self, *, as_string: bool = False) -> str | dict:
+        cls_fqn = f"{inspect.getmodule(self).__name__}.{type(self).__name__}"
+        init_sig = inspect.signature(self.__init__)
+        if type(self) is TileIndex:
+            raise RuntimeError(
+                ".to_json() only makes sense for subclasses of TileIndex"
+            )
+        obj = {
+            "type": "pado.images.tiles.TileIndex",
+            "version": 1,
+            "cls": cls_fqn,
+            "kwargs": {
+                name: getattr(self, f"_{name}")
+                for name, parameter in init_sig.parameters.items()
+                if parameter.kind == inspect.Parameter.KEYWORD_ONLY
+            },
+        }
+        if as_string:
+            return orjson.dumps(obj).decode()
+        else:
+            return obj
+
+    @classmethod
+    def from_json(cls, obj: str | dict) -> TileIndex:
+        if isinstance(obj, str):
+            obj = orjson.loads(obj.encode())
+        if not isinstance(obj, dict):
+            raise TypeError("expected json str or dict")
+        if obj["type"] != "pado.images.tiles.TileIndex":
+            raise ValueError("not a tile index json")
+        mod, cls_name = obj["cls"].rsplit(".")
+        sub_cls = cls._registry[cls_name]
+        return sub_cls(**obj["kwargs"])
+
 
 class GridTileIndex(TileIndex):
     def __init__(
         self,
+        *,
         image_size: IntSize,
         tile_size: IntSize,
         overlap: int,
         target_mpp: MPP,
-        mask: NDArray[np.bool] | None = None,
+        masked_indices: NDArray[np.int64] | None = None,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         if tile_size.mpp is not None:
             if tile_size.mpp != target_mpp:
                 raise NotImplementedError("tile_size.mpp must equal target_mpp")
 
         if image_size.mpp is not None and image_size.mpp != target_mpp:
-            self._image_size = image_size.scale(target_mpp).as_tuple()
+            self._image_size = image_size.scale(target_mpp).round()
         else:
-            self._image_size = image_size.as_tuple()
+            self._image_size = image_size
 
         self._tile_size = tile_size
         self._overlap = int(overlap)
         if not (0 <= self._overlap < min(self._tile_size.x, self._tile_size.y)):
             raise ValueError(f"overlap is out of bounds: {self._overlap!r}")
         self._target_mpp = target_mpp
-
-        if mask is None:
+        if masked_indices is None:
             self._masked_indices = None
+        else:
+            self._masked_indices = np.array(masked_indices, dtype=np.int64)
+
+    @classmethod
+    def from_mask(
+        cls,
+        image_size: IntSize,
+        tile_size: IntSize,
+        overlap: int,
+        target_mpp: MPP,
+        mask: NDArray[np.bool] | None = None,
+    ):
+        if mask is None:
+            masked_indices = None
         else:
             import cv2
 
-            size = self._get_size()
+            image_size, tile_size = cls._scale_size(image_size, tile_size, target_mpp)
+            size = cls._get_size(image_size, tile_size, overlap)
             if not (mask.ndim == 2 and mask.dtype == bool):
                 raise RuntimeError(
                     f"expected 2D boolean mask, got: {mask.shape!r} {mask.dtype!r}"
@@ -173,12 +245,19 @@ class GridTileIndex(TileIndex):
             _mask = cv2.resize(
                 mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST
             ).astype(bool)
-            self._masked_indices = np.argwhere(_mask)
+            masked_indices = np.argwhere(_mask)
+        return cls(
+            image_size=image_size,
+            tile_size=tile_size,
+            overlap=overlap,
+            target_mpp=target_mpp,
+            masked_indices=masked_indices,
+        )
 
     def __getitem__(self, item: int) -> tuple[IntPoint, IntSize, MPP]:
         item = int(item)
-        sw, sh = self._image_size
-        tw, th = self._tile_size.x, self._tile_size.y
+        sw, sh = self._image_size.as_tuple()
+        tw, th = self._tile_size.as_tuple()
         dx = tw - self._overlap
         dy = th - self._overlap
         num_x = math.floor(sw / dx)
@@ -203,20 +282,40 @@ class GridTileIndex(TileIndex):
             self._target_mpp,
         )
 
-    def _get_size(self):
-        sw, sh = self._image_size
-        tw, th = self._tile_size.x, self._tile_size.y
-        dx = tw - self._overlap
-        dy = th - self._overlap
+    @staticmethod
+    def _get_size(
+        image_size: IntSize, tile_size: IntSize, overlap: int
+    ) -> tuple[int, int]:
+        if image_size.mpp is None or image_size.mpp != tile_size.mpp:
+            raise ValueError("image_size and tile_size must have same mpp")
+        sw, sh = image_size.as_tuple()
+        tw, th = tile_size.as_tuple()
+        dx = tw - overlap
+        dy = th - overlap
         num_x = math.floor(sw / dx)
         num_y = math.floor(sh / dy)
         return num_x, num_y
+
+    @staticmethod
+    def _scale_size(
+        image_size: IntSize, tile_size: IntSize, target_mpp: MPP
+    ) -> tuple[IntSize, IntSize]:
+        if tile_size.mpp is not None:
+            if tile_size.mpp != target_mpp:
+                raise NotImplementedError("tile_size.mpp must equal target_mpp")
+
+        if image_size.mpp is not None and image_size.mpp != target_mpp:
+            return image_size.scale(target_mpp).round(), tile_size
+        else:
+            return image_size, tile_size
 
     def __len__(self):
         if self._masked_indices is not None:
             return len(self._masked_indices)
         else:
-            num_x, num_y = self._get_size()
+            num_x, num_y = self._get_size(
+                self._image_size, self._tile_size, self._overlap
+            )
             return num_x * num_y
 
 
@@ -278,7 +377,7 @@ class FastGridTiling(TilingStrategy):
         else:
             mask = None
 
-        return GridTileIndex(
+        return GridTileIndex.from_mask(
             image_size=image_size,
             tile_size=self._tile_size,
             overlap=self._overlap,

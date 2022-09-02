@@ -110,7 +110,7 @@ def mock_dataset(
 def mock_annotations(
     image_ids: Union[int, List[ImageId]],
     *,
-    num_annotations: Iterable[int] = (1, 3, 5),
+    num_annotations: Iterable[int] = (5, 7, 9),
     base: bool = False,
 ) -> BaseAnnotationProvider:
     """return an annotation provider for testing"""
@@ -131,14 +131,19 @@ def mock_annotations(
                         name="Mock Mockington",
                     ),
                     state=AnnotationState.DONE,
-                    classification="mocked-class",
+                    classification=f"mocked-class-{dx}",
                     color="#ff00ff",
                     description="mocked description",
                     comment="none",
-                    geometry=Polygon.from_bounds(0, 0, 10, 10),
+                    geometry=Polygon.from_bounds(
+                        0 + dx * 32,
+                        0 + dx * 32,
+                        64 + dx * 32,
+                        64 + dx * 32,
+                    ),
                 )
             ).to_record(image_id=image_id)
-            for _ in range(num_anno)
+            for dx in range(num_anno)
         )
 
     if base:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -11,14 +13,24 @@ from typing import Callable
 from typing import Generator
 from typing import Iterator
 
+if sys.version_info < (3, 10):
+    from typing_extensions import TypeAlias
+else:
+    from typing import TypeAlias
+
 import numpy as np
+import orjson
+from shapely.geometry import box
 from tqdm import tqdm
 
+from pado.annotations.annotation import AnnotationIndex
+from pado.annotations.annotation import ensure_validity
+from pado.annotations.annotation import scale_annotation
+from pado.annotations.annotation import translate_annotation
 from pado.dataset import PadoItem
 from pado.images.tiles import PadoTileItem
 from pado.images.tiles import TileId
 from pado.images.tiles import TileIndex
-from pado.images.tiles import TilingStrategy
 from pado.types import CollatedPadoItems
 from pado.types import CollatedPadoTileItems
 
@@ -37,9 +49,12 @@ except ImportError:
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from pado.annotations import Annotation  # noqa
     from pado.dataset import PadoDataset
     from pado.images.ids import ImageId
+    from pado.images.tiles import TilingStrategy
     from pado.images.utils import MPP
+    from pado.images.utils import IntSize  # noqa
 
 
 __all__ = [
@@ -107,6 +122,21 @@ def call_precompute(ts, args, kwargs):
     return ts.precompute(*args, **kwargs)
 
 
+def ensure_callable(func: Any) -> Callable[..., Any] | None:
+    if func is None:
+        return None
+    elif not callable(func):
+        raise ValueError(f"{func!r} not callable")
+    else:
+        return func
+
+
+TransformCallable: TypeAlias = "Callable[[PadoTileItem], PadoTileItem]"
+ErrorHandlerCallable: TypeAlias = "Callable[[TileDataset, int, BaseException], bool]"
+AnnotationsMaskMapper: TypeAlias = "Callable[[list[Annotation], IntSize], NDArray]"
+AnnotationsPolyMapper: TypeAlias = "Callable[[Annotation], Annotation | None]"
+
+
 class TileDataset(Dataset):
     """A thin wrapper around a pado dataset for data loading
 
@@ -120,54 +150,105 @@ class TileDataset(Dataset):
         *,
         tiling_strategy: TilingStrategy,
         precompute_kw: dict | None = None,
-        transform: Callable[[PadoTileItem], PadoTileItem] | None = None,
+        transform: TransformCallable | None = None,
         as_tensor: bool = True,
         image_storage_options: dict[str, Any] | None = None,
-        error_handler: Callable[[TileDataset, int, BaseException], bool] | None = None,
-        **kwargs,
-    ):
+        error_handler: ErrorHandlerCallable | None = None,
+        annotations_crop: bool = False,
+        annotations_mpp_scale: bool = False,
+        annotations_mask_mapper: AnnotationsMaskMapper | None = None,
+        annotations_poly_mapper: AnnotationsPolyMapper | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._ds = ds
         self._ts = tiling_strategy
-        self._precompute_kw = precompute_kw or {}
         self._strategy_str = self._ts.serialize()
-        self._cumulative_num_tiles: NDArray[np.int64] | None = None
-        self._tile_indexes: dict[ImageId, TileIndex] = {}
-        self._error_handler = error_handler or (lambda td, idx, exc: False)
-
-        if transform is None:
-            self._transform = None
-        elif not callable(transform):
-            raise ValueError("transform not callable")
-        else:
-            self._transform = transform
+        self._precompute_kw = precompute_kw or {}
+        self._transform = ensure_callable(transform)
         self._as_tensor = bool(as_tensor)
         self._image_so = image_storage_options
+        self._error_handler = error_handler or (lambda td, idx, exc: False)
+        self._annotations_crop = bool(annotations_crop)
+        self._annotations_mpp_scale = bool(annotations_mpp_scale)
+        self._annotations_mask_mapper = ensure_callable(annotations_mask_mapper)
+        self._annotations_poly_mapper = ensure_callable(annotations_poly_mapper)
 
-    def precompute_tiling(self, workers: int | None = None):
-        if self._cumulative_num_tiles is None and not self._tile_indexes:
+        # internal caches
+        self._cumulative_num_tiles: NDArray[np.int64] | None = None
+        self._tile_indexes: dict[ImageId, TileIndex] = {}
+        self._annotation_trees: dict[ImageId, AnnotationIndex | None] = {}
+
+    def precompute_tiling(self, workers: int | None = None, *, force: bool = False):
+        compute_tile_indexes = (
+            self._cumulative_num_tiles is None
+            or len(self._cumulative_num_tiles) != len(self._ds.index)
+            or not set(self._ds.index).issubset(self._tile_indexes)
+        )
+        compute_annotation_indexes = not set(self._ds.annotations).issubset(
+            self._annotation_trees
+        )
+
+        if compute_tile_indexes or compute_annotation_indexes or force:
+
             if workers is None:
-                for image_id in tqdm(self._ds.index, desc="precomputing tile indices"):
+                # single worker sequential
+                image_ids = set(self._ds.index)
+                if not force:
+                    image_ids -= set(self._tile_indexes)
+
+                for image_id in tqdm(image_ids, desc="precomputing tile indices"):
                     image = self._ds.images[image_id]
                     self._tile_indexes[image_id] = call_precompute(
                         self._ts, (image,), {"storage_options": self._image_so}
                     )
 
+                image_ids = set(self._ds.annotations).intersection(self._ds.index)
+                if not force:
+                    image_ids -= set(self._annotation_trees)
+
+                for image_id in tqdm(image_ids, desc="precomputing annotation trees"):
+                    _annotations = self._ds.annotations[image_id]
+                    self._annotation_trees[image_id] = AnnotationIndex.from_annotations(
+                        _annotations
+                    )
+
             else:
                 with ThreadPoolExecutor(max_workers=workers) as executor:
+                    image_ids = set(self._ds.index)
+                    if not force:
+                        image_ids -= set(self._tile_indexes)
+
                     for image_id, tile_index in tqdm(
                         zip(
-                            self._ds.index,
+                            image_ids,
                             executor.map(
                                 call_precompute,
                                 repeat(self._ts),
-                                map(lambda x: (x,), self._ds.images.values()),
+                                ((self._ds.images[iid],) for iid in image_ids),
                                 repeat({"storage_options": self._image_so}),
                             ),
                         ),
                         desc="precomputing tile indices",
                     ):
                         self._tile_indexes[image_id] = tile_index
+
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    image_ids = set(self._ds.annotations)
+                    if not force:
+                        image_ids -= set(self._annotation_trees)
+
+                    for image_id, str_tree in tqdm(
+                        zip(
+                            image_ids,
+                            executor.map(
+                                AnnotationIndex.from_annotations,
+                                (self._ds.annotations[iid] for iid in image_ids),
+                            ),
+                        ),
+                        desc="precomputing annotation trees",
+                    ):
+                        self._annotation_trees[image_id] = str_tree
 
             self._cumulative_num_tiles = np.cumsum(
                 [len(self._tile_indexes[iid]) for iid in self._ds.index], dtype=np.int64
@@ -185,6 +266,8 @@ class TileDataset(Dataset):
                 self._ensure_precompute()
                 if index < 0:
                     raise NotImplementedError(index)
+
+                # retrieve the pado item
                 slide_idx = int(
                     np.searchsorted(
                         self._cumulative_num_tiles, index, side="right", sorter=None
@@ -192,6 +275,7 @@ class TileDataset(Dataset):
                 )
                 pado_item = self._ds[slide_idx]
 
+                # get the tile location
                 tile_index = self._tile_indexes[pado_item.id]
                 if slide_idx > 0:
                     idx = index - self._cumulative_num_tiles[slide_idx - 1]
@@ -199,35 +283,81 @@ class TileDataset(Dataset):
                     idx = index
                 location, size, mpp = tile_index[idx]
 
+                # get the tile array
                 with pado_item.image.via(
                     self._ds, storage_options=self._image_so
                 ) as img:
+                    lvl0_mpp = img.mpp
                     arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
-
                 if self._as_tensor:
                     arr = from_numpy(arr)
 
+                # filter the annotations
+                slide_annotations = pado_item.annotations
+                str_tree = self._annotation_trees.get(pado_item.id, None)
+                if str_tree is not None:
+                    x0, y0 = location.scale(lvl0_mpp).as_tuple()
+                    tw, th = size.scale(lvl0_mpp).as_tuple()
+                    tile_box = box(x0, y0, x0 + tw, y0 + th)
+                    idxs = str_tree.query_items(tile_box)
+                    tile_annotations = [slide_annotations[i] for i in idxs]
+                else:
+                    tile_box = None
+                    tile_annotations = None
+
+                # postprocess annotations
+                if tile_annotations:
+                    for a_idx, a in zip(
+                        reversed(range(len(tile_annotations))),
+                        reversed(tile_annotations),
+                    ):
+                        a.__dict__["_readonly"] = False
+                        if self._annotations_poly_mapper:
+                            a = self._annotations_poly_mapper(a)
+                            if a is None:
+                                tile_annotations.pop(a_idx)
+                                continue
+                        a = ensure_validity(a)
+                        if self._annotations_crop:
+                            a.geometry = tile_box.intersection(a.geometry)
+                        if self._annotations_mpp_scale:
+                            a = scale_annotation(a, level0_mpp=lvl0_mpp, target_mpp=mpp)
+
+                        a = translate_annotation(a, location=location)
+                        a._readonly = True
+                        tile_annotations[a_idx] = a
+
+                # convert to mask if wanted
+                if self._annotations_mask_mapper:
+                    tile_annotations = self._annotations_mask_mapper(
+                        tile_annotations, size
+                    )
+
+                # create the tile item
                 tile_item = PadoTileItem(
                     id=TileId(
                         image_id=pado_item.id, strategy=self._strategy_str, index=idx
                     ),
                     tile=arr,
                     metadata=pado_item.metadata,
-                    annotations=pado_item.annotations,
+                    annotations=tile_annotations,
                 )
+
+                # apply user transforms
                 if self._transform:
                     tile_item = self._transform(tile_item)
+
                 return tile_item
+
             except KeyboardInterrupt:
                 raise
-
             except BaseException as e:
                 should_retry = self._error_handler(self, index, e)
                 if should_retry:
                     _log.exception(f"Retrying {self!r}[{index}] ...")
                     continue
                 else:
-                    raise e
+                    raise
 
     def __iter__(self) -> Iterator[PadoTileItem]:
         # can be done faster by lazy evaluating the len of slides
@@ -250,6 +380,53 @@ class TileDataset(Dataset):
                 dct["tile"] = np.stack(tile)
             else:
                 dct["tile"] = stack(tile)
+        return dct
+
+    def caches_dump(self, fn: os.PathLike | str) -> dict:
+        """dump caches to disk"""
+        tile_indexes = {}
+        annotation_trees = {}
+        dct = {
+            "type": "pado.itertools.TileDataset:cache",
+            "version": 1,
+            "ds_urlpath": self._ds.urlpath,
+            "caches": {
+                "tile_indexes": tile_indexes,
+                "annotation_trees": annotation_trees,
+            },
+        }
+        for iid, tile_index in self._tile_indexes.items():
+            tile_indexes[iid.to_str()] = tile_index.to_json(as_string=False)
+        for iid, str_tree in self._annotation_trees.items():
+            annotation_trees[iid.to_str()] = str_tree.to_json(as_string=False)
+
+        with open(fn, mode="wb") as f:
+            f.write(orjson.dumps(dct))
+        return dct
+
+    def caches_load(self, fn: os.PathLike | str) -> dict:
+        """load caches from disk"""
+        with open(fn, mode="rb") as f:
+            dct = orjson.loads(f.read())
+
+        if dct["type"] != "pado.itertools.TileDataset:cache":
+            raise ValueError("incorrect type cache json")
+
+        tile_indexes_json = dct["caches"]["tile_indexes"]
+        annotation_trees_json = dct["caches"]["annotation_trees"]
+
+        self._tile_indexes.update(
+            {
+                ImageId.from_str(key): TileIndex.from_json(value)
+                for key, value in tile_indexes_json.items()
+            }
+        )
+        self._annotation_trees.update(
+            {
+                ImageId.from_str(key): AnnotationIndex.from_json(value)
+                for key, value in annotation_trees_json.items()
+            }
+        )
         return dct
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 from reprlib import Repr
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterable
 from typing import MutableSequence
@@ -8,15 +10,24 @@ from typing import Optional
 from typing import Union
 from typing import overload
 
+import orjson
 import pandas as pd
 from pydantic.color import Color
+from shapely.affinity import scale as shapely_scale
+from shapely.affinity import translate as shapely_translate
 from shapely.geometry.base import BaseGeometry
+from shapely.strtree import STRtree
+from shapely.wkt import loads as wkt_loads
 
 from pado.annotations.formats import AnnotationModel
 from pado.annotations.formats import AnnotationState
 from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import Annotator
 from pado.images.ids import ImageId
+
+if TYPE_CHECKING:
+    from pado.images.utils import MPP
+    from pado.images.utils import IntPoint
 
 
 class Annotation:
@@ -209,3 +220,102 @@ class Annotations(MutableSequence[Annotation]):
     ) -> Annotations:
         df = pd.DataFrame(list(annotation_records), columns=AnnotationModel.__fields__)
         return Annotations(df, image_id=image_id)
+
+
+class AnnotationIndex:
+    def __init__(self, geometries: list[BaseGeometry]) -> None:
+        self.geometries = copy.copy(geometries)
+        self._strtree = STRtree(geometries)
+
+    # noinspection PyShadowingNames
+    @classmethod
+    def from_annotations(
+        cls, annotations: Annotations | None
+    ) -> AnnotationIndex | None:
+        if annotations is None:
+            return None
+        geometries = [a.geometry for a in annotations]
+        return cls(geometries)
+
+    def query_items(self, geom: BaseGeometry) -> list[int]:
+        return list(self._strtree.query_items(geom))
+
+    def to_json(self, *, as_string: bool = False) -> str | dict:
+        obj = {
+            "type": "pado.annotations.annotation.AnnotationIndex",
+            "version": 1,
+            "geometries": [o.wkt for o in self.geometries],
+        }
+        if as_string:
+            return orjson.dumps(obj).decode()
+        else:
+            return obj
+
+    @classmethod
+    def from_json(cls, obj: str | dict | None) -> AnnotationIndex | None:
+        if obj is None:
+            return None
+        if isinstance(obj, str):
+            obj = orjson.loads(obj.encode())
+        if not isinstance(obj, dict):
+            raise TypeError("expected json str or dict")
+
+        t = obj["type"]
+        if t != "pado.annotations.annotation.AnnotationIndex":
+            raise NotImplementedError(t)
+        geometries = obj["geometries"]
+        return cls([wkt_loads(o) for o in geometries])
+
+
+def shapely_fix_shape(
+    shape: BaseGeometry, buffer_size: tuple[int, int]
+) -> BaseGeometry:
+    shape = shape.buffer(buffer_size[0])
+    if not shape.is_valid:
+        shape = shape.buffer(buffer_size[1])
+    return shape
+
+
+def ensure_validity(
+    annotation: Annotation,
+) -> Annotation:
+    geom = annotation.geometry
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+    annotation.geometry = geom
+    return annotation
+
+
+def scale_annotation(
+    annotation: Annotation,
+    *,
+    level0_mpp: MPP,
+    target_mpp: MPP,
+) -> Annotation:
+    rescale = None
+    # We rescale if target_mpp differs from slide_mpp
+    if target_mpp != level0_mpp:
+        rescale = dict(
+            xfact=level0_mpp.x / target_mpp.x,
+            yfact=level0_mpp.y / target_mpp.y,
+            origin=(0, 0),
+        )
+
+    geom = annotation.geometry
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+
+    if rescale:
+        geom = shapely_scale(geom, **rescale)
+
+    if not geom.is_valid:
+        geom = shapely_fix_shape(geom, buffer_size=(0, 0))
+
+    annotation.geometry = geom
+    return annotation
+
+
+def translate_annotation(annotation: Annotation, *, location: IntPoint) -> Annotation:
+    geom = shapely_translate(annotation.geometry, xoff=-location.x, yoff=-location.y)
+    annotation.geometry = geom
+    return annotation
