@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from reprlib import Repr
 from typing import TYPE_CHECKING
 from typing import Any
@@ -225,7 +226,10 @@ class Annotations(MutableSequence[Annotation]):
 class AnnotationIndex:
     def __init__(self, geometries: list[BaseGeometry]) -> None:
         self.geometries = copy.copy(geometries)
-        self._strtree = STRtree(geometries)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            strtree = STRtree(geometries)
+        self._strtree = strtree
 
     # noinspection PyShadowingNames
     @classmethod
