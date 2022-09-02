@@ -132,6 +132,16 @@ def test_image_id_json_roundtrip(image_id):
     assert image_id == new_id
 
 
+@pytest.mark.parametrize("image_id", IMAGE_ID_ARG_KWARG_LIST, indirect=True)
+def test_image_id_str_roundtrip_no_eval(image_id, monkeypatch):
+    import pado.images.ids
+
+    monkeypatch.setattr(pado.images.ids, "_PADO_BLOCK_IMAGE_ID_EVAL", True)
+    id_str = image_id.to_str()
+    new_id = ImageId.from_str(id_str)
+    assert image_id == new_id
+
+
 def test_image_id_from_json_incorrect_input_type():
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker

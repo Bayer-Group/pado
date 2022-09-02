@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import os.path as op
+import token
 import warnings
+from ast import literal_eval
 from operator import itemgetter
 from pathlib import Path
 from pathlib import PurePath
+from tokenize import generate_tokens
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -22,6 +26,72 @@ from orjson import loads as orjson_loads
 
 from pado.types import FilterMissing
 from pado.types import OpenFileLike
+
+_PADO_BLOCK_IMAGE_ID_EVAL = None
+
+
+def _pado_image_id_from_str(cls: type[ImageId], image_id_str: str):
+    """parse an image id string"""
+    global _PADO_BLOCK_IMAGE_ID_EVAL
+
+    if _PADO_BLOCK_IMAGE_ID_EVAL is None:
+        from pado.settings import settings
+
+        _PADO_BLOCK_IMAGE_ID_EVAL = settings.block_image_id_eval
+
+    if not _PADO_BLOCK_IMAGE_ID_EVAL:
+        # let's verify the input a tiny little bit
+        if not (
+            image_id_str.startswith(cls._prefix) and image_id_str.endswith(cls._suffix)
+        ):
+            raise ValueError(
+                f"provided image_id str is not an ImageId(), got: '{image_id_str}'"
+            )
+
+        try:
+            # fastest way to create the ImageId's from str.
+            image_id = eval(image_id_str, {}, {cls.__name__: cls})
+        except (ValueError, SyntaxError):
+            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
+        except NameError:
+            # note: We want to guarantee that it's the same class. This could
+            #   happen if a subclass of ImageId tries to deserialize a ImageId str
+            raise ValueError(f"not a {cls.__name__}(): {image_id_str!r}")
+        return image_id
+
+    else:
+        tokens = generate_tokens(io.StringIO(image_id_str).read)
+        t_cls = next(tokens)
+        if t_cls.type != token.NAME or t_cls.string != "ImageId":
+            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
+        t_tuple_start = next(tokens)
+        if t_tuple_start.type != token.OP or t_tuple_start.string != "(":
+            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
+        parts = []
+        site = None
+        while True:
+            t_item = next(tokens)
+            t_sep = next(tokens)
+            if t_item.type == token.STRING:
+                parts.append(literal_eval(t_item.string))
+                if t_sep.type == token.OP:
+                    if t_sep.string == ")":
+                        break
+                    elif t_sep.string == ",":
+                        continue
+            elif t_item.type == token.NAME and t_item.string == "site":
+                if t_sep.type == token.OP and t_sep.string == "=":
+                    t_site = next(tokens)
+                    t_end = next(tokens)
+                    if (
+                        t_site.type == token.STRING
+                        and t_end.type == token.OP
+                        and t_end.string == ")"
+                    ):
+                        site = literal_eval(t_site.string)
+                        break
+            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
+        return ImageId.make(parts, site=site)
 
 
 # noinspection PyMethodMayBeStatic
@@ -142,28 +212,7 @@ class ImageId(Tuple[Optional[str], ...]):
             raise TypeError(
                 f"image_id must be of type 'str', got: '{type(image_id_str)}'"
             )
-
-        # let's verify the input a tiny little bit
-        if not (
-            image_id_str.startswith(cls._prefix) and image_id_str.endswith(cls._suffix)
-        ):
-            raise ValueError(
-                f"provided image_id str is not an ImageId(), got: '{image_id_str}'"
-            )
-
-        try:
-            # ... i know it's bad, but it's the easiest way right now to support
-            #   kwargs in the calling interface
-            # fixme: revisit in case we consider this a security problem
-            image_id = eval(image_id_str, {cls.__name__: cls})
-        except (ValueError, SyntaxError):
-            raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
-        except NameError:
-            # note: We want to guarantee that it's the same class. This could
-            #   happen if a subclass of ImageId tries to deserialize a ImageId str
-            raise ValueError(f"not a {cls.__name__}(): {image_id_str!r}")
-
-        return image_id
+        return _pado_image_id_from_str(cls, image_id_str)
 
     # --- json serialization methods ----------------------------------
 

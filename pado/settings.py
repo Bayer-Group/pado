@@ -69,6 +69,7 @@ settings = Dynaconf(
         Validator("override_user_host", must_exist=False, len_min=1),
         Validator("ignore_default_registry", cast=bool, default=False),
         Validator("registry", condition=validate_registries, default={}),
+        Validator("block_image_id_eval", cast=bool, default=False),
     ],
 )
 
