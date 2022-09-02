@@ -50,7 +50,7 @@ def _pado_image_id_from_str(cls: type[ImageId], image_id_str: str):
 
         try:
             # fastest way to create the ImageId's from str.
-            image_id = eval(image_id_str, {}, {cls.__name__: cls})
+            image_id = eval(image_id_str, {}, {cls.__name__: cls})  # nosec B307
         except (ValueError, SyntaxError):
             raise ValueError(f"provided image_id is not parsable: '{image_id_str}'")
         except NameError:

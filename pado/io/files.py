@@ -86,7 +86,7 @@ def _pado_pickle_load(obj: Any):
             ".pado.toml config file."
         )
     else:
-        return pickle.loads(literal_eval(obj))
+        return pickle.loads(literal_eval(obj))  # nosec B301
 
 
 class _OpenFileAndParts(NamedTuple):

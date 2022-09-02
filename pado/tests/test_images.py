@@ -81,7 +81,7 @@ def test_image_id_from_image_id(image_id):
 @pytest.mark.parametrize("image_id", IMAGE_ID_ARG_KWARG_LIST, indirect=True)
 def test_image_id_pickle_roundtrip(image_id):
     serialized = pickle.dumps(image_id)
-    new_id = pickle.loads(serialized)
+    new_id = pickle.loads(serialized)  # nosec B301
     assert image_id == new_id
 
 

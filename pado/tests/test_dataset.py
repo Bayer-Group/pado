@@ -266,7 +266,7 @@ def test_dataset_unpickle_fsspec_memory_dataset_same_process():
         pickled = pickle.dumps(ds)
 
     with pytest.warns(UserWarning, match=r"Key collision .*memory"):
-        ds = pickle.loads(pickled)
+        ds = pickle.loads(pickled)  # nosec B301
 
     assert ds[0].image is not None  # test if we can access the ds
 
