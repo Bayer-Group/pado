@@ -274,6 +274,8 @@ class TileDataset(Dataset):
         )
         if compute_annotation_indexes:
             return True
+        # we passed the check! now let's speed this up
+        self.__dict__["requires_precompute"] = lambda: False
         return False
 
     def __getitem__(self, index: int) -> PadoTileItem:
