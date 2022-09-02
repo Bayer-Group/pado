@@ -179,7 +179,12 @@ class TileDataset(Dataset):
         self._tile_indexes: dict[ImageId, TileIndex] = {}
         self._annotation_trees: dict[ImageId, AnnotationIndex | None] = {}
 
-    def precompute_tiling(self, workers: int | None = None, *, force: bool = False):
+    def precompute_tiling(
+        self,
+        workers: int | None = None,
+        *,
+        force: bool = False,
+    ) -> bool:
         compute_tile_indexes = (
             self._cumulative_num_tiles is None
             or len(self._cumulative_num_tiles) != len(self._ds.index)
@@ -253,17 +258,30 @@ class TileDataset(Dataset):
             self._cumulative_num_tiles = np.cumsum(
                 [len(self._tile_indexes[iid]) for iid in self._ds.index], dtype=np.int64
             )
-        return
+        return False
 
-    def _ensure_precompute(self):
-        if self._cumulative_num_tiles is None and not self._tile_indexes:
-            self.precompute_tiling(**self._precompute_kw)
+    def requires_precompute(self) -> bool:
+        """return if the TileIndex would need to precompute"""
+        compute_tile_indexes = (
+            self._cumulative_num_tiles is None
+            or len(self._cumulative_num_tiles) != len(self._ds.index)
+            or not set(self._ds.index).issubset(self._tile_indexes)
+        )
+        if compute_tile_indexes:
+            return True
+        compute_annotation_indexes = not set(self._ds.annotations).issubset(
+            self._annotation_trees
+        )
+        if compute_annotation_indexes:
+            return True
+        return False
 
     def __getitem__(self, index: int) -> PadoTileItem:
+        if self.requires_precompute():
+            self.precompute_tiling(**self._precompute_kw)
         while True:
 
             try:
-                self._ensure_precompute()
                 if index < 0:
                     raise NotImplementedError(index)
 
@@ -365,7 +383,8 @@ class TileDataset(Dataset):
             yield self[idx]
 
     def __len__(self):
-        self._ensure_precompute()
+        if self.requires_precompute():
+            self.precompute_tiling(**self._precompute_kw)
         return self._cumulative_num_tiles[-1]
 
     @staticmethod

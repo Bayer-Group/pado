@@ -56,6 +56,47 @@ def test_tile_dataset(ds_iter):
         assert item.tile.sum() > 0
 
 
+def test_tile_dataset_caches(dataset, tmp_path):
+    tile_ds = TileDataset(
+        dataset,
+        tiling_strategy=FastGridTiling(
+            tile_size=(128, 128),
+            target_mpp=MPP(0.25, 0.25),
+            overlap=0,
+            min_chunk_size=0.0,  # use 0.2 or so with real data
+            normalize_chunk_sizes=True,
+        ),
+    )
+
+    assert tile_ds.requires_precompute() is True
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tile_ds.precompute_tiling()
+
+    # store the caches
+    fn = tmp_path.joinpath("_tile_dataset.caches.json")
+    _dct = tile_ds.caches_dump(fn)
+    assert len(_dct["caches"]["tile_indexes"]) == len(dataset.images)
+    assert len(_dct["caches"]["annotation_trees"]) == len(
+        set(dataset.annotations).intersection(dataset.images)
+    )
+
+    new_tile_ds = TileDataset(
+        dataset,
+        tiling_strategy=FastGridTiling(
+            tile_size=(128, 128),
+            target_mpp=MPP(0.25, 0.25),
+            overlap=0,
+            min_chunk_size=0.0,  # use 0.2 or so with real data
+            normalize_chunk_sizes=True,
+        ),
+    )
+
+    # restore caches
+    new_tile_ds.caches_load(fn)
+    assert tile_ds.requires_precompute() is False
+
+
 def test_retry_handler(ds_iter, monkeypatch):
 
     retry_handler = RetryErrorHandler(
