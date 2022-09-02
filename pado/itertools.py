@@ -389,7 +389,11 @@ class TileDataset(Dataset):
         dct = {
             "type": "pado.itertools.TileDataset:cache",
             "version": 1,
-            "ds_urlpath": self._ds.urlpath,
+            "ds": {
+                "urlpath": self._ds.urlpath,
+                "storage_options": self._ds.storage_options,
+            },
+            "tiling_strategy": self._strategy_str,
             "caches": {
                 "tile_indexes": tile_indexes,
                 "annotation_trees": annotation_trees,
@@ -411,6 +415,13 @@ class TileDataset(Dataset):
 
         if dct["type"] != "pado.itertools.TileDataset:cache":
             raise ValueError("incorrect type cache json")
+
+        if "tiling_strategy" in dct:
+            if dct["tiling_strategy"] != self._strategy_str:
+                raise ValueError(
+                    "caches are for a different tiling strategy: "
+                    f"{dct['tiling_strategy']!r} != {self._strategy_str!r}"
+                )
 
         tile_indexes_json = dct["caches"]["tile_indexes"]
         annotation_trees_json = dct["caches"]["annotation_trees"]
