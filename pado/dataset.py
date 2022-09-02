@@ -133,6 +133,11 @@ class PadoDataset:
         return self._urlpath
 
     @property
+    def storage_options(self) -> dict[str, Any]:
+        """the storage options used for the PadoDataset"""
+        return self._storage_options
+
+    @property
     def _fs(self) -> fsspec.AbstractFileSystem:
         fs, _ = urlpathlike_to_fs_and_path(
             self._urlpath, storage_options=self._storage_options
