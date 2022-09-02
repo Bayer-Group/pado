@@ -436,7 +436,8 @@ class TileDataset(Dataset):
 def iter_exc_chain(exc: BaseException | None) -> Generator[BaseException]:
     if exc:
         yield exc
-        yield from iter_exc_chain(exc.__cause__ or exc.__context__)
+        if isinstance(exc, BaseException):
+            yield from iter_exc_chain(exc.__cause__ or exc.__context__)
 
 
 class RetryErrorHandler:
@@ -484,9 +485,9 @@ class RetryErrorHandler:
         if num_retries is None and total_delay is None:
             raise ValueError("must provide one of `num_retries` or `timeout_sec`")
         self._exception_type = exception_type
-        self._num_retries = int(num_retries) if num_retries else None
+        self._num_retries = int(num_retries) if num_retries is not None else None
         self._retry_delay = float(retry_delay)
-        self._total_delay = float(total_delay) if total_delay else None
+        self._total_delay = float(total_delay) if total_delay is not None else None
         self._exp_backoff = bool(exponential_backoff)
         self._check_exc_chain = bool(check_exception_chain)
         self._call_counter = Counter()
