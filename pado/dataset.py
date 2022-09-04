@@ -92,6 +92,7 @@ class PadoDataset:
             # enable in-memory pado datasets and change mode to enable write
             self._urlpath = f"memory://pado-{uuid.uuid4()}"
             self._mode = "r+"
+            self._ensure_dir()
         else:
             try:
                 self._urlpath: str = urlpathlike_to_string(urlpath)
@@ -122,9 +123,12 @@ class PadoDataset:
                 ):
                     raise FileExistsError(f"{self._urlpath!r} exists")
 
-        # paths
-        if not self.readonly:
-            self._ensure_dir()
+            if not self.readonly:
+                if fs.exists(self._get_fspath(".frozen")):
+                    raise PermissionError(
+                        "PadoDataset has been frozen. Can only use mode='r'"
+                    )
+                self._ensure_dir()
 
     @property
     def urlpath(self) -> str:

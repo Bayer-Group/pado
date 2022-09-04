@@ -312,3 +312,10 @@ def test_dataset_filter_empty(dataset_ro):
     assert len(ds.metadata) == 0
     assert len(ds.annotations) == 0
     assert (ds.metadata.df.columns == dataset_ro.metadata.df.columns).all()
+
+
+def test_open_dataset_frozen(mock_dataset_path: str):
+    Path(mock_dataset_path).joinpath(".frozen").touch()
+
+    with pytest.raises(PermissionError):
+        _ = PadoDataset(mock_dataset_path, mode="r+")
