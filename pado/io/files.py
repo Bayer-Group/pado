@@ -15,7 +15,6 @@ import zipfile
 from ast import literal_eval
 from contextlib import ExitStack
 from contextlib import contextmanager
-from pathlib import PurePath
 from typing import Any
 from typing import AnyStr
 from typing import BinaryIO
@@ -87,6 +86,17 @@ def _pado_pickle_load(obj: Any):
         )
     else:
         return pickle.loads(literal_eval(obj))  # nosec B301
+
+
+def _os_path_parts(pth: str) -> tuple[str, ...]:
+    """os.path version of pathlib.Path().parts"""
+    remaining, part = os.path.split(pth)
+    if remaining == pth:
+        return (remaining,)
+    elif part == pth:
+        return (pth,)
+    else:
+        return *_os_path_parts(remaining), part
 
 
 class _OpenFileAndParts(NamedTuple):
@@ -554,7 +564,7 @@ def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
             if not isinstance(json_obj, dict):
                 raise TypeError(f"got json {json_obj!r} of type {type(json_obj)!r}")
             path = json_obj["path"]
-    return PurePath(path).parts
+    return _os_path_parts(path)
 
 
 def urlpathlike_to_localpath(

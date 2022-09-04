@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os.path
 from contextlib import ExitStack
 from functools import partial
-from pathlib import PurePath
 from typing import Callable
 
 from fsspec import AbstractFileSystem
@@ -93,7 +93,7 @@ def _transfer(
                 of0 = urlpathlike_local_via_fs(item_urlpath_src, fs0)
 
                 # create the remote path
-                name = PurePath(of0.path).name
+                _, name = os.path.split(of0.path)
                 item_urlpath_dst = get_fspath1(item_urlpath_destination, name)
 
                 # skip if remote exists

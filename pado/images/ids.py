@@ -7,9 +7,9 @@ import token
 import warnings
 from ast import literal_eval
 from operator import itemgetter
-from pathlib import Path
 from pathlib import PurePath
 from tokenize import generate_tokens
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -26,6 +26,9 @@ from orjson import loads as orjson_loads
 
 from pado.types import FilterMissing
 from pado.types import OpenFileLike
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _PADO_BLOCK_IMAGE_ID_EVAL = None
 
