@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import os
-import pathlib
 import sys
 import uuid
 import warnings
@@ -146,10 +145,7 @@ class PadoDataset:
 
     @property
     def _root(self) -> str:
-        _, path = urlpathlike_to_fs_and_path(
-            self._urlpath, storage_options=self._storage_options
-        )
-        return path
+        return urlpathlike_get_path(self._urlpath)
 
     @property
     def readonly(self) -> bool:
@@ -630,7 +626,7 @@ class PadoDataset:
 
     def _get_fspath(self, *parts: Union[str, os.PathLike]) -> str:
         """return a fspath for a resource"""
-        return os.fspath(pathlib.PurePath(self._root).joinpath(*parts))
+        return os.fspath(os.path.join(self._root, *parts))
 
     def _ensure_dir(self, *parts: Union[str, os.PathLike]) -> str:
         """ensure that a folder within the dataset exists"""

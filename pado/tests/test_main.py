@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from typer.testing import CliRunner
 
 from pado.__main__ import cli
 from pado.dataset import PadoDataset
+from pado.io.files import urlpathlike_get_path
 from pado.mock import mock_dataset
 from pado.registry import dataset_registry
 from pado.types import UrlpathWithStorageOptions
@@ -457,7 +459,9 @@ def test_cmd_ops_update_image(dataset_and_images_path):
         ],
     )
     assert result.exit_code == 0
-    assert img_pth in PadoDataset(ds_pth).images.df.urlpath.iloc[0]
+    img_urlpath = PadoDataset(ds_pth).images.df.urlpath.iloc[0]
+    path = urlpathlike_get_path(img_urlpath)
+    assert Path(img_pth) == Path(path).parent
 
 
 def test_cmd_ops_update_image_dry_run(dataset_and_images_path):
