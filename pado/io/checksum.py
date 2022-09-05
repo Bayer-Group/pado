@@ -72,6 +72,11 @@ def ensure_str(x: bytes | str) -> str:
         return x
 
 
+def _get_md5(x: bytes):
+    # md5 is only used for file integrity checks
+    return hashlib.md5(x)  # nosec B303
+
+
 def checksum_multiple(
     f: BinaryIO, *, algorithms: Container[Algorithm], chunk_size: int
 ) -> tuple[Checksum]:
@@ -81,7 +86,7 @@ def checksum_multiple(
 
     build = {}
     if Algorithm.MD5 in algorithms:
-        build[Algorithm.MD5] = hashlib.md5()
+        build[Algorithm.MD5] = _get_md5()
     if Algorithm.CRC32C in algorithms:
         if _CRC32C_Checksum is None:
             try:
@@ -109,7 +114,7 @@ def checksum_multiple(
 
 def checksum_md5(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str:
     """return the md5sum"""
-    m = hashlib.md5()
+    m = _get_md5()
     for data in iter(lambda: f.read(chunk_size), b""):
         m.update(data)
     return m.hexdigest()
@@ -136,7 +141,7 @@ class _AWSETagChecksum:
         if len(data) >= (self._block_size if not final else 1):
             # feed the input in blocks
             inp = data[: self._block_size]
-            self._blocks.append(hashlib.md5(inp))
+            self._blocks.append(_get_md5(inp))
             # requeue the remaining data
             rem = data[self._block_size :]
             if rem:
@@ -150,14 +155,14 @@ class _AWSETagChecksum:
         self._digest_block(final=True)
 
         if len(self._blocks) == 0:
-            etag = hashlib.md5().hexdigest()
+            etag = _get_md5().hexdigest()
             return f'"{etag}"'
         if len(self._blocks) == 1:
             etag = self._blocks[0].hexdigest()
             return f'"{etag}"'
         else:
             _concatenated_md5s = b"".join(m.digest() for m in self._blocks)
-            etag = hashlib.md5(_concatenated_md5s).hexdigest()
+            etag = _get_md5(_concatenated_md5s).hexdigest()
             return f'"{etag}-{len(self._blocks)}"'
 
 
@@ -166,11 +171,11 @@ def checksum_aws_etag(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str
 
     md5 for single chunk, md5 of concatenated chunk md5s for multi chunk.
     """
-    chunk_md5s = [hashlib.md5(data) for data in iter(lambda: f.read(chunk_size), b"")]
+    chunk_md5s = [_get_md5(data) for data in iter(lambda: f.read(chunk_size), b"")]
     num_chunks = len(chunk_md5s)
 
     if num_chunks == 0:
-        etag = hashlib.md5().hexdigest()
+        etag = _get_md5().hexdigest()
         return f'"{etag}"'
 
     if num_chunks == 1:
@@ -179,7 +184,7 @@ def checksum_aws_etag(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str
 
     else:
         _concatenated_md5s = b"".join(m.digest() for m in chunk_md5s)
-        etag = hashlib.md5(_concatenated_md5s).hexdigest()
+        etag = _get_md5(_concatenated_md5s).hexdigest()
         return f'"{etag}-{num_chunks}"'
 
 
