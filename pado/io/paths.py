@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 __all__ = [
     "match_partial_paths_reversed",
     "search_dataset",
+    "get_dataset_fs",
 ]
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from typing import Any
@@ -16,8 +15,6 @@ from typing import Union
 
 import tiffslide
 from fsspec import AbstractFileSystem
-from fsspec import get_fs_token_paths
-from fsspec.core import OpenFile
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from numpy.typing import NDArray
@@ -37,10 +34,13 @@ from tiffslide._zarr import get_zarr_chunk_sizes
 from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.io.checksum import Checksum
+from pado.io.checksum import compute_checksum
 from pado.io.files import update_fs_storage_options
 from pado.io.files import urlpathlike_get_fs_cls
 from pado.io.files import urlpathlike_is_localfile
 from pado.io.files import urlpathlike_local_via_fs
+from pado.io.files import urlpathlike_to_fs_and_path
 from pado.io.files import urlpathlike_to_fsspec
 from pado.io.files import urlpathlike_to_string
 from pado.io.paths import get_dataset_fs
@@ -349,20 +349,10 @@ class Image:
             if self._slide is None:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
 
-            if isinstance(self.urlpath, str):
-                fs, _, [path] = get_fs_token_paths(self.urlpath)
-            elif isinstance(self.urlpath, OpenFile):
-                fs = self.urlpath.fs
-                path = self.urlpath.path
-            elif isinstance(self.urlpath, os.PathLike):
-                fs, _, [path] = get_fs_token_paths(os.fspath(self.urlpath))
-            else:
-                raise NotImplementedError(
-                    f"todo: {self.urlpath!r} of type {type(self.urlpath)!r}"
-                )
-
+            fs, path = urlpathlike_to_fs_and_path(self.urlpath)
             if checksum:
-                _checksum = fs.checksum(path)
+                checksums = compute_checksum(self.urlpath, available_only=not force)
+                _checksum = Checksum.join_checksums(checksums)
             else:
                 _checksum = None
 

@@ -54,6 +54,7 @@ __all__ = [
     "urlpathlike_get_fs_cls",
     "urlpathlike_get_path",
     "urlpathlike_get_storage_args_options",
+    "urlpathlike_is_localfile",
     "urlpathlike_to_string",
     "urlpathlike_to_fsspec",
     "urlpathlike_to_fs_and_path",
