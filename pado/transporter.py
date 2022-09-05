@@ -161,7 +161,8 @@ class _CommandIter:
     """iterate over the stdout of a running subprocess"""
 
     def __init__(self, command, poll_timeout=0.5, max_timeout=10.0):
-        assert isinstance(command, list)
+        if not isinstance(command, list):
+            raise TypeError(f"command expected list, got {type(command).__name__!r}")
         self.command = command
         self.return_code = None
         self.max_timeout_counter = max(1, int(max_timeout / poll_timeout))
@@ -197,10 +198,12 @@ def _make_rsync_cmd(*options, remote_shell=None):
     """creates the command list for running rsync commands"""
     cmd = [RSYNC_EXECUTABLE]
     if remote_shell:
-        assert '"' not in remote_shell, "double quote character in the remote_shell?"
+        if '"' in remote_shell:
+            raise ValueError("double quote character in the remote_shell?")
         cmd.extend(["-e", remote_shell])
     for option in options:
-        assert option.startswith("-"), f"option '{option}' does not start with '-'"
+        if not option.startswith("-"):
+            raise ValueError(f"option '{option}' does not start with '-'")
         cmd.append(option)
     return cmd
 
@@ -258,7 +261,8 @@ def list_files_on_remote(
         )
 
     status_msgs = {"receiving file list ... done", "receiving incremental file list"}
-    assert line0 in status_msgs, f"received: '{line0!r}'"
+    if line0 not in status_msgs:
+        raise RuntimeError(f"received: '{line0!r}'")
     # parse files
     for line in it:
         try:
