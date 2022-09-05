@@ -35,6 +35,7 @@ from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.io.checksum import Checksum
+from pado.io.checksum import compare_checksums
 from pado.io.checksum import compute_checksum
 from pado.io.files import update_fs_storage_options
 from pado.io.files import urlpathlike_get_fs_cls
@@ -295,7 +296,12 @@ class Image:
             return False
         # if checksum available for both
         if self.file_info.md5_computed and other.file_info.md5_computed:
-            return self.file_info.md5_computed == other.file_info.md5_computed
+            try:
+                return compare_checksums(
+                    self.file_info.md5_computed, other.file_info.md5_computed
+                )
+            except ValueError:
+                pass
         if self.file_info.size_bytes != other.file_info.size_bytes:
             return False
         return self.metadata == other.metadata
