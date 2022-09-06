@@ -503,30 +503,26 @@ class Image:
 
         if location.mpp != target_mpp:
             raise ValueError(
-                f"location.mpp != target mpp: {location.mpp} != {target_mpp}"
+                f"location.mpp != target_mpp -> {location.mpp!r} != {target_mpp!r}"
             )
         if target_mpp.x != target_mpp.y:
             raise NotImplementedError("currently assuming same x and y mpp")
 
-        if location.mpp.as_tuple() != target_mpp.as_tuple():
-            raise ValueError(
-                f"location.mpp != target_mpp -> {location.mpp!r} != {target_mpp!r}"
-            )
         if region.mpp is None:
             pass
-        elif region.mpp.as_tuple() != target_mpp.as_tuple():
+        elif region.mpp != target_mpp:
             raise ValueError(
                 f"region.mpp != target_mpp -> {region.mpp!r} != {target_mpp!r}"
             )
 
-        mpp_xy = target_mpp.as_tuple()
-
-        lvl0_mpp = self.mpp
         # we find the corresponding location at level0
-        lvl0_xy = _scale_xy(location, mpp_current=target_mpp, mpp_target=lvl0_mpp)
+        lvl0_xy = _scale_xy(
+            location,
+            mpp_current=target_mpp,
+            mpp_target=self.mpp,
+        )
+        region_wh = region.as_tuple()
 
-        if mpp_xy[0] != mpp_xy[1]:
-            raise NotImplementedError("currently missing support for non symmetric MPP")
         for lvl_best, mpp_best in self.level_mpp.items():
             if target_mpp > mpp_best or target_mpp == mpp_best:
                 break
@@ -536,11 +532,10 @@ class Image:
                 f"than provided in the image {self.level_mpp.items()!r}"
             )
 
-        region_tuple = region.as_tuple()
-        if mpp_xy == mpp_best:
+        if target_mpp == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                location=lvl0_xy, level=lvl_best, size=region_tuple, as_array=True
+                location=lvl0_xy, level=lvl_best, size=region_wh, as_array=True
             )
         else:
             # we need to rescale to the target_mpp
@@ -552,8 +547,8 @@ class Image:
                 location=lvl0_xy, level=lvl_best, size=region_best, as_array=True
             )
 
-            if array.shape[0:2:-1] != region_tuple:
-                array = cv2.resize(array, dsize=region_tuple)
+            if array.shape[0:2:-1] != region_wh:
+                array = cv2.resize(array, dsize=region_wh)
 
         return array
 
@@ -604,6 +599,6 @@ def _scale_xy(
     pos_x, pos_y = to_transform.as_tuple()
     mpp_x_current, mpp_y_current = mpp_current.as_tuple()
     mpp_x_target, mpp_y_target = mpp_target.as_tuple()
-    return int(round(pos_x * mpp_x_current / mpp_x_target)), int(
-        round(pos_y * mpp_y_current / mpp_y_target)
-    )
+    x = int(round(pos_x * mpp_x_current / mpp_x_target))
+    y = int(round(pos_y * mpp_y_current / mpp_y_target))
+    return x, y
