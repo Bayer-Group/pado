@@ -413,11 +413,8 @@ class Image:
 
     @property
     def level_mpp(self) -> Dict[int, MPP]:
-        if self._slide is None:
-            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return {
-            lvl: self.mpp.scale(ds)
-            for lvl, ds in enumerate(self._slide.level_downsamples)
+            lvl: self.mpp.scale(ds) for lvl, ds in enumerate(self.metadata.downsamples)
         }
 
     @property
