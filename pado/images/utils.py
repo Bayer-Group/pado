@@ -114,7 +114,7 @@ class MPP:
 
     def __gt__(self, other: Any) -> bool:
         x, y, tol_x, tol_y = self._get_xy_tolerance(other)
-        return self.x < (x + tol_x) and self.y < (y + tol_y)
+        return self.x > (x + tol_x) and self.y > (y + tol_y)
 
     def __ne__(self, other):
         return not self.__eq__(other)
