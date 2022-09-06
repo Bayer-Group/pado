@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import total_ordering
+import warnings
 from math import floor
 from typing import Any
 from typing import Callable
@@ -29,6 +29,17 @@ __all__ = [
     "ensure_type",
 ]
 
+
+def __getattr__(name):
+    if name == "FuzzyMPP":
+        warnings.warn(
+            "MPP now supports setting atol and rtol for fuzzy matching. "
+            "Please import `MPP` instead of `FuzzyMPP`",
+            DeprecationWarning,
+        )
+        return MPP
+
+
 # NOTE:
 #  maybe we should use decimals instead of floats here, to be really correct.
 #  Why you ask? There's some strange edge cases that we should further investigate,
@@ -38,12 +49,15 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-@total_ordering
 class MPP:
     """micrometer per pixel scaling common in pathological images"""
 
     x: PositiveFloat
     y: PositiveFloat
+
+    # support approximate matching
+    rtol: NonNegativeFloat = 0.0  # relative tolerance
+    atol: NonNegativeFloat = 0.0  # absolute tolerance
 
     def scale(self, downsample: float) -> MPP:
         return MPP(x=self.x * downsample, y=self.y * downsample)
@@ -60,99 +74,47 @@ class MPP:
     def as_tuple(self) -> Tuple[float, float]:
         return self.x, self.y
 
-    def __eq__(self, other: Any) -> bool:
+    def with_tolerance(self, rtol: float, atol: float) -> MPP:
+        return MPP(self.x, self.y, rtol=rtol, atol=atol)
+
+    @property
+    def tolerance(self) -> Tuple[float, float]:
+        tol_x = self.atol + self.rtol * abs(self.x)
+        tol_y = self.atol + self.rtol * abs(self.y)
+        return tol_x, tol_y
+
+    def _get_xy_tolerance(self, other: Any) -> Tuple[float, float, float, float]:
         if isinstance(other, MPP):
-            return self.x == other.x and self.y == other.y
+            atol = max(self.atol, other.atol)
+            rtol_x = max(self.rtol, other.rtol * other.x / self.x)
+            rtol_y = max(self.rtol, other.rtol * other.y / self.y)
+            tol_x = atol + rtol_x * abs(self.x)
+            tol_y = atol + rtol_y * abs(self.y)
+            return other.x, other.y, tol_x, tol_y
         elif (
             isinstance(other, (tuple, list))
             and len(other) == 2
             and isinstance(other[0], (float, int))
             and isinstance(other[1], (float, int))
         ):
-            return self.x == other[0] and self.y == other[1]
+            tol_x, tol_y = self.tolerance
+            return other[0], other[1], tol_x, tol_y
         else:
-            raise TypeError(
-                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
-            )
-
-    def __lt__(self, other: Any) -> bool:
-        if isinstance(other, MPP):
-            return self.x < other.x and self.y < other.y
-        elif (
-            isinstance(other, (tuple, list))
-            and len(other) == 2
-            and isinstance(other[0], (float, int))
-            and isinstance(other[1], (float, int))
-        ):
-            return self.x < other[0] and self.y < other[1]
-        else:
-            raise TypeError(
-                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
-            )
-
-
-@dataclass(frozen=True)
-class FuzzyMPP(MPP):
-
-    rtol: NonNegativeFloat = 0.05  # relative tolerance
-    atol: NonNegativeFloat = 0  # absolute tolerance
+            raise TypeError(f"unsupported object of type: {type(other).__name__!r}")
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, MPP):
-            return abs(self.x - other.x) < (
-                self.atol + self.rtol * abs(other.x)
-            ) and abs(self.y - other.y) < (self.atol + self.rtol * abs(other.y))
-        elif (
-            isinstance(other, (tuple, list))
-            and len(other) == 2
-            and isinstance(other[0], (float, int))
-            and isinstance(other[1], (float, int))
-        ):
-            return abs(self.x - other[0]) < (
-                self.atol + self.rtol * abs(other[0])
-            ) and abs(self.y - other[1]) < (self.atol + self.rtol * abs(other[1]))
-        else:
-            raise TypeError(
-                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
-            )
+        x, y, tol_x, tol_y = self._get_xy_tolerance(other)
+        dx = abs(self.x - x)
+        dy = abs(self.y - y)
+        return dx <= tol_x and dy <= tol_y
 
     def __lt__(self, other: Any) -> bool:
-        if isinstance(other, MPP):
-            tol_x = self.atol + self.rtol * abs(other.x)
-            tol_y = self.atol + self.rtol * abs(other.y)
-            return self.x < other.x - tol_x and self.y < other.y - tol_y
-        elif (
-            isinstance(other, (tuple, list))
-            and len(other) == 2
-            and isinstance(other[0], (float, int))
-            and isinstance(other[1], (float, int))
-        ):
-            tol_x = self.atol + self.rtol * abs(other[0])
-            tol_y = self.atol + self.rtol * abs(other[1])
-            return self.x < other[0] - tol_x and self.y < other[1] - tol_y
-        else:
-            raise TypeError(
-                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
-            )
+        x, y, tol_x, tol_y = self._get_xy_tolerance(other)
+        return self.x < (x - tol_x) and self.y < (y - tol_y)
 
     def __gt__(self, other: Any) -> bool:
-        if isinstance(other, MPP):
-            tol_x = self.atol + self.rtol * abs(other.x)
-            tol_y = self.atol + self.rtol * abs(other.y)
-            return self.x > other.x + tol_x and self.y > other.y + tol_y
-        elif (
-            isinstance(other, (tuple, list))
-            and len(other) == 2
-            and isinstance(other[0], (float, int))
-            and isinstance(other[1], (float, int))
-        ):
-            tol_x = self.atol + self.rtol * abs(other[0])
-            tol_y = self.atol + self.rtol * abs(other[1])
-            return self.x > other[0] + tol_x and self.y > other[1] + tol_y
-        else:
-            raise TypeError(
-                f"can't compare {self!r} with object of type: {type(other).__name__!r}"
-            )
+        x, y, tol_x, tol_y = self._get_xy_tolerance(other)
+        return self.x < (x + tol_x) and self.y < (y + tol_y)
 
     def __ne__(self, other):
         return not self.__eq__(other)

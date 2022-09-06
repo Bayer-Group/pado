@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
+from sys import float_info
 
 import fsspec
 import pytest
@@ -12,7 +13,6 @@ from pado.images.providers import update_image_provider_urlpaths
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
-from pado.images.utils import FuzzyMPP
 from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
@@ -333,10 +333,29 @@ def test_image_get_chunk_sizes(dataset):
             chunk_sizes = img.get_chunk_sizes(level=0)
             assert chunk_sizes.ndim == 2
 
-def test_fuzzy_mpp():
-    mpp0 = MPP(0.5, 0.5)
-    mpp1 = MPP(0.51, 0.51)
-    fmpp1 = FuzzyMPP(0.51, 0.51, rtol=0.05, atol=0)
+def test_mpp_equality():
+    m0 = MPP(0.5, 0.5)
+    m1 = MPP(0.51, 0.51)
+    m2 = MPP(0.51, 0.51, rtol=0.05, atol=0)
 
-    assert mpp0 != mpp1
-    assert fmpp1 == mpp0
+    assert m0 != m1
+    assert m1 != m0
+    assert m0 == m2
+    assert m2 == m0
+
+    m0 = MPP(1, 1, rtol=1, atol=0)
+    m1 = MPP(10, 10, rtol=0.1, atol=0)
+    assert m0 != m1
+    assert m1 != m0
+
+    m0 = MPP(1, 1, rtol=1)
+    m1 = MPP(2, 2)
+    assert m0 == m1
+    assert m1 == m0
+
+
+def test_mpp_close_rtol():
+    m0 = MPP(1, 1, rtol=1)
+    m1 = MPP(2 + 2 * float_info.epsilon, 2)
+    assert m0 != m1
+    assert m1 != m0
