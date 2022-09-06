@@ -13,6 +13,7 @@ from pado.images.providers import update_image_provider_urlpaths
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import MPP
+from pado.images.utils import match_mpp
 from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
@@ -359,3 +360,14 @@ def test_mpp_close_rtol():
     m1 = MPP(2 + 2 * float_info.epsilon, 2)
     assert m0 != m1
     assert m1 != m0
+
+
+def test_mpp_match():
+    m = match_mpp(MPP(1, 1), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(3.3, 3.3))
+    assert m == MPP(1, 1)
+
+    m = match_mpp(MPP(1, 1, rtol=0.2), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(3.3, 3.3))
+    assert m == MPP(1.1, 1.1)
+
+    m = match_mpp(MPP(1, 1, rtol=0.2), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(0.95, 0.95))
+    assert m == MPP(0.95, 0.95)

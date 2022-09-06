@@ -126,6 +126,30 @@ class MPP:
         return self.__gt__(other) or self.__eq__(other)
 
 
+def match_mpp(
+    origin: MPP,
+    *targets: MPP,
+    remove_tolerance: bool = True,
+    raise_no_match: bool = False,
+) -> MPP:
+    """returns an MPP from potential matches or the original"""
+    targets = sorted(
+        targets,
+        key=lambda target: (origin.x - target.x) ** 2 + (origin.y - target.y) ** 2,
+    )
+    for t in targets:
+        if origin == t:
+            break
+    else:
+        if raise_no_match:
+            raise ValueError("could not match to targets")
+        t = origin
+    if remove_tolerance:
+        return t.with_tolerance(rtol=0, atol=0)
+    else:
+        return t
+
+
 _P = TypeVar("_P", bound="Point")
 _S = TypeVar("_S", bound="Size")
 _B = TypeVar("_B", bound="Bounds")
