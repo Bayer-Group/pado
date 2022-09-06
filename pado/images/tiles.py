@@ -27,6 +27,7 @@ from pado.images.utils import Geometry
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
 from pado.images.utils import ensure_type
+from pado.images.utils import match_mpp
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -210,11 +211,20 @@ class GridTileIndex(TileIndex):
         if tile_size.mpp is not None:
             if tile_size.mpp != target_mpp:
                 raise NotImplementedError("tile_size.mpp must equal target_mpp")
+            elif not tile_size.mpp.is_exact:
+                raise ValueError("tile_size MPP must be exact!")
 
-        if image_size.mpp is not None and image_size.mpp != target_mpp:
+        if image_size.mpp is None:
+            raise ValueError("image_size must provide an MPP!")
+        elif not image_size.mpp.is_exact:
+            raise ValueError("image_size MPP must be exact!")
+        elif image_size.mpp != target_mpp:
             self._image_size = image_size.scale(target_mpp).round()
         else:
             self._image_size = image_size
+
+        if not target_mpp.is_exact:
+            raise ValueError("target_mpp MPP must be exact!")
 
         self._tile_size = tile_size
         self._overlap = int(overlap)
@@ -337,24 +347,20 @@ class FastGridTiling(TilingStrategy):
     ) -> None:
         if isinstance(target_mpp, float):
             self._target_mpp = MPP.from_float(target_mpp)
-        elif not isinstance(target_mpp, MPP):
+        elif isinstance(target_mpp, MPP):
+            self._target_mpp = target_mpp
+        else:
             raise TypeError(
                 f"target_mpp expected MPP | float, got {type(target_mpp).__name__!r}"
             )
+        if not isinstance(tile_size, IntSize):
+            self._tile_size = IntSize.from_tuple(tile_size, mpp=None)
+        elif tile_size.mpp is None:
+            self._tile_size = IntSize(tile_size.x, tile_size.y, mpp=None)
+        elif tile_size.mpp != self._target_mpp:
+            raise NotImplementedError("Todo: warn and scale?")
         else:
-            self._target_mpp = target_mpp
-        if isinstance(tile_size, IntSize):
-            if tile_size.mpp is None:
-                self._tile_size = IntSize(
-                    tile_size.x, tile_size.y, mpp=self._target_mpp
-                )
-            elif tile_size.mpp != self._target_mpp:
-                raise NotImplementedError("Todo: warn and scale?")
-            else:
-                self._tile_size = tile_size
-        else:
-            tw, th = tile_size
-            self._tile_size = IntSize(tw, th, mpp=self._target_mpp)
+            self._tile_size = IntSize(tile_size.x, tile_size.y, mpp=None)
         self._overlap = int(overlap)
         self._min_chunk_size = min_chunk_size
         self._normalize_chunk_size = normalize_chunk_sizes
@@ -370,6 +376,8 @@ class FastGridTiling(TilingStrategy):
             image.metadata.height,
             mpp=MPP(image.metadata.mpp_x, image.metadata.mpp_y),
         )
+        target_mpp = match_mpp(self._target_mpp, *image.level_mpp.values())
+
         if self._min_chunk_size is not None:
             with image.open(storage_options=storage_options):
                 chunk_sizes = image.get_chunk_sizes(level=0)
@@ -381,11 +389,18 @@ class FastGridTiling(TilingStrategy):
         else:
             mask = None
 
+        if not target_mpp.is_exact:
+            raise RuntimeError("target_mpp must be exact")
+        if self._tile_size.mpp is not None:
+            raise RuntimeError("tile_size.mpp can't be set before")
+        else:
+            tile_size = IntSize(self._tile_size.x, self._tile_size.y, mpp=target_mpp)
+
         return GridTileIndex.from_mask(
             image_size=image_size,
-            tile_size=self._tile_size,
+            tile_size=tile_size,
             overlap=self._overlap,
-            target_mpp=self._target_mpp,
+            target_mpp=target_mpp,
             mask=mask,
         )
 

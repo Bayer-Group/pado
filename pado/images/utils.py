@@ -27,6 +27,7 @@ __all__ = [
     "IntBounds",
     "Geometry",
     "ensure_type",
+    "match_mpp",
 ]
 
 
@@ -38,6 +39,8 @@ def __getattr__(name):
             DeprecationWarning,
         )
         return MPP
+    else:
+        raise AttributeError(name)
 
 
 # NOTE:
@@ -83,6 +86,10 @@ class MPP:
         tol_y = self.atol + self.rtol * abs(self.y)
         return tol_x, tol_y
 
+    @property
+    def is_exact(self) -> bool:
+        return self.rtol == 0 and self.atol == 0
+
     def _get_xy_tolerance(self, other: Any) -> Tuple[float, float, float, float]:
         if isinstance(other, MPP):
             atol = max(self.atol, other.atol)
@@ -103,7 +110,10 @@ class MPP:
             raise TypeError(f"unsupported object of type: {type(other).__name__!r}")
 
     def __eq__(self, other: Any) -> bool:
-        x, y, tol_x, tol_y = self._get_xy_tolerance(other)
+        try:
+            x, y, tol_x, tol_y = self._get_xy_tolerance(other)
+        except TypeError:
+            return False
         dx = abs(self.x - x)
         dy = abs(self.y - y)
         return dx <= tol_x and dy <= tol_y
@@ -233,7 +243,7 @@ class Size:
         return self.y
 
     @classmethod
-    def from_tuple(cls: Type[_S], xy: Tuple[float, float], *, mpp: MPP) -> _S:
+    def from_tuple(cls: Type[_S], xy: Tuple[float, float], *, mpp: Optional[MPP]) -> _S:
         x, y = xy
         return cls(x=x, y=y, mpp=mpp)
 
