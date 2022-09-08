@@ -413,11 +413,8 @@ class Image:
 
     @property
     def level_mpp(self) -> Dict[int, MPP]:
-        if self._slide is None:
-            raise RuntimeError(f"{self!r} not opened and not in context manager")
         return {
-            lvl: self.mpp.scale(ds)
-            for lvl, ds in enumerate(self._slide.level_downsamples)
+            lvl: self.mpp.scale(ds) for lvl, ds in enumerate(self.metadata.downsamples)
         }
 
     @property
@@ -504,60 +501,54 @@ class Image:
     ) -> np.ndarray:
         """return array from a defined mpp and a position (in the target mpp)"""
 
-        def _scale_xy(
-            to_transform: Union[IntPoint, IntSize], mpp_current: MPP, mpp_target: MPP
-        ):
-            pos_x, pos_y = to_transform.as_tuple()
-            mpp_x_current, mpp_y_current = mpp_current.as_tuple()
-            mpp_x_target, mpp_y_target = mpp_target.as_tuple()
-            return int(round(pos_x * mpp_x_current / mpp_x_target)), int(
-                round(pos_y * mpp_y_current / mpp_y_target)
-            )
-
-        if location.mpp.as_tuple() != target_mpp.as_tuple():
+        if location.mpp != target_mpp:
             raise ValueError(
                 f"location.mpp != target_mpp -> {location.mpp!r} != {target_mpp!r}"
             )
+        if target_mpp.x != target_mpp.y:
+            raise NotImplementedError("currently assuming same x and y mpp")
+
         if region.mpp is None:
             pass
-        elif region.mpp.as_tuple() != target_mpp.as_tuple():
+        elif region.mpp != target_mpp:
             raise ValueError(
                 f"region.mpp != target_mpp -> {region.mpp!r} != {target_mpp!r}"
             )
 
-        mpp_xy = target_mpp.as_tuple()
-
-        lvl0_mpp = self.mpp
         # we find the corresponding location at level0
-        lvl0_xy = _scale_xy(location, mpp_current=target_mpp, mpp_target=lvl0_mpp)
+        lvl0_xy = _scale_xy(
+            location,
+            mpp_current=target_mpp,
+            mpp_target=self.mpp,
+        )
+        region_wh = region.as_tuple()
 
-        if mpp_xy[0] != mpp_xy[1]:
-            raise NotImplementedError("currently missing support for non symmetric MPP")
         for lvl_best, mpp_best in self.level_mpp.items():
-            if mpp_xy[0] >= mpp_best.as_tuple()[0]:
+            if target_mpp > mpp_best or target_mpp == mpp_best:
                 break
         else:
             raise NotImplementedError(
-                f"requesting a smaller mpp {mpp_xy!r} "
+                f"requesting a smaller mpp {target_mpp!r} "
                 f"than provided in the image {self.level_mpp.items()!r}"
             )
 
-        region_tuple = region.as_tuple()
-        if mpp_xy == mpp_best:
+        if target_mpp == mpp_best:
             # no need to rescale
             array = self._slide.read_region(
-                location=lvl0_xy, level=lvl_best, size=region_tuple, as_array=True
+                location=lvl0_xy, level=lvl_best, size=region_wh, as_array=True
             )
         else:
             # we need to rescale to the target_mpp
-            region_best = _scale_xy(region, mpp_current=target_mpp, mpp_target=mpp_best)
+            region_best = _scale_xy(
+                region, mpp_current=location.mpp, mpp_target=mpp_best
+            )
 
             array = self._slide.read_region(
                 location=lvl0_xy, level=lvl_best, size=region_best, as_array=True
             )
 
-            if array.shape[0:2:-1] != region_tuple:
-                array = cv2.resize(array, dsize=region_tuple)
+            if array.shape[0:2:-1] != region_wh:
+                array = cv2.resize(array, dsize=region_wh)
 
         return array
 
@@ -600,3 +591,14 @@ class Image:
     def is_local(self, must_exist=True) -> bool:
         """Return True if the image is stored locally"""
         return urlpathlike_is_localfile(self.urlpath, must_exist=must_exist)
+
+
+def _scale_xy(
+    to_transform: Union[IntPoint, IntSize], mpp_current: MPP, mpp_target: MPP
+):
+    pos_x, pos_y = to_transform.as_tuple()
+    mpp_x_current, mpp_y_current = mpp_current.as_tuple()
+    mpp_x_target, mpp_y_target = mpp_target.as_tuple()
+    x = int(round(pos_x * mpp_x_current / mpp_x_target))
+    y = int(round(pos_y * mpp_y_current / mpp_y_target))
+    return x, y

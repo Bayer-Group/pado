@@ -107,7 +107,9 @@ class PadoDataset:
             try:
                 fs = self._fs
             except OSError as err:
-                raise RuntimeError(f"can't instantiate filesystem: {err!r}")
+                raise RuntimeError(
+                    f"can't instantiate filesystem (urlpath={self._urlpath!r}) error: {err!r}"
+                )
             if mode in {"r", "r+"}:
                 try:
                     is_dir = fs.isdir(self._root)  # raises if not there or reachable

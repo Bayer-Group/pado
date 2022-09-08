@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
+from sys import float_info
 
 import fsspec
 import pytest
@@ -9,8 +10,10 @@ import pytest
 from pado.images.ids import ImageId
 from pado.images.ids import load_image_ids_from_csv
 from pado.images.providers import update_image_provider_urlpaths
+from pado.images.utils import MPP
 from pado.images.utils import IntPoint
 from pado.images.utils import IntSize
+from pado.images.utils import match_mpp
 from pado.io.files import urlpathlike_to_fsspec
 
 # --- test constructors -----------------------------------------------
@@ -330,3 +333,49 @@ def test_image_get_chunk_sizes(dataset):
         with img:
             chunk_sizes = img.get_chunk_sizes(level=0)
             assert chunk_sizes.ndim == 2
+
+
+def test_mpp_equality():
+    m0 = MPP(0.5, 0.5)
+    m1 = MPP(0.51, 0.51)
+    m2 = MPP(0.51, 0.51, rtol=0.05, atol=0)
+
+    assert m0 != m1
+    assert m1 != m0
+    assert m0 == m2
+    assert m2 == m0
+
+    m0 = MPP(1, 1, rtol=1, atol=0)
+    m1 = MPP(10, 10, rtol=0.1, atol=0)
+    assert m0 != m1
+    assert m1 != m0
+
+    m0 = MPP(1, 1, rtol=1)
+    m1 = MPP(2, 2)
+    assert m0 == m1
+    assert m1 == m0
+
+
+def test_mpp_close_rtol():
+    m0 = MPP(1, 1, rtol=1)
+    m1 = MPP(2 + 2 * float_info.epsilon, 2)
+    assert m0 != m1
+    assert m1 != m0
+
+
+def test_mpp_match():
+    m = match_mpp(MPP(1, 1), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(3.3, 3.3))
+    assert m == MPP(1, 1)
+
+    m = match_mpp(MPP(1, 1, rtol=0.2), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(3.3, 3.3))
+    assert m == MPP(1.1, 1.1)
+
+    m = match_mpp(MPP(1, 1, rtol=0.2), MPP(1.1, 1.1), MPP(2.2, 2.2), MPP(0.95, 0.95))
+    assert m == MPP(0.95, 0.95)
+
+
+def test_mpp_cmp():
+    assert MPP(1, 1) > MPP(0.25, 0.25)
+    assert not (MPP(1, 1) < MPP(0.25, 0.25))
+    assert not (MPP(1, 1) <= MPP(0.25, 0.25))
+    assert MPP(1, 1) >= MPP(0.25, 0.25)
