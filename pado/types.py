@@ -10,24 +10,24 @@ from typing import IO
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import AnyStr
-from typing import ContextManager
 from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
 from typing import Type
-from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 
 if sys.version_info >= (3, 8):
     from typing import Literal  # 3.8+
     from typing import Protocol  # 3.8+
+    from typing import TypedDict
     from typing import runtime_checkable
 else:
     from typing_extensions import Literal
     from typing_extensions import Protocol
+    from typing_extensions import TypedDict
     from typing_extensions import runtime_checkable
 
 if TYPE_CHECKING:
@@ -47,14 +47,17 @@ if TYPE_CHECKING:
 # --- types ---
 
 
+S = TypeVar("S", str, bytes)
+
+
 @runtime_checkable
-class OpenFileLike(Protocol, ContextManager[IO[AnyStr]]):
+class OpenFileLike(Protocol[S]):
     """minimal fsspec open file type"""
 
     fs: AbstractFileSystem
     path: str
 
-    def __enter__(self) -> IO[AnyStr]:
+    def __enter__(self) -> IO[S]:
         ...
 
     def __exit__(self, exc_type, exc_val, exc_tb):

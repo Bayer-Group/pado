@@ -98,7 +98,7 @@ def _os_path_parts(pth: str) -> tuple[str, ...]:
     elif part == pth:
         return (pth,)
     else:
-        return *_os_path_parts(remaining), part
+        return (*_os_path_parts(remaining), part)
 
 
 class _OpenFileAndParts(NamedTuple):
