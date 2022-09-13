@@ -14,13 +14,14 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import Union
-from typing import get_args
 from typing import overload
 
 if sys.version_info >= (3, 8):
     from typing import Literal
+    from typing import get_args
 else:
     from typing_extensions import Literal
+    from typing_extensions import get_args
 
 import fsspec
 import pandas as pd

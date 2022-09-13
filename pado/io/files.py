@@ -9,7 +9,6 @@ import os
 import pickle
 import sys
 import tarfile
-import typing
 import warnings
 import zipfile
 from ast import literal_eval
@@ -42,9 +41,11 @@ from pado.types import UrlpathLike
 if sys.version_info[:2] >= (3, 10):
     from typing import Literal
     from typing import TypeGuard
+    from typing import get_args
 else:
     from typing_extensions import Literal
     from typing_extensions import TypeGuard
+    from typing_extensions import get_args
 
 __all__ = [
     "find_files",
@@ -602,7 +603,7 @@ def fsopen(
     mode: FsspecIOMode = "rb",
 ) -> OpenFile:
     """small helper to support mode 'x' for fsspec filesystems"""
-    if mode not in typing.get_args(FsspecIOMode):
+    if mode not in get_args(FsspecIOMode):
         raise ValueError("fsspec only supports a subset of IOModes")
     if "x" in mode:
         if fs.exists(path):
