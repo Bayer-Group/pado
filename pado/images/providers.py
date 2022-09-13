@@ -124,7 +124,7 @@ class ImageProvider(BaseImageProvider):
             self.df = provider.df.copy()
             self.identifier = str(identifier) if identifier else provider.identifier
         elif isinstance(provider, pd.DataFrame):
-            validate_dataframe_index(provider)
+            validate_dataframe_index(provider, unique_index=True)
             self.df = provider.copy()
             self.identifier = str(identifier) if identifier else str(uuid.uuid4())
         elif isinstance(provider, BaseImageProvider):

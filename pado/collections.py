@@ -546,7 +546,7 @@ class ProviderStoreMixin(Store):
 # === helpers =================================================================
 
 
-def validate_dataframe_index(df: pd.DataFrame) -> None:
+def validate_dataframe_index(df: pd.DataFrame, *, unique_index: bool = False) -> None:
     """raise if an incorrect index is used"""
     if not isinstance(df, pd.DataFrame):
         raise TypeError(f"expected pandas.DataFrame, got: {type(df).__name__!r}")
@@ -568,6 +568,9 @@ def validate_dataframe_index(df: pd.DataFrame) -> None:
                 >>> df = pd.DataFrame(index=[iid.to_str() for iid in image_ids], data=...)
             """
         raise ValueError(dedent(msg))
+
+    if unique_index and not df.index.is_unique:
+        raise ValueError("Dataframe index is required to be unique.")
 
 
 IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9_])?$")
