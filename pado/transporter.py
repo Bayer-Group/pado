@@ -16,7 +16,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import toml
-from appdirs import user_config_dir
+from platformdirs import user_config_dir
 
 
 def subcommand(*arguments, parent):
