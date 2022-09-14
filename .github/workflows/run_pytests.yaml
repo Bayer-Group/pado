@@ -28,9 +28,11 @@ jobs:
             python-version: "3.7"
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Make python reference python3 because conda-devenv needs it
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -49,3 +51,68 @@ jobs:
       uses: codecov/codecov-action@v3
       with:
         name: pado
+
+  # DEPLOY PADO TO TEST.PYPI ON SUCCESS
+  testdeploy:
+    needs: [tests]
+    name: deploy to test.pypi
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install wheel "setuptools_scm>=6.2" build
+      # we'll have to remove local_scheme for pushes to test.pypi pep440
+      - name: Get version without local_scheme
+        id: non_local_version
+        run: |
+          python -m setuptools_scm | awk -F+ '{print "::set-output name=version::"$1}'
+      - name: Build a binary wheel and a source tarball
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.non_local_version.outputs.version }}
+        run: |
+          python -m build .
+      # push all versions on master to test.pypi.org
+      - name: Publish package to TestPyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.test_pypi_password }}
+          repository_url: https://test.pypi.org/legacy/
+
+  # DEPLOY PADO TO PYPI ON SUCCESS
+  deploy:
+    needs: [tests]
+    name: deploy to pypi
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+      - name: Build a binary wheel and a source tarball
+        run: |
+          python -m build .
+      # push all tagged versions to pypi.org
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.pypi_password }}
