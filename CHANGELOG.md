@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ...
 
+## [0.10.0] - 2022-09-14
+### Fixed
+- pado.images.providers: ensure provided dataframe index is unique
+- fix python3.7 compatibility
+
+### Added
+- ci: readthedocs
+- ci: pypi deployment
+
 ## [0.9.0] - 2022-09-08
 ### Added
 - support fuzzy definition of MPP values
@@ -67,7 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - started this changelog
 
-[Unreleased]: https://github.com/Bayer-Group/pado/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Bayer-Group/pado/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Bayer-Group/pado/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Bayer-Group/pado/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Bayer-Group/pado/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Bayer-Group/pado/compare/v0.6.1...v0.7.0
