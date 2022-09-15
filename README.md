@@ -1,6 +1,13 @@
 # PADO: PAthological Data Obsession
 
-[![Milestones](https://img.shields.io/badge/mlr%20milestones-pado-brightgreen)](https://github.com/Bayer-Group/pado/milestones?direction=asc&sort=due_date&state=open)
+[![PyPI Version](https://img.shields.io/pypi/v/pado)](https://pypi.org/project/pado/)
+[![Conda (channel only)](https://img.shields.io/conda/vn/conda-forge/pado?label=conda)](https://anaconda.org/conda-forge/pado)
+[![Read the Docs](https://img.shields.io/readthedocs/pado)](https://pado.readthedocs.io)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/Bayer-Group/pado/pado%20ci?label=tests)](https://github.com/Bayer-Group/pado/actions)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pado)](https://github.com/Bayer-Group/pado)
+[![GitHub issues](https://img.shields.io/github/issues/Bayer-Group/pado)](https://github.com/Bayer-Group/pado/issues)
+[![Milestones](https://img.shields.io/badge/milestones-pado-brightgreen)](https://github.com/Bayer-Group/pado/milestones?direction=asc&sort=due_date&state=open)
+
 
 Welcome to `pado` :wave:, a dataset library for accessing histopathological
 datasets in a standardized way from [Python](https://www.python.org/).
