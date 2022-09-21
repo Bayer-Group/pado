@@ -269,7 +269,8 @@ class TileDataset(Dataset):
         )
         if compute_tile_indexes:
             return True
-        compute_annotation_indexes = not set(self._ds.annotations).issubset(
+        annotation_iids = set(self._ds.annotations).intersection(self._ds.index)
+        compute_annotation_indexes = not annotation_iids.issubset(
             self._annotation_trees
         )
         if compute_annotation_indexes:
@@ -304,11 +305,12 @@ class TileDataset(Dataset):
                 location, size, mpp = tile_index[idx]
 
                 # get the tile array
-                with pado_item.image.via(
-                    self._ds, storage_options=self._image_so
-                ) as img:
-                    lvl0_mpp = img.mpp
-                    arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
+                img = pado_item.image
+                if not img.is_open:
+                    img.via(self._ds, storage_options=self._image_so)
+
+                lvl0_mpp = img.mpp
+                arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
                 if self._as_tensor:
                     arr = from_numpy(arr)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections import deque
+from functools import lru_cache
 from itertools import repeat
 from reprlib import Repr
 from textwrap import dedent
@@ -37,6 +38,7 @@ __all__ = [
     "GroupedProviderMixin",
     "validate_dataframe_index",
     "is_valid_identifier",
+    "clear_provider_getitem_cache",
 ]
 
 _r = Repr()
@@ -84,7 +86,12 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
                 f"expected `{type(self).__name__}`, got: {type(provider).__name__!r}"
             )
 
+        self.__getitem_cached__ = lru_cache(maxsize=None)(self.__getitem_uncached__)
+
     def __getitem__(self, image_id: ImageId) -> PI:
+        return self.__getitem_cached__(image_id)
+
+    def __getitem_uncached__(self, image_id: ImageId) -> PI:
         if not isinstance(image_id, ImageId):
             raise TypeError(
                 f"keys must be ImageId instances, got {type(image_id).__name__!r}"
@@ -498,6 +505,8 @@ class SerializableProviderMixin:
             raise NotImplementedError(f"currently unused {user_metadata!r}")
         inst = cls(identifier=identifier)
         inst.df = df
+        if hasattr(inst, "__getitem_uncached__"):
+            inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)
         return inst
 
 
@@ -582,3 +591,16 @@ def is_valid_identifier(identifier: str) -> bool:
         return True
     else:
         return False
+
+
+def clear_provider_getitem_cache(p: PadoMutableMapping) -> None:
+    if hasattr(p, "__getitem_cached__"):
+        p.__getitem_cached__.cache_clear()
+    elif hasattr(p, "providers"):
+        for _p in p.providers:
+            clear_provider_getitem_cache(p)
+    elif hasattr(p, "_provider"):
+        # noinspection PyProtectedMember
+        clear_provider_getitem_cache(p._provider)
+    else:
+        pass

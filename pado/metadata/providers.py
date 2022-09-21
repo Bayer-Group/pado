@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC
+from functools import lru_cache
 from reprlib import Repr
 from typing import Any
 from typing import Callable
@@ -120,7 +121,12 @@ class MetadataProvider(BaseMetadataProvider):
                 f"expected `BaseMetadataProvider`, got: {type(provider).__name__!r}"
             )
 
+        self.__getitem_cached__ = lru_cache(maxsize=None)(self.__getitem_uncached__)
+
     def __getitem__(self, image_id: ImageId) -> pd.DataFrame:
+        return self.__getitem_cached__(image_id)
+
+    def __getitem_uncached__(self, image_id: ImageId) -> pd.DataFrame:
         if not isinstance(image_id, ImageId):
             raise TypeError(
                 f"keys must be ImageId instances, got {type(image_id).__name__!r}"
@@ -187,6 +193,7 @@ class MetadataProvider(BaseMetadataProvider):
         inst = cls.__new__(cls)
         inst.df = df
         inst.identifier = identifier
+        inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)
         return inst
 
 
