@@ -269,7 +269,8 @@ class TileDataset(Dataset):
         )
         if compute_tile_indexes:
             return True
-        compute_annotation_indexes = not set(self._ds.annotations).issubset(
+        annotation_iids = set(self._ds.annotations).intersection(self._ds.index)
+        compute_annotation_indexes = not annotation_iids.issubset(
             self._annotation_trees
         )
         if compute_annotation_indexes:
