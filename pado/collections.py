@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections import deque
+from functools import lru_cache
 from itertools import repeat
 from reprlib import Repr
 from textwrap import dedent
@@ -84,7 +85,12 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
                 f"expected `{type(self).__name__}`, got: {type(provider).__name__!r}"
             )
 
+        self.__getitem_cached__ = lru_cache(maxsize=None)(self.__getitem_uncached__)
+
     def __getitem__(self, image_id: ImageId) -> PI:
+        return self.__getitem_cached__(image_id)
+
+    def __getitem_uncached__(self, image_id: ImageId) -> PI:
         if not isinstance(image_id, ImageId):
             raise TypeError(
                 f"keys must be ImageId instances, got {type(image_id).__name__!r}"
