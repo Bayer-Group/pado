@@ -30,6 +30,7 @@ from fsspec.implementations.local import LocalFileSystem
 from tqdm import tqdm
 
 from pado._compat import cached_property
+from pado.collections import clear_provider_getitem_cache
 from pado.collections import validate_dataframe_index
 from pado.images.ids import ImageId
 from pado.images.image import Image
@@ -455,6 +456,7 @@ def update_image_provider_urlpaths(
 
     if isinstance(provider, provider_cls):
         ip = provider
+        clear_provider_getitem_cache(ip)
     else:
         ip = provider_cls.from_parquet(urlpath=provider)
 

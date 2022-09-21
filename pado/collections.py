@@ -38,6 +38,7 @@ __all__ = [
     "GroupedProviderMixin",
     "validate_dataframe_index",
     "is_valid_identifier",
+    "clear_provider_getitem_cache",
 ]
 
 _r = Repr()
@@ -504,6 +505,8 @@ class SerializableProviderMixin:
             raise NotImplementedError(f"currently unused {user_metadata!r}")
         inst = cls(identifier=identifier)
         inst.df = df
+        if hasattr(inst, "__getitem_uncached__"):
+            inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)
         return inst
 
 
@@ -588,3 +591,16 @@ def is_valid_identifier(identifier: str) -> bool:
         return True
     else:
         return False
+
+
+def clear_provider_getitem_cache(p: PadoMutableMapping) -> None:
+    if hasattr(p, "__getitem_cached__"):
+        p.__getitem_cached__.cache_clear()
+    elif hasattr(p, "providers"):
+        for _p in p.providers:
+            clear_provider_getitem_cache(p)
+    elif hasattr(p, "_provider"):
+        # noinspection PyProtectedMember
+        clear_provider_getitem_cache(p._provider)
+    else:
+        pass
