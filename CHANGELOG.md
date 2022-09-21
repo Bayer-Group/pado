@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ...
 
+## [0.11.0] - 2022-09-21
+### Changed
+- pado: cache `???Provider.__getitem__` calls
+
+### Added
+- pado.collections: add function to clear provider caches
+
 ## [0.10.1] - 2022-09-15
 ### Fixed
 - pado.transporter: switch to platformdirs
