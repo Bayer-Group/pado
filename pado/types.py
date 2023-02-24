@@ -9,7 +9,6 @@ from enum import Enum
 from typing import IO
 from typing import TYPE_CHECKING
 from typing import Any
-from typing import AnyStr
 from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
@@ -64,7 +63,7 @@ class OpenFileLike(Protocol[S]):
         ...
 
 
-UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
+UrlpathLike = Union[str, "os.PathLike[str]", OpenFileLike[str]]
 IOMode = Literal["r", "r+", "w", "a", "x"]
 FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
 
