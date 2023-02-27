@@ -43,8 +43,8 @@ def match_partial_paths_reversed(
     """
     current_path_parts = {}
     for _idx, urlpathlike in enumerate(current_urlpaths):
-        parts = urlpathlike_to_path_parts(urlpathlike)
-        current_path_parts[parts] = {
+        _parts = urlpathlike_to_path_parts(urlpathlike)
+        current_path_parts[_parts] = {
             "index": _idx,
             "cur": urlpathlike,
             "new": None,
@@ -79,7 +79,7 @@ def match_partial_paths_reversed(
             current_path_parts[m]["new"] = new_up
 
     return [
-        x["new"] or x["cur"]
+        x["new"] or x["cur"]  # type: ignore
         for x in sorted(current_path_parts.values(), key=itemgetter("index"))
     ]
 
