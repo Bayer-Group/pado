@@ -138,7 +138,7 @@ def number(
     if agg == "id":
         x["val"] = cast_to(v.item())
     elif agg == "sum":
-        x["val"] = cast_to(v.sum())  # type: ignore
+        x["val"] = cast_to(v.sum())
     elif agg == "avg":
         x["val"] = cast_to(v.mean())
         x["std"] = cast_to(v.std())

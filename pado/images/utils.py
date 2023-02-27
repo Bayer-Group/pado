@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import warnings
 from math import floor
 from typing import Any
@@ -16,6 +17,12 @@ from pydantic import conint
 from pydantic.dataclasses import dataclass
 from shapely.affinity import scale as shapely_scale
 from shapely.geometry.base import BaseGeometry
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
+
 
 __all__ = [
     "Point",
@@ -143,11 +150,11 @@ def match_mpp(
     raise_no_match: bool = False,
 ) -> MPP:
     """returns an MPP from potential matches or the original"""
-    targets = sorted(
+    _targets = sorted(
         targets,
         key=lambda target: (origin.x - target.x) ** 2 + (origin.y - target.y) ** 2,
     )
-    for t in targets:
+    for t in _targets:
         if origin == t:
             break
     else:
@@ -158,12 +165,6 @@ def match_mpp(
         return t.with_tolerance(rtol=0, atol=0)
     else:
         return t
-
-
-_P = TypeVar("_P", bound="Point")
-_S = TypeVar("_S", bound="Size")
-_B = TypeVar("_B", bound="Bounds")
-_G = TypeVar("_G", bound="Geometry")
 
 
 @dataclass(frozen=True)
@@ -189,7 +190,7 @@ class Point:
         )
 
     @classmethod
-    def from_tuple(cls: Type[_P], xy: Tuple[float, float], *, mpp: MPP) -> _P:
+    def from_tuple(cls: Type[Self], xy: Tuple[float, float], *, mpp: MPP) -> Self:
         x, y = xy
         return cls(x=x, y=y, mpp=mpp)
 
@@ -243,7 +244,9 @@ class Size:
         return self.y
 
     @classmethod
-    def from_tuple(cls: Type[_S], xy: Tuple[float, float], *, mpp: Optional[MPP]) -> _S:
+    def from_tuple(
+        cls: Type[Self], xy: Tuple[float, float], *, mpp: Optional[MPP]
+    ) -> Self:
         x, y = xy
         return cls(x=x, y=y, mpp=mpp)
 
@@ -350,8 +353,8 @@ class Bounds:
 
     @classmethod
     def from_tuple(
-        cls: Type[_B], x0y0x1y1: Tuple[float, float, float, float], *, mpp: MPP
-    ) -> _B:
+        cls: Type[Self], x0y0x1y1: Tuple[float, float, float, float], *, mpp: MPP
+    ) -> Self:
         return cls(*x0y0x1y1, mpp=mpp)
 
     def as_tuple(self) -> Tuple[float, float, float, float]:
@@ -386,7 +389,6 @@ class Bounds:
 # noinspection PyDataclass
 @dataclass(frozen=True)
 class IntBounds(Bounds):
-
     x0: conint(ge=0, strict=True)  # type: ignore
     y0: conint(ge=0, strict=True)  # type: ignore
     x1: conint(ge=0, strict=True)  # type: ignore
@@ -431,16 +433,16 @@ class Geometry:
     geometry: BaseGeometry
     mpp: Optional[MPP] = None
 
-    def scale(self, mpp: MPP) -> _G:
+    def scale(self: Self, mpp: MPP) -> Self:
         """scale geometry to a new mpp"""
         current = self.mpp
         if current is None:
             raise ValueError(f"Can't scale: {self!r} has no mpp")
 
-        factor_x = self.mpp.x / mpp.x
-        factor_y = self.mpp.y / mpp.y
+        factor_x = current.x / mpp.x
+        factor_y = current.y / mpp.y
 
-        return Geometry(
+        return self.from_geometry(
             geometry=shapely_scale(
                 self.geometry, xfact=factor_x, yfact=factor_y, origin=(0, 0)
             ),
@@ -460,7 +462,7 @@ class Geometry:
                 self.geometry = self.geometry.buffer(buffer_size[0])
 
     @classmethod
-    def from_geometry(cls: Type[_G], geometry: BaseGeometry, *, mpp: MPP) -> _G:
+    def from_geometry(cls: Type[Self], geometry: BaseGeometry, *, mpp: MPP) -> Self:
         return cls(geometry=geometry, mpp=mpp)
 
 

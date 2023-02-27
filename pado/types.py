@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
     import os
 
+    import numpy as np
     import numpy.typing as npt
     import pandas as pd
     from fsspec import AbstractFileSystem
@@ -84,7 +85,7 @@ class DatasetSplitter(Protocol):
         X: Sequence[Any],
         y: Optional[Sequence[Any]],
         groups: Optional[Sequence[Any]],
-    ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
+    ) -> Iterator[Tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]]:
         ...
 
 

@@ -12,6 +12,7 @@ from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
+from typing import overload
 
 import numpy as np
 import orjson
@@ -47,19 +48,18 @@ __all__ = [
 
 
 def __getattr__(name):
-    if name == "Tile":
-        cls = _DeprecatedTile
-    elif name == "TileIterator":
-        cls = _DeprecatedTileIterator
-    else:
-        raise AttributeError(name)
-    warnings.warn(
-        f"`pado.images.tiles.{name}` will be removed in the next major version of pado."
-        " Please checkout `pado.itertools.TileDataset`!",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return cls
+    if name in {"Tile", "TileIterator"}:
+        warnings.warn(
+            f"`pado.images.tiles.{name}` will be removed in the next major version of pado."
+            " Please checkout `pado.itertools.TileDataset`!",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if name == "Tile":
+            return _DeprecatedTile
+        elif name == "TileIterator":
+            return _DeprecatedTileIterator
+    raise AttributeError(name)
 
 
 class TileId(NamedTuple):
@@ -67,7 +67,7 @@ class TileId(NamedTuple):
 
     image_id: ImageId
     strategy: str
-    index: int
+    index: int  # type: ignore
 
 
 class PadoTileItem(NamedTuple):
@@ -120,13 +120,13 @@ class TilingStrategy:
     def deserialize(cls, strategy: str) -> TilingStrategy:
         if not isinstance(strategy, str):
             raise TypeError(f"expected str, got {type(strategy).__name__}")
-        name, kwargs = strategy.split(":")
+        name, _ = strategy.split(":")
         for s_cls in cls.__subclasses__():
             if s_cls.name == name:
                 break
         else:
             raise ValueError(f"could not find matching strategy: {strategy!r}")
-        s_cls, kwargs = cls.parse_serialized_strategy_options(strategy)
+        kwargs = s_cls.parse_serialized_strategy_options(strategy)
         return s_cls(**kwargs)
 
 
@@ -134,7 +134,7 @@ ReadTileTuple: TypeAlias = "tuple[IntPoint, IntSize, MPP]"
 
 
 class TileIndex(Sequence[ReadTileTuple]):
-    _registry = {}
+    _registry: dict[str, type[TileIndex]] = {}
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -152,15 +152,34 @@ class TileIndex(Sequence[ReadTileTuple]):
                 )
         TileIndex._registry[cls.__name__] = cls
 
+    @overload
     def __getitem__(self, i: int) -> ReadTileTuple:
+        ...
+
+    @overload
+    def __getitem__(self, i: slice) -> Sequence[ReadTileTuple]:
+        ...
+
+    def __getitem__(self, i: int | slice) -> ReadTileTuple | Sequence[ReadTileTuple]:
+        if isinstance(i, int):
+            return self._getitem(i)
+        elif isinstance(i, slice):
+            raise TypeError("slicing not supported")
+        else:
+            raise TypeError(f"expected `int` got `{type(i).__name__}`")
+
+    def _getitem(self, i: int) -> ReadTileTuple:
         raise NotImplementedError
 
     def __len__(self) -> int:
         raise NotImplementedError
 
     def to_json(self, *, as_string: bool = False) -> str | dict:
-        cls_fqn = f"{inspect.getmodule(self).__name__}.{type(self).__name__}"
-        init_sig = inspect.signature(self.__init__)
+        _module = inspect.getmodule(self)
+        if not _module:
+            raise RuntimeError
+        cls_fqn = f"{_module.__name__}.{type(self).__name__}"
+        init_sig = inspect.signature(self.__init__)  # type: ignore
         if type(self) is TileIndex:
             raise RuntimeError(
                 ".to_json() only makes sense for subclasses of TileIndex"
@@ -243,7 +262,7 @@ class GridTileIndex(TileIndex):
         tile_size: IntSize,
         overlap: int,
         target_mpp: MPP,
-        mask: NDArray[np.bool] | None = None,
+        mask: NDArray[np.bool_] | None = None,
     ):
         if mask is None:
             masked_indices = None
@@ -268,7 +287,7 @@ class GridTileIndex(TileIndex):
             masked_indices=masked_indices,
         )
 
-    def __getitem__(self, item: int) -> tuple[IntPoint, IntSize, MPP]:
+    def _getitem(self, item: int) -> ReadTileTuple:
         item = int(item)
         sw, sh = self._image_size.as_tuple()
         tw, th = self._tile_size.as_tuple()
@@ -429,6 +448,8 @@ class _DeprecatedTile:
         data: Optional[np.ndarray] = None,
         parent: Optional[Image] = None,
     ):
+        if bounds.mpp is None:
+            raise ValueError("bounds must have mpp")
         if mpp.as_tuple() != bounds.mpp.as_tuple():
             raise NotImplementedError(
                 f"tile mpp does not coincide with bounds mpp: {mpp} vs {bounds.mpp}"
