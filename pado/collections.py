@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import sys
 import uuid
 from collections import deque
 from functools import lru_cache
@@ -11,6 +12,8 @@ from textwrap import dedent
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Generic
+from typing import ItemsView
 from typing import Iterable
 from typing import Iterator
 from typing import Mapping
@@ -21,6 +24,11 @@ from typing import Type
 from typing import TypeVar
 from typing import cast
 from typing import overload
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 import pandas as pd
 
@@ -124,14 +132,8 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
     def __iter__(self) -> Iterator[ImageId]:
         return iter(map(ImageId.from_str, self.df.index))
 
-    def items(self) -> Iterator[tuple[ImageId, PI]]:
-        iid_from_str = ImageId.from_str
-        value_from_obj = self.__value_type__.from_obj
-        for row in self.df.itertuples(index=True, name="ValueAsRow"):
-            # noinspection PyProtectedMember
-            x = row._asdict()
-            i = x.pop("Index")
-            yield iid_from_str(i), value_from_obj(x)
+    def items(self) -> PadoItemsView[ImageId, PI]:
+        return PadoItemsView(self)
 
     def __repr__(self):
         _akw = [_r.repr_dict(cast(dict, self), 0)]
@@ -140,7 +142,20 @@ class PadoMutableMapping(MutableMapping[ImageId, PI]):
         return f"{type(self).__name__}({', '.join(_akw)})"
 
 
-PS = TypeVar("PS", bound="PadoMutableSequence")  # todo: use typing.Self
+K = TypeVar("K")
+
+
+class PadoItemsView(ItemsView, Generic[K, PI]):
+    _mapping: PadoMutableMapping
+
+    def __iter__(self) -> Iterator[tuple[K, PI]]:
+        iid_from_str = ImageId.from_str
+        value_from_obj = self._mapping.__value_type__.from_obj
+        for row in self._mapping.df.itertuples(index=True, name="ValueAsRow"):
+            # noinspection PyProtectedMember
+            x = row._asdict()
+            i = x.pop("Index")
+            yield iid_from_str(i), value_from_obj(x)
 
 
 class PadoMutableSequence(MutableSequence[PI]):
@@ -176,13 +191,25 @@ class PadoMutableSequence(MutableSequence[PI]):
         return f"{type(self).__name__}({v}, image_id={self._image_id!r})"
 
     def __eq__(self, other):
-        if not isinstance(other, self.__item_class__):
-            return False
+        if (
+            not isinstance(other, type(self))
+            or other.__item_class__ != type(self).__item_class__
+        ):
+            return NotImplemented
         return all(a == b for a, b in zip(self, other))
 
     @property
     def image_id(self) -> ImageId | None:
         return self._image_id
+
+    @image_id.setter
+    def image_id(self, value: ImageId):
+        if not isinstance(value, ImageId):
+            raise TypeError(
+                f"{value!r} not of type ImageId, got {type(value).__name__}"
+            )
+        self._update_df_image_id(image_id=value)
+        self._image_id = value
 
     def _update_df_image_id(self, image_id: ImageId):
         """internal"""
@@ -200,24 +227,15 @@ class PadoMutableSequence(MutableSequence[PI]):
                 f"unexpected image_ids in {type(self).__name__}.df: {ids!r}"
             )
 
-    @image_id.setter
-    def image_id(self, value: ImageId):
-        if not isinstance(value, ImageId):
-            raise TypeError(
-                f"{value!r} not of type ImageId, got {type(value).__name__}"
-            )
-        self._update_df_image_id(image_id=value)
-        self._image_id = value
-
     @overload
     def __getitem__(self, index: int) -> PI:
         ...
 
     @overload
-    def __getitem__(self: PS, index: slice) -> PS:
+    def __getitem__(self, index: slice) -> Self:
         ...
 
-    def __getitem__(self, index: int | slice) -> PI | PS:
+    def __getitem__(self, index: int | slice) -> PI | Self:
         if isinstance(index, int):
             return self.__item_class__.from_obj(self.df.iloc[index, :])
         elif isinstance(index, slice):
@@ -237,14 +255,24 @@ class PadoMutableSequence(MutableSequence[PI]):
 
     def __setitem__(self, index: int | slice, value: PI | Iterable[PI]) -> None:
         if isinstance(index, int):
+            if not isinstance(value, self.__item_class__):
+                raise TypeError(
+                    f"requires `{self.__item_class__.__name__}` got: {type(value).__name__!r}"
+                )
             self.df.iloc[index, :] = pd.DataFrame(
                 [value.to_record(self._image_id)],
-                columns=self.__item_class__.__fields__,
+                columns=list(self.__item_class__.__fields__),
             )
         elif isinstance(index, slice):
+            if isinstance(value, self.__item_class__):
+                raise TypeError(
+                    f"requires `Iterable[{self.__item_class__.__name__}]` got: {type(value).__name__!r}"
+                )
+            else:
+                it = iter(value)  # type: ignore
             self.df.iloc[index, :] = pd.DataFrame(
-                [x.to_record(self._image_id) for x in value],
-                columns=self.__item_class__.__fields__,
+                [x.to_record(self._image_id) for x in it],
+                columns=list(self.__item_class__.__fields__),
             )
         else:
             raise TypeError(
@@ -278,11 +306,11 @@ class PadoMutableSequence(MutableSequence[PI]):
 
     @classmethod
     def from_records(
-        cls: Type[PS],
+        cls: Type[Self],
         annotation_records: Iterable[dict],
         *,
         image_id: ImageId | None = None,
-    ) -> PS:
+    ) -> Self:
         df = pd.DataFrame(
             list(annotation_records), columns=cls.__item_class__.__fields__
         )
@@ -320,8 +348,8 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
                     columns=self.__value_class__.__item_class__.__fields__
                 )
             else:
-                indices = []
-                data = []
+                indices: list[ImageId] = []
+                data: list[dict] = []
                 for key, value in provider.items():
                     if value is None:
                         continue
@@ -338,7 +366,7 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
                 f"expected `BaseAnnotationProvider`, got: {type(provider).__name__!r}"
             )
 
-        self._store = {}
+        self._store: dict[ImageId, VT] = {}
 
     def __getitem__(self, image_id: ImageId) -> VT:
         if not isinstance(image_id, ImageId):
@@ -402,11 +430,12 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
         )
 
 
-PT = TypeVar("PT")
-GT = TypeVar("GT", bound="GroupedProviderMixin")
+PT = TypeVar(
+    "PT", "PadoMutableMapping", "PadoMutableSequence", "PadoMutableSequenceMapping"
+)
 
 
-class GroupedProviderMixin:
+class GroupedProviderMixin(Generic[PT]):
     __provider_class__: Type[PT]
 
     def __init_subclass__(cls, **kwargs):
@@ -423,7 +452,7 @@ class GroupedProviderMixin:
 
     def __init__(self, *providers: PT):
         super().__init__()
-        self.providers = []
+        self.providers: list[PT] = []
         for p in providers:
             if not isinstance(p, self.__provider_class__):
                 p = self.__provider_class__(p)
@@ -450,20 +479,19 @@ class GroupedProviderMixin:
         self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
     ) -> None:
         # noinspection PyUnresolvedReferences
-        super().to_parquet(urlpath, storage_options=storage_options)
+        super().to_parquet(urlpath, storage_options=storage_options)  # type: ignore
 
     @classmethod
-    def from_parquet(cls: Type[GT], urlpath: UrlpathLike) -> GT:
+    def from_parquet(cls: Type[Self], urlpath: UrlpathLike) -> Self:
         raise TypeError(f"unsupported operation for {cls.__name__!r}()")
 
 
 # === mixins ==================================================================
 
 ST = TypeVar("ST", bound=Store)
-PC = TypeVar("PC")
 
 
-class SerializableProviderMixin:
+class SerializableProviderMixin(Generic[ST]):
     # required attributes
     __store_class__: Type[ST]
 
@@ -475,6 +503,8 @@ class SerializableProviderMixin:
         super().__init_subclass__(**kwargs)
         if not hasattr(cls, "__store_class__"):
             raise AttributeError(f"subclass {cls.__name__} must define __store_class__")
+        if cls.__store_class__ is Store:
+            raise ValueError("must use a subclass of Store for __store_class__")
 
     def __repr__(self):
         return f"{type(self).__name__}({self.identifier!r})"
@@ -482,7 +512,7 @@ class SerializableProviderMixin:
     def to_parquet(
         self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
     ) -> None:
-        store = self.__store_class__()
+        store = self.__store_class__()  # type: ignore
         store.to_urlpath(
             self.df,
             urlpath,
@@ -491,7 +521,7 @@ class SerializableProviderMixin:
         )
 
     @classmethod
-    def from_parquet(cls: Type[PC], urlpath: UrlpathLike) -> PC:
+    def from_parquet(cls: Type[Self], urlpath: UrlpathLike) -> Self:
         store = cls.__store_class__()
         df, identifier, user_metadata = store.from_urlpath(urlpath)
         if {
@@ -503,10 +533,10 @@ class SerializableProviderMixin:
             store.METADATA_KEY_CREATED_BY,
         } != set(user_metadata):
             raise NotImplementedError(f"currently unused {user_metadata!r}")
-        inst = cls(identifier=identifier)
+        inst = cls(identifier=identifier)  # type: ignore
         inst.df = df
         if hasattr(inst, "__getitem_uncached__"):
-            inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)
+            inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)  # type: ignore
         return inst
 
 
