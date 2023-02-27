@@ -18,13 +18,15 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 
-if sys.version_info >= (3, 8):
+if sys.version_info >= (3, 11):
     from typing import Literal  # 3.8+
+    from typing import NotRequired
     from typing import Protocol  # 3.8+
     from typing import TypedDict
     from typing import runtime_checkable
 else:
     from typing_extensions import Literal
+    from typing_extensions import NotRequired
     from typing_extensions import Protocol
     from typing_extensions import TypedDict
     from typing_extensions import runtime_checkable
@@ -126,3 +128,10 @@ class CollatedPadoTileItems(TypedDict):
     tile: Union[list[npt.ArrayLike], npt.ArrayLike]
     metadata: list[pd.DataFrame]
     annotations: list[Annotations]
+
+
+class SerializedImageId(TypedDict):
+    """a json serialized image id"""
+
+    image_id: Sequence[str]
+    site: NotRequired[str]
