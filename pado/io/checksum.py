@@ -7,6 +7,7 @@ import itertools
 import json
 from collections import deque
 from importlib import import_module
+from typing import IO
 from typing import Any
 from typing import BinaryIO
 from typing import Container
@@ -24,6 +25,9 @@ __all__ = [
 
 
 class Algorithm(str, enum.Enum):
+    ALL_SUPPORTED: frozenset[Algorithm]
+    NON_ETAG: frozenset[Algorithm]
+
     MD5 = "md5"
     AWS_ETAG = "aws-etag"
     CRC32C = "crc32c"
@@ -78,15 +82,15 @@ def _get_md5(x: bytes):
 
 
 def checksum_multiple(
-    f: BinaryIO, *, algorithms: Container[Algorithm], chunk_size: int
-) -> tuple[Checksum]:
+    f: IO[bytes], *, algorithms: Container[Algorithm], chunk_size: int
+) -> tuple[Checksum, ...]:
     global _CRC32C_Checksum
     if not algorithms:
         raise ValueError("must provide at least one algorithm")
 
     build = {}
     if Algorithm.MD5 in algorithms:
-        build[Algorithm.MD5] = _get_md5()
+        build[Algorithm.MD5] = _get_md5(b"")
     if Algorithm.CRC32C in algorithms:
         if _CRC32C_Checksum is None:
             try:
@@ -114,7 +118,7 @@ def checksum_multiple(
 
 def checksum_md5(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str:
     """return the md5sum"""
-    m = _get_md5()
+    m = _get_md5(b"")
     for data in iter(lambda: f.read(chunk_size), b""):
         m.update(data)
     return m.hexdigest()
@@ -122,9 +126,9 @@ def checksum_md5(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str:
 
 class _AWSETagChecksum:
     def __init__(self, block_size: int):
-        self._blocks = []
+        self._blocks: list[Any] = []
         self._block_size = int(block_size)
-        self._queue = deque()
+        self._queue: deque[bytes] = deque()
 
     def update(self, data: bytes):
         self._queue.append(data)
@@ -155,7 +159,7 @@ class _AWSETagChecksum:
         self._digest_block(final=True)
 
         if len(self._blocks) == 0:
-            etag = _get_md5().hexdigest()
+            etag = _get_md5(b"").hexdigest()
             return f'"{etag}"'
         if len(self._blocks) == 1:
             etag = self._blocks[0].hexdigest()
@@ -175,7 +179,7 @@ def checksum_aws_etag(f: BinaryIO, *, chunk_size: int = 10 * 1024 * 1024) -> str
     num_chunks = len(chunk_md5s)
 
     if num_chunks == 0:
-        etag = _get_md5().hexdigest()
+        etag = _get_md5(b"").hexdigest()
         return f'"{etag}"'
 
     if num_chunks == 1:
@@ -225,7 +229,12 @@ def _convert_checksum(
     alg, size, chk = checksum
 
     # md5 to aws-etag
-    if alg == Algorithm.MD5 and algorithm == Algorithm.AWS_ETAG and size < block_size:
+    if (
+        alg == Algorithm.MD5
+        and algorithm == Algorithm.AWS_ETAG
+        and size is not None
+        and size < block_size
+    ):
         return Checksum(algorithm, size, f'"{chk}"')
 
     # aws-etag to md5
@@ -294,7 +303,7 @@ def compute_checksum(
     available_only: bool = False,
     raise_not_local: bool = True,
     storage_options: dict[str, Any] | None = None,
-) -> tuple[Checksum] | str:
+) -> tuple[Checksum, ...] | str:
     """compute a checksum trying to take advantage of remote fs
 
     Parameters
@@ -350,35 +359,40 @@ def compute_checksum(
     if raise_not_local and not getattr(fs, "local_file", False):
         raise ValueError(f"won't checksum non-local: {f!r}")
 
-    with fs.open(path, mode="rb") as f:
-        checksums = checksum_multiple(
-            f, algorithms=missing_algorithms, chunk_size=2**21
-        )
+    with fs.open(path, mode="rb") as of:
+        with of as f:
+            checksums = checksum_multiple(
+                f,  # type: ignore
+                algorithms=missing_algorithms,
+                chunk_size=fs.blocksize,
+            )
 
     return checksums
 
 
-def _to_checksums(x: tuple[Checksum] | Checksum | str) -> tuple[Checksum]:
+def _to_checksums(x: tuple[Checksum, ...] | Checksum | str) -> tuple[Checksum, ...]:
     if isinstance(x, str):
-        x = Checksum.from_str(x)
-    if isinstance(x, Checksum):
-        return (x,)
-    elif isinstance(x, tuple) and x and all(isinstance(y, Checksum) for y in x):
-        return x
+        c: tuple[Checksum, ...] | Checksum = Checksum.from_str(x)
     else:
-        raise ValueError(
-            f"expected str, Checksum or tuple[Checksum], got {type(x).__name__}"
-        )
+        c = x
+    if isinstance(c, Checksum):
+        return (c,)
+    else:
+        if not (isinstance(c, tuple) and x and all(isinstance(y, Checksum) for y in c)):
+            raise ValueError(
+                f"expected str, Checksum or tuple[Checksum], got {type(x).__name__}"
+            )
+        return c  # type: ignore
 
 
 def compare_checksums(
-    test: tuple[Checksum] | Checksum | str,
-    target: tuple[Checksum] | Checksum | str,
+    test: tuple[Checksum, ...] | Checksum | str,
+    target: tuple[Checksum, ...] | Checksum | str,
 ) -> bool:
     """compare checksums. raises ValueError if not possible"""
-    test = _to_checksums(test)
-    target = _to_checksums(target)
-    for c0, c1 in itertools.product(test, target):
+    _test = _to_checksums(test)
+    _target = _to_checksums(target)
+    for c0, c1 in itertools.product(_test, _target):
         if c0.algorithm == c1.algorithm:
             return c0 == c1
         try:
@@ -397,7 +411,7 @@ def verify_checksum(
     target: Checksum,
     raise_not_local: bool = True,
     storage_options: dict[str, Any] | None = None,
-) -> tuple[bool, tuple[Checksum]]:
+) -> tuple[bool, tuple[Checksum, ...]]:
     """verify if checksums match"""
     fs, path = urlpathlike_to_fs_and_path(test, storage_options=storage_options)
     meta = fs.info(path)
