@@ -11,14 +11,13 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Iterable
 from typing import Mapping
 from typing import MutableMapping
 from typing import NamedTuple
 from typing import Optional
-from typing import Sequence
 from typing import Tuple
 from typing import Type
-from typing import TypeVar
 
 import pandas as pd
 import pyarrow
@@ -310,12 +309,18 @@ class StoreMigrationInfo(NamedTuple):
         ):
             return None
         else:
+            if store_info.data_version is None:
+                raise ValueError("store_info needs a data_version")
             # return version as if updated
             sv = self.target_store_version
             if sv is None:
+                if store_info.store_version is None:
+                    raise ValueError("store_info needs a store_version")
                 sv = store_info.store_version.store
             pv = self.target_provider_version
             if pv is None:
+                if store_info.store_version is None:
+                    raise ValueError("store_info needs a store_version")
                 pv = store_info.store_version.provider
             dv = self.target_data_version
             if dv is None:
@@ -346,6 +351,10 @@ class StoreMigrationInfo(NamedTuple):
 
         if any(x is None for x in origin[:2]):
             raise NotImplementedError("fixme: currently assumed to be provided...")
+        else:
+            assert origin[0] is not None
+            assert origin[1] is not None
+            assert origin[2] is not None
 
         for a, b, name in zip(origin, target, ["store", "provider", "data"]):
             if b is not None:
@@ -381,8 +390,12 @@ class StoreMigrationInfo(NamedTuple):
         _osv, _opv, _odv, _tsv, _tpv, _tdv = map(
             lambda x: fill_none(x, "X"),
             [
-                self.store_info.store_version.store,
-                self.store_info.store_version.provider,
+                self.store_info.store_version.store
+                if self.store_info.store_version
+                else None,
+                self.store_info.store_version.provider
+                if self.store_info.store_version
+                else None,
                 self.store_info.data_version.version
                 if self.store_info.data_version
                 else None,
@@ -428,7 +441,7 @@ def get_migration_registry() -> Mapping[StoreMigrationInfo, StoreMigrationFunc]:
 
 def find_migration_path(
     store_info: StoreInfo,
-    migrations: Sequence[StoreMigrationInfo],
+    migrations: Iterable[StoreMigrationInfo],
 ) -> list[StoreMigrationInfo]:
     """return a store/data migration path"""
     pth = []
@@ -448,10 +461,7 @@ def find_migration_path(
     return pth
 
 
-S = TypeVar("S", bound=Store)
-
-
-def _get_store_subclass(store_type: StoreType) -> Type[S]:
+def _get_store_subclass(store_type: StoreType) -> Type[Store]:
     """return the corresponding Store subclass"""
     # get the corresponding store class
     _module, _clsname = {
@@ -479,8 +489,14 @@ def get_store_info(
 
     # get all versions
     store_version = int(md.get(store_cls.METADATA_KEY_STORE_VERSION, 0))
-    provider_version = int(md.get(store_cls.METADATA_KEY_PROVIDER_VERSION, 0))
-    data_version = int(md.get(store_cls.METADATA_KEY_DATA_VERSION, 0))
+    if store_cls.METADATA_KEY_PROVIDER_VERSION is None:
+        provider_version = 0
+    else:
+        provider_version = int(md.get(store_cls.METADATA_KEY_PROVIDER_VERSION, 0))
+    if store_cls.METADATA_KEY_DATA_VERSION is None:
+        data_version = 0
+    else:
+        data_version = int(md.get(store_cls.METADATA_KEY_DATA_VERSION, 0))
     data_identifier = md[store_cls.METADATA_KEY_IDENTIFIER]
 
     return StoreInfo(
@@ -495,7 +511,7 @@ def migrate_store(
     *,
     storage_options: dict[str, Any] | None = None,
     dry_run: bool = True,
-) -> tuple[bool, StoreInfo, UrlpathLike]:
+) -> UrlpathLike:
     """try migrating a store to a newer version"""
     store_info = get_store_info(urlpath, storage_options=storage_options)
     store_type = store_info.store_type
@@ -506,7 +522,7 @@ def migrate_store(
 
     migrations = find_migration_path(store_info, _STORE_MIGRATION_REGISTRY)
     if not migrations:
-        return False, store_info, urlpath
+        return urlpath
 
     for info in migrations:
         m_func = _STORE_MIGRATION_REGISTRY[info]
@@ -516,6 +532,10 @@ def migrate_store(
         target_store_info = info.can_migrate(current_store_info)
         if target_store_info is None:
             raise RuntimeError("can_migrate should not have returned None")
+        if current_store_info.store_version is None:
+            raise RuntimeError("current store_info requires version")
+        if target_store_info.store_version is None:
+            raise RuntimeError("current store_info requires version")
         load_store = store_cls(
             version=current_store_info.store_version.store, store_type=store_type
         )
@@ -532,7 +552,7 @@ def migrate_store(
             save_store = load_store
         else:
             save_store = store_cls(
-                version=info.target_store_version, store_type=store_type
+                version=info.target_store_version or 0, store_type=store_type
             )
 
         # store temporary
