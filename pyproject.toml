@@ -89,6 +89,7 @@ module = [
   "pandera.*",
   "orjson.*",
   "fsspec.*",
+  "pandas.*",
   "pyarrow.*",
   "shapely.*",
   "tifffile.*",

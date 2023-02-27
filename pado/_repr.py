@@ -125,23 +125,24 @@ def number(
     unit: str | None = None,
 ) -> dict[str, Any] | Number:
     """create a number with some meta information"""
+    _v: pd.Series
     if isinstance(v, Number):
-        v = pd.Series([v])
+        _v = pd.Series([v])
     elif isinstance(v, pd.DataFrame):
-        v = v[name]
+        _v = v[name]
     elif isinstance(v, pd.Series):
-        pass
+        _v = v
     else:
         raise ValueError(f"{v!r}")
 
     x = {}
     if agg == "id":
-        x["val"] = cast_to(v.item())
+        x["val"] = cast_to(_v.item())
     elif agg == "sum":
-        x["val"] = cast_to(v.sum())
+        x["val"] = cast_to(_v.sum())
     elif agg == "avg":
-        x["val"] = cast_to(v.mean())
-        x["std"] = cast_to(v.std())
+        x["val"] = cast_to(_v.mean())
+        x["std"] = cast_to(_v.std())
     else:
         raise ValueError(f"agg={agg!r}")
 
