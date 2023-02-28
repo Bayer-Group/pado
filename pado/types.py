@@ -99,7 +99,9 @@ class SerializableItem(Protocol):
     def from_obj(cls: Type[PI], obj: Any) -> PI:
         ...
 
-    def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
+    def to_record(
+        self, image_id: ImageId | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         ...
 
 

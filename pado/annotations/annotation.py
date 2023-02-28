@@ -113,7 +113,7 @@ class Annotations(MutableSequence[Annotation]):
             self._update_df_image_id(image_id)
 
     def __repr__(self):
-        return f"{type(self).__name__}({_r.repr_list(self, 0)}, image_id={self._image_id!r})"
+        return f"{type(self).__name__}({_r.repr_list(self, 0)}, image_id={self._image_id!r})"  # type: ignore
 
     def __eq__(self, other):
         if not isinstance(other, Annotations):
@@ -123,6 +123,15 @@ class Annotations(MutableSequence[Annotation]):
     @property
     def image_id(self) -> Optional[ImageId]:
         return self._image_id
+
+    @image_id.setter
+    def image_id(self, value: ImageId):
+        if not isinstance(value, ImageId):
+            raise TypeError(
+                f"{value!r} not of type ImageId, got {type(value).__name__}"
+            )
+        self._update_df_image_id(image_id=value)
+        self._image_id = value
 
     def _update_df_image_id(self, image_id: ImageId):
         """internal"""
@@ -137,15 +146,6 @@ class Annotations(MutableSequence[Annotation]):
             self.df.loc[self.df["image_id"].isna(), "image_id"] = image_id.to_str()
         else:
             raise AssertionError(f"unexpected image_ids in Annotations.df: {ids!r}")
-
-    @image_id.setter
-    def image_id(self, value: ImageId):
-        if not isinstance(value, ImageId):
-            raise TypeError(
-                f"{value!r} not of type ImageId, got {type(value).__name__}"
-            )
-        self._update_df_image_id(image_id=value)
-        self._image_id = value
 
     @overload
     def __getitem__(self, index: int) -> Annotation:
@@ -177,13 +177,16 @@ class Annotations(MutableSequence[Annotation]):
         self, index: Union[int, slice], value: Union[Annotation, Iterable[Annotation]]
     ) -> None:
         if isinstance(index, int):
+            assert isinstance(value, Annotation)
             self.df.iloc[index, :] = pd.DataFrame(
-                [value.to_record(self._image_id)], columns=AnnotationModel.__fields__
+                [value.to_record(self._image_id)],
+                columns=list(AnnotationModel.__fields__),
             )
         elif isinstance(index, slice):
+            assert hasattr(value, "__iter__")
             self.df.iloc[index, :] = pd.DataFrame(
                 [x.to_record(self._image_id) for x in value],
-                columns=AnnotationModel.__fields__,
+                columns=list(AnnotationModel.__fields__),
             )
         else:
             raise TypeError(

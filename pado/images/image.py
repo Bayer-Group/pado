@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     import PIL.Image
 
     from pado.dataset import PadoDataset
+    from pado.images.ids import ImageId
 
 try:
     import cv2
@@ -125,7 +126,7 @@ class Image:
         "_file_info",
         "_slide",
     )  # prevent attribute errors during refactor
-    __fields__ = _SerializedImage.__fields__
+    __fields__: tuple[str, ...] = tuple(_SerializedImage.__fields__)
 
     def __init__(
         self,
@@ -152,7 +153,7 @@ class Image:
                     self._file_info = self._load_file_info(checksum=checksum)
 
     @classmethod
-    def from_obj(cls, obj) -> Image:
+    def from_obj(cls, obj: Any) -> Image:
         """instantiate an image from an object, i.e. a pd.Series"""
         md = _SerializedImage.parse_obj(obj)
         # get metadata
@@ -167,7 +168,13 @@ class Image:
         # pado_info ...
         return inst
 
-    def to_record(self, *, urlpath_ignore_options: Collection[str] = ()) -> dict:
+    def to_record(
+        self,
+        image_id: ImageId | None = None,
+        *,
+        urlpath_ignore_options: Collection[str] = (),
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """return a record for serializing"""
         pado_info = PadoInfo(
             urlpath=urlpathlike_to_string(

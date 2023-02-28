@@ -68,7 +68,6 @@ class ImagePrediction:
             )
 
     def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
-
         if self.image_id is not None and image_id is not None:
             if self.image_id != image_id:
                 raise ValueError(
@@ -105,7 +104,7 @@ class ImagePredictionsProviderStore(ProviderStoreMixin, Store):
 
 
 class ImagePredictionProvider(
-    PadoMutableSequenceMapping[ImagePredictions], SerializableProviderMixin
+    SerializableProviderMixin, PadoMutableSequenceMapping[ImagePredictions]
 ):
     __store_class__ = ImagePredictionsProviderStore
     __value_class__ = ImagePredictions
@@ -233,7 +232,8 @@ class MetadataPredictionProvider(
     def __iter__(self) -> Iterator[ImageId]:
         return map(ImageId.from_str, self.df.index.unique())
 
-    __repr__ = mapping_repr
+    def __repr__(self):
+        return mapping_repr(self)
 
 
 class GroupedMetadataPredictionProvider(

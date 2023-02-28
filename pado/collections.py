@@ -148,14 +148,31 @@ K = TypeVar("K")
 class PadoItemsView(ItemsView, Generic[K, PI]):
     _mapping: PadoMutableMapping
 
+    def __init__(self, mapping, *, value_type=None, value_transform=None) -> None:
+        super().__init__(mapping)
+        if not hasattr(mapping, "__value_type__"):
+            self._value_type = value_type
+        else:
+            self._value_type = self._mapping.__value_type__
+        self._value_transform = value_transform
+
     def __iter__(self) -> Iterator[tuple[K, PI]]:
         iid_from_str = ImageId.from_str
-        value_from_obj = self._mapping.__value_type__.from_obj
-        for row in self._mapping.df.itertuples(index=True, name="ValueAsRow"):
-            # noinspection PyProtectedMember
-            x = row._asdict()
-            i = x.pop("Index")
-            yield iid_from_str(i), value_from_obj(x)
+        value_from_obj = self._value_type.from_obj
+        if self._value_transform is None:
+            for row in self._mapping.df.itertuples(index=True, name="ValueAsRow"):
+                # noinspection PyProtectedMember
+                x = row._asdict()
+                i = x.pop("Index")
+                yield iid_from_str(i), value_from_obj(x)
+        else:
+            vt = self._value_transform
+            mapping = self._mapping
+            for row in mapping.df.itertuples(index=True, name="ValueAsRow"):
+                # noinspection PyProtectedMember
+                x = row._asdict()
+                i = x.pop("Index")
+                yield iid_from_str(i), vt(mapping, value_from_obj(x))
 
 
 class PadoMutableSequence(MutableSequence[PI]):
@@ -430,62 +447,6 @@ class PadoMutableSequenceMapping(MutableMapping[ImageId, VT]):
         )
 
 
-PT = TypeVar(
-    "PT", "PadoMutableMapping", "PadoMutableSequence", "PadoMutableSequenceMapping"
-)
-
-
-class GroupedProviderMixin(Generic[PT]):
-    __provider_class__: Type[PT]
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        # todo: should be subclass of mapping with ImageId keys
-        # if PadoMutableSequenceMapping not in cls.__mro__:
-        #     raise AttributeError(
-        #         f"{cls.__name__} must also inherit from a provider class"
-        #     )
-        if not hasattr(cls, "__provider_class__"):
-            raise AttributeError(
-                f"subclass {cls.__name__} must define __provider_class__"
-            )
-
-    def __init__(self, *providers: PT):
-        super().__init__()
-        self.providers: list[PT] = []
-        for p in providers:
-            if not isinstance(p, self.__provider_class__):
-                p = self.__provider_class__(p)
-            if isinstance(p, type(self)):
-                self.providers.extend(p.providers)
-            else:
-                self.providers.append(p)
-        self.__dict__.pop("df")  # clear cache ...
-
-    @cached_property
-    def df(self):
-        return pd.concat([p.df for p in self.providers])
-
-    def __setitem__(self, image_id: ImageId, value: Any) -> None:
-        raise RuntimeError(f"can't add new item to {type(self).__name__}")
-
-    def __delitem__(self, image_id: ImageId) -> None:
-        raise RuntimeError(f"can't delete from {type(self).__name__}")
-
-    def __repr__(self):
-        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
-
-    def to_parquet(
-        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
-    ) -> None:
-        # noinspection PyUnresolvedReferences
-        super().to_parquet(urlpath, storage_options=storage_options)  # type: ignore
-
-    @classmethod
-    def from_parquet(cls: Type[Self], urlpath: UrlpathLike) -> Self:
-        raise TypeError(f"unsupported operation for {cls.__name__!r}()")
-
-
 # === mixins ==================================================================
 
 ST = TypeVar("ST", bound=Store)
@@ -538,6 +499,64 @@ class SerializableProviderMixin(Generic[ST]):
         if hasattr(inst, "__getitem_uncached__"):
             inst.__getitem_cached__ = lru_cache(maxsize=None)(inst.__getitem_uncached__)  # type: ignore
         return inst
+
+
+PT = TypeVar(
+    "PT", "PadoMutableMapping", "PadoMutableSequence", "PadoMutableSequenceMapping"
+)
+
+
+class GroupedProviderMixin(
+    SerializableProviderMixin[ST],
+    Generic[ST, PT],
+):
+    __provider_class__: Type[PT]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # todo: should be subclass of mapping with ImageId keys
+        # if PadoMutableSequenceMapping not in cls.__mro__:
+        #     raise AttributeError(
+        #         f"{cls.__name__} must also inherit from a provider class"
+        #     )
+        if not hasattr(cls, "__provider_class__"):
+            raise AttributeError(
+                f"subclass {cls.__name__} must define __provider_class__"
+            )
+
+    def __init__(self, *providers: PT):
+        super().__init__()
+        self.providers: list[PT] = []
+        for p in providers:
+            if not isinstance(p, self.__provider_class__):
+                p = self.__provider_class__(p)
+            if isinstance(p, type(self)):
+                self.providers.extend(p.providers)
+            else:
+                self.providers.append(p)
+        self.__dict__.pop("df")  # clear cache ...
+
+    @cached_property
+    def df(self):
+        return pd.concat([p.df for p in self.providers])
+
+    def __setitem__(self, image_id: ImageId, value: Any) -> None:
+        raise RuntimeError(f"can't add new item to {type(self).__name__}")
+
+    def __delitem__(self, image_id: ImageId) -> None:
+        raise RuntimeError(f"can't delete from {type(self).__name__}")
+
+    def __repr__(self: Any) -> str:
+        return f'{type(self).__name__}({", ".join(map(repr, self.providers))})'
+
+    def to_parquet(
+        self, urlpath: UrlpathLike, *, storage_options: dict[str, Any] | None = None
+    ) -> None:
+        return super().to_parquet(urlpath, storage_options=storage_options)
+
+    @classmethod
+    def from_parquet(cls: Type[Self], urlpath: UrlpathLike) -> Self:
+        raise TypeError(f"unsupported operation for {cls.__name__!r}()")
 
 
 class ProviderStoreMixin(Store):
