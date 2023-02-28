@@ -137,7 +137,7 @@ def find_files(
     ]
 
 
-def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike[str]]:
+def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
     """test if an object is like a fsspec.core.OpenFile instance"""
     # if isinstance(obj, fsspec.core.OpenFile) doesn't cut it...
     # ... fsspec filesystems just need to quack OpenFile.
@@ -544,7 +544,7 @@ def urlpathlike_local_via_fs(
         path = urlpathlike_get_path(obj, fs_cls=fs_cls)
         return fsopen(fs, path)
     else:
-        return obj
+        return urlpathlike_to_fsspec(obj)
 
 
 def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:

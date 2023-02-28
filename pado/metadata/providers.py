@@ -203,7 +203,7 @@ class GroupedMetadataProvider(MetadataProvider):
     # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseMetadataProvider):
         # super().__init__() ... violating Liskov anyways ...
-        self.providers = []
+        self.providers: list[MetadataProvider] = []
         for p in providers:
             if not isinstance(p, MetadataProvider):
                 p = MetadataProvider(p)

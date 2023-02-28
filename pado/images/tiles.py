@@ -398,6 +398,7 @@ class FastGridTiling(TilingStrategy):
         target_mpp = match_mpp(self._target_mpp, *image.level_mpp.values())
 
         if self._min_chunk_size is not None:
+            chunk_sizes: NDArray[np.int_ | np.float_]
             with image.open(storage_options=storage_options):
                 chunk_sizes = image.get_chunk_sizes(level=0)
             if self._normalize_chunk_size:

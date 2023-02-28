@@ -63,7 +63,7 @@ class OpenFileLike(Protocol):
         ...
 
 
-UrlpathLike = Union[str, "os.PathLike[str]", OpenFileLike[str]]
+UrlpathLike = Union[str, "os.PathLike[str]", OpenFileLike]
 IOMode = Literal["r", "r+", "w", "a", "x"]
 FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
 
