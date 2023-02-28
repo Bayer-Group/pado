@@ -537,7 +537,7 @@ def urlpathlike_get_storage_args_options(
 def urlpathlike_local_via_fs(
     obj: UrlpathLike,
     fs: AbstractFileSystem,
-) -> UrlpathLike:
+) -> OpenFileLike:
     """take an urlpath and access it via another fs"""
     fs_cls = urlpathlike_get_fs_cls(obj)
     if issubclass(fs_cls, LocalFileSystem):

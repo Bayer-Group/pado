@@ -65,7 +65,7 @@ class Checksum(NamedTuple):
             return tuple(checksums)
 
     @classmethod
-    def join_checksums(cls, checksums: tuple[Checksum]) -> str | None:
+    def join_checksums(cls, checksums: tuple[Checksum, ...]) -> str | None:
         return "::".join(map(str, checksums)) or None
 
 
@@ -303,7 +303,7 @@ def compute_checksum(
     available_only: bool = False,
     raise_not_local: bool = True,
     storage_options: dict[str, Any] | None = None,
-) -> tuple[Checksum, ...] | str:
+) -> tuple[Checksum, ...]:
     """compute a checksum trying to take advantage of remote fs
 
     Parameters

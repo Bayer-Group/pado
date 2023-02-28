@@ -507,6 +507,8 @@ class Image:
         self, location: IntPoint, region: IntSize, target_mpp: MPP
     ) -> np.ndarray:
         """return array from a defined mpp and a position (in the target mpp)"""
+        if self._slide is None:
+            raise RuntimeError("need to open slide")
 
         if location.mpp != target_mpp:
             raise ValueError(
@@ -580,7 +582,7 @@ class Image:
     def get_chunk_sizes(
         self,
         level: int = 0,
-    ) -> NDArray[np.int]:
+    ) -> NDArray[np.int_]:
         """return a chunk bytesize array"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")

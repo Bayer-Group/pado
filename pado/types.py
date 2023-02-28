@@ -49,17 +49,14 @@ if TYPE_CHECKING:
 # --- types ---
 
 
-S = TypeVar("S", str, bytes)
-
-
 @runtime_checkable
-class OpenFileLike(Protocol[S]):
+class OpenFileLike(Protocol):
     """minimal fsspec open file type"""
 
     fs: AbstractFileSystem
     path: str
 
-    def __enter__(self) -> IO[S]:
+    def __enter__(self) -> IO[bytes]:
         ...
 
     def __exit__(self, exc_type, exc_val, exc_tb):
