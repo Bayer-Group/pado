@@ -462,6 +462,8 @@ class SerializableProviderMixin(Generic[ST]):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        if cls.__name__ == "GroupedProviderMixin":
+            return
         if not hasattr(cls, "__store_class__"):
             raise AttributeError(f"subclass {cls.__name__} must define __store_class__")
         if cls.__store_class__ is Store:

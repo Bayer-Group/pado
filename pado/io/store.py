@@ -354,7 +354,6 @@ class StoreMigrationInfo(NamedTuple):
         else:
             assert origin[0] is not None
             assert origin[1] is not None
-            assert origin[2] is not None
 
         for a, b, name in zip(origin, target, ["store", "provider", "data"]):
             if b is not None:

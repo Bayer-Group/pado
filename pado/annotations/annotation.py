@@ -11,6 +11,7 @@ from typing import Optional
 from typing import Union
 from typing import overload
 
+import numpy as np
 import orjson
 import pandas as pd
 from pydantic.color import Color
@@ -156,7 +157,7 @@ class Annotations(MutableSequence[Annotation]):
         ...
 
     def __getitem__(self, index: Union[int, slice]) -> Union[Annotation, Annotations]:
-        if isinstance(index, int):
+        if isinstance(index, (int, np.int_)):
             return Annotation.from_obj(self.df.iloc[index, :])
         elif isinstance(index, slice):
             return Annotations(self.df.loc[index, :], image_id=self.image_id)
