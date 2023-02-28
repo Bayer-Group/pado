@@ -246,7 +246,7 @@ class AnnotationIndex:
         return cls(geometries)
 
     def query_items(self, geom: BaseGeometry) -> list[int]:
-        return list(self._strtree.query_items(geom))
+        return list(self._strtree.query(geom))
 
     def to_json(self, *, as_string: bool = False) -> str | dict:
         obj = {
