@@ -161,7 +161,7 @@ class TileIndex(Sequence[ReadTileTuple]):
         ...
 
     def __getitem__(self, i: int | slice) -> ReadTileTuple | Sequence[ReadTileTuple]:
-        if isinstance(i, (int, np.int_)):
+        if isinstance(i, (int, np.int32, np.int64)):
             return self._getitem(i)
         elif isinstance(i, slice):
             raise TypeError("slicing not supported")
