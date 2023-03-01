@@ -373,7 +373,7 @@ class StoreMigrationInfo(NamedTuple):
             store_info=StoreInfo(
                 store_type=store_type,
                 store_version=StoreVersionTuple(origin[0], origin[1]),
-                data_version=DataVersionTuple(data_identifier, origin[2])
+                data_version=DataVersionTuple(data_identifier, origin[2] or 0)
                 if data_identifier is not None
                 else None,
             ),

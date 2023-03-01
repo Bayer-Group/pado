@@ -67,7 +67,9 @@ class ImagePrediction:
                 image=Image.from_obj(obj),
             )
 
-    def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
+    def to_record(
+        self, image_id: ImageId | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         if self.image_id is not None and image_id is not None:
             if self.image_id != image_id:
                 raise ValueError(

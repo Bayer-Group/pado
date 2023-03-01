@@ -3,6 +3,7 @@ from __future__ import annotations
 import os.path
 from contextlib import ExitStack
 from functools import partial
+from typing import Any
 from typing import Callable
 
 from fsspec import AbstractFileSystem
@@ -24,7 +25,7 @@ def transfer(
     images_path: str | None = None,
     image_predictions_path: str | None = None,
     keep_individual_providers: bool = True,
-    progress_callback: Callable[[str], ...] = lambda _: None,
+    progress_callback: Callable[[str], Any] = lambda _: None,
 ) -> None:
     """move dataset contents from one to another"""
     if not isinstance(ds0, PadoDataset):
@@ -63,13 +64,12 @@ def _transfer(
     item_urlpath_destination=None,
     chunked=False,
 ) -> None:
-
     # noinspection PyProtectedMember
     fs0: AbstractFileSystem = ds0._fs
     # noinspection PyProtectedMember
     fs1: AbstractFileSystem = ds1._fs
     # noinspection PyProtectedMember
-    get_fspath1: Callable[[str], str] = ds1._get_fspath
+    get_fspath1 = ds1._get_fspath
 
     if keep_individual_providers and hasattr(p, "providers"):
         providers = p.providers
@@ -81,7 +81,6 @@ def _transfer(
 
         # copy items referenced by urlpath in the provider if requested
         if item_urlpath_destination is not None and hasattr(_p, "df"):
-
             # create destination dir
             dst_dir = get_fspath1(item_urlpath_destination)
             if not fs1.isdir(dst_dir):

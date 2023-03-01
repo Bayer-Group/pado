@@ -14,6 +14,7 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Sequence
 from typing import Union
+from typing import cast
 from typing import overload
 
 if sys.version_info >= (3, 8):
@@ -96,7 +97,7 @@ class PadoDataset:
             self._ensure_dir()
         else:
             try:
-                self._urlpath: str = urlpathlike_to_string(urlpath)
+                self._urlpath = urlpathlike_to_string(urlpath)
             except TypeError as err:
                 raise TypeError(f"incompatible urlpath {urlpath!r}") from err
 
@@ -178,10 +179,9 @@ class PadoDataset:
         """sequence of image_ids in the dataset"""
         image_ids = self.images.keys()
         if isinstance(image_ids, Sequence):
-            index = image_ids
+            return image_ids
         else:
-            index = tuple(image_ids)
-        return index
+            return tuple(image_ids)
 
     @cached_property
     def images(self) -> ImageProvider:
@@ -255,7 +255,6 @@ class PadoDataset:
         ...
 
     def __getitem__(self, key):
-
         if isinstance(key, slice):
             selected = self.index[key]
             return self.filter(selected)
@@ -270,7 +269,6 @@ class PadoDataset:
             raise TypeError(f"Unexpected type {type(key)}")
 
         try:
-
             return PadoItem(
                 image_id,
                 self.images[image_id],
@@ -352,15 +350,17 @@ class PadoDataset:
 
         elif callable(ids_or_func):
             func = ids_or_func
-            ip = {}
-            ap = {}
-            mp = {}
+            ip = cast(ImageProvider, {})
+            ap = cast(AnnotationProvider, {})
+            mp = cast(MetadataProvider, {})
             for image_id in self.index:
                 item = self[image_id]
                 keep = func(item)
                 if not keep:
                     continue
-                ip[image_id] = item.image
+                image = item.image
+                assert image is not None, "images currently required"
+                ip[image_id] = image
                 if item.annotations is not None:
                     ap[image_id] = item.annotations
                 if item.metadata is not None:
@@ -535,7 +535,7 @@ class PadoDataset:
         ...
 
     def describe(
-        self, output_format: DescribeFormat = "plain_text"
+        self, output_format: DescribeFormat = DescribeFormat.PLAIN_TEXT
     ) -> Union[str, dict]:
         """A 'to string' method for essential PadoDataset information"""
         if output_format not in list(DescribeFormat):
@@ -615,17 +615,17 @@ class PadoDataset:
         """clear each requested cached_property"""
         valid_caches = ("images", "metadata", "annotations", "predictions")
         if not caches:
-            caches = valid_caches
+            caches = valid_caches  # type: ignore
         elif not set(caches).issubset(valid_caches):
             raise ValueError(
                 f"unsupported cache: {set(caches).difference(valid_caches)}"
             )
-        caches = list(caches)
-        if "images" in caches:
-            caches.insert(caches.index("images") + 1, "index")
+        _caches: list[str] = list(caches)
+        if "images" in _caches:
+            _caches.insert(_caches.index("images") + 1, "index")
         if _target is None:
             _target = self.__dict__
-        for cache in reversed(caches):
+        for cache in reversed(_caches):
             try:
                 del _target[cache]
             except KeyError:

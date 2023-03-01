@@ -31,7 +31,6 @@ from pado.predictions.providers import ImagePredictionProvider
 from pado.predictions.providers import ImagePredictionType
 
 if TYPE_CHECKING:
-    from numpy.typing import ArrayLike
     from numpy.typing import NDArray
 
     from pado.dataset import PadoDataset
@@ -114,7 +113,7 @@ def create_image_prediction_tiff(
 
 
 def _multichannel_to_rgb(
-    arr: ArrayLike,
+    arr: NDArray[np.float_],
     *,
     channel_colors: Sequence[tuple[int, int, int]],
     single_channel_threshold: float | None = None,
@@ -138,6 +137,9 @@ def _multichannel_to_rgb(
     # assume:
     # - every channel stores some sort of score/probability for a single class
     # -
+    if not hasattr(arr, "ndim"):
+        arr = np.ndarray(arr)
+
     if not arr.ndim == 3:
         raise NotImplementedError(f"incorrect array={arr.shape}")
     num_channels = arr.shape[2]
@@ -219,20 +221,20 @@ class ImagePredictionWriter:
         self._mask_map: dict[ImageId, set[tuple[int, int, int, int]]] = defaultdict(set)
 
         if identifier is None:
-            self._identifier = uuid.uuid4()
+            self._identifier = str(uuid.uuid4())
         else:
             self._identifier = identifier
 
         store = zarr.storage.TempStore(prefix="pado_zarr", normalize_keys=True)
         group = zarr.hierarchy.group(store=store)
         self._group = group
-        self._chunk_size: tuple[int] | None = None
+        self._chunk_size: tuple[int, int, int] | None = None
         self._output_dtype: np.dtype | None = None
         self._fill_value: float = 0
         self._is_rgb_prediction: bool | None = None
 
         # color conversion kwargs
-        self._color_conversion_kwargs = {}
+        self._color_conversion_kwargs: dict[str, Any] = {}
 
         if not (isinstance(extra_metadata, dict) and json.dumps(extra_metadata)):
             raise ValueError("no extra_metadata")
@@ -257,8 +259,8 @@ class ImagePredictionWriter:
     def set_output(
         self,
         *,
-        tile_shape: tuple[int, ...],
-        tile_dtype: np.dtype | type[np.numeric],
+        tile_shape: tuple[int, int, int],
+        tile_dtype: np.dtype,
         fill_value: float = 0,
         is_rgb_prediction: bool = False,
         channel_colors: Sequence[tuple[int, int, int]] = (),
@@ -287,7 +289,7 @@ class ImagePredictionWriter:
         s = tuple(tile_shape)
         if not (len(s) == 3 and all(isinstance(x, int) and x > 0 for x in s)):
             raise ValueError("must provide 3D tile_shape")
-        self._chunk_size = s
+        self._chunk_size = s[0], s[1], s[2]
         self._output_dtype = tile_dtype
 
         self._is_rgb_prediction = bool(is_rgb_prediction)
@@ -314,6 +316,8 @@ class ImagePredictionWriter:
         try:
             return self._group[name]
         except KeyError:
+            if self._chunk_size is None:
+                raise RuntimeError("chunk_size is not set")
             width, height = self._size_map[image_id].as_tuple()
             cheight, cwidth, cdepth = self._chunk_size
             return self._group.create(
@@ -324,7 +328,9 @@ class ImagePredictionWriter:
                 fill_value=self._fill_value,
             )
 
-    def add_prediction(self, prediction_data: ArrayLike, *, bounds: IntBounds) -> None:
+    def add_prediction(
+        self, prediction_data: NDArray[np.float_], *, bounds: IntBounds
+    ) -> None:
         """add a tile prediction to the writer"""
         if self._image_id is None:
             raise NotImplementedError(
@@ -347,7 +353,7 @@ class ImagePredictionWriter:
                 "current restriction of the system"
             )  # todo: lift restriction
 
-        x0, y0, x1, y1 = b = tuple(map(int, bounds.as_tuple()))
+        x0, y0, x1, y1 = tuple(map(int, bounds.as_tuple()))
 
         if self._raise_on_overwrite:
             # test that we don't overwrite existing data
@@ -361,7 +367,7 @@ class ImagePredictionWriter:
                 )
             else:
                 # could merge adjacent tiles if this becomes a bottleneck
-                written_bounds.add(b)
+                written_bounds.add((x0, y0, x1, y1))
 
         if prediction_data.shape != self._chunk_size:
             raise RuntimeError(f"{prediction_data.shape!r} == {self._chunk_size!r}")
@@ -486,7 +492,6 @@ class ImagePredictionWriter:
 
 
 if __name__ == "__main__":
-
     print("writing test image")
     H, W, C = 10000, 8000, 5
     TW = TH = 512
@@ -501,10 +506,11 @@ if __name__ == "__main__":
     writer = ImagePredictionWriter(extra_metadata={})
     iid = ImageId("test")
     size = IntSize(W, H, mpp=MPP(1.0, 1.0))
+    assert size.mpp is not None
     writer.set_input(image_id=iid, image_size=size)
     writer.set_output(
         tile_shape=(TH, TW, C),
-        tile_dtype=np.float32,
+        tile_dtype=np.dtype(np.float32),
         fill_value=0.0,
         channel_colors=colors,
     )
