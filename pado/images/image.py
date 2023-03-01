@@ -134,7 +134,7 @@ class Image:
         *,
         load_metadata: bool = False,
         load_file_info: bool = False,
-        checksum: bool = False,
+        checksum: bool | str = False,
     ):
         """instantiate an image from an urlpath"""
         self.urlpath = urlpath
@@ -362,7 +362,7 @@ class Image:
             return self._metadata
 
     def _load_file_info(
-        self, *, force: bool = False, checksum: bool = False
+        self, *, force: bool = False, checksum: bool | str = False
     ) -> FileInfo:
         """load the file information from the file"""
         if self._file_info is None or force:
@@ -370,11 +370,18 @@ class Image:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
 
             fs, path = urlpathlike_to_fs_and_path(self.urlpath)
-            if checksum:
+            if checksum is True:
                 checksums = compute_checksum(self.urlpath, available_only=not force)
                 _checksum = Checksum.join_checksums(checksums)
-            else:
+            elif checksum is False:
                 _checksum = None
+            elif isinstance(checksum, str):
+                checksums = Checksum.from_str(checksum, unpack_single=False)
+                _checksum = Checksum.join_checksums(checksums)
+            else:
+                raise TypeError(
+                    f"checksum must be bool or str, got: {type(checksum).__name__!r}"
+                )
 
             info = fs.info(path)
             return FileInfo(

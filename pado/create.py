@@ -36,8 +36,8 @@ try:
     import rich.console
     from rich.progress import track
 except ImportError:
-    rich = None
-    track = None
+    rich = None  # type: ignore
+    track = None  # type: ignore
 
 
 __all__ = [
@@ -167,7 +167,7 @@ def create_image_provider(
         )
         progress = False
 
-    if resume:
+    if resume and output_urlpath:
         try:
             ip = ImageProvider.from_parquet(urlpath=output_urlpath)
         except FileNotFoundError:
@@ -189,7 +189,7 @@ def create_image_provider(
         console = rich.get_console()
         spinner = console.status("[bold green]Searching files...")
     else:
-        spinner = nullcontext()
+        spinner = nullcontext()  # type: ignore
 
     with spinner:
         files_and_parts = find_files(
@@ -205,7 +205,7 @@ def create_image_provider(
         )
     else:
         e = type("_executor", (), {"imap_unordered": map})
-        _pool = nullcontext(e)
+        _pool = nullcontext(e)  # type: ignore
 
     broken = []
 
@@ -217,7 +217,7 @@ def create_image_provider(
             rich.progress.TimeRemainingColumn(),
         )
     else:
-        _progress = nullcontext(None)
+        _progress = nullcontext(None)  # type: ignore
 
     with _progress as _p:
         if _p:
@@ -254,7 +254,7 @@ def create_image_provider(
                     else:
                         if image_id is not None:
                             ip[image_id] = image
-                    if _p:
+                    if _p and task_id is not None:
                         _p.advance(task_id)
 
         finally:
@@ -275,6 +275,7 @@ def create_image_provider(
                 if fs.isdir(pth):
                     pth = os.path.join(pth, f"{identifier}.image.parquet")
                     output_urlpath = fsopen(fs, pth, mode="wb")
+                assert output_urlpath is not None
                 ip.to_parquet(output_urlpath)
             if broken:
                 if rich:

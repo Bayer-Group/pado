@@ -5,6 +5,7 @@ import enum
 import hashlib
 import itertools
 import json
+import sys
 from collections import deque
 from importlib import import_module
 from typing import IO
@@ -12,6 +13,12 @@ from typing import Any
 from typing import BinaryIO
 from typing import Container
 from typing import NamedTuple
+from typing import overload
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 from pado.io.files import urlpathlike_to_fs_and_path
 from pado.types import UrlpathLike
@@ -50,8 +57,22 @@ class Checksum(NamedTuple):
         file_size = json.dumps(self.file_size)
         return f"{algorithm}:{file_size}:{self.value}"
 
+    @overload
     @classmethod
-    def from_str(cls, string) -> Checksum | tuple[Checksum, ...]:
+    def from_str(
+        cls, string: str, *, unpack_single: Literal[False]
+    ) -> tuple[Checksum, ...]:
+        ...
+
+    @overload
+    @classmethod
+    def from_str(cls, string: str) -> Checksum | tuple[Checksum, ...]:
+        ...
+
+    @classmethod
+    def from_str(
+        cls, string: str, *, unpack_single: bool = True
+    ) -> Checksum | tuple[Checksum, ...]:
         checksums = []
         for string_i in string.split("::"):
             algorithm, json_file_size, value = string_i.split(":")
@@ -59,7 +80,7 @@ class Checksum(NamedTuple):
             checksums.append(cls(Algorithm(algorithm), file_size, value))
         if len(checksums) == 0:
             raise ValueError("empty checksum string")
-        elif len(checksums) == 1:
+        elif len(checksums) == 1 and unpack_single:
             return checksums[0]
         else:
             return tuple(checksums)

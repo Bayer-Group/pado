@@ -77,7 +77,6 @@ _r.maxdict = 4
 
 
 class AnnotationProvider(BaseAnnotationProvider):
-    df: pd.DataFrame
     identifier: str
 
     def __init__(
@@ -97,8 +96,8 @@ class AnnotationProvider(BaseAnnotationProvider):
             if not provider:
                 self._df = pd.DataFrame(columns=AnnotationModel.__fields__)
             else:
-                indices = []
-                data = []
+                indices: list[str] = []
+                data: list[dict] = []
                 for key, value in provider.items():
                     if value is None:
                         continue
@@ -115,10 +114,10 @@ class AnnotationProvider(BaseAnnotationProvider):
                 f"expected `BaseAnnotationProvider`, got: {type(provider).__name__!r}"
             )
 
-        self._store = {}
+        self._store: dict[ImageId, Annotations] = {}
 
     @property
-    def df(self):
+    def df(self) -> pd.DataFrame:
         if not self._store:
             return self._df
         else:
@@ -244,7 +243,7 @@ class GroupedAnnotationProvider(AnnotationProvider):
     # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseAnnotationProvider):
         # super().__init__() ... violating liskov anyways ...
-        self.providers = []
+        self.providers: list[AnnotationProvider] = []
         for p in providers:
             if not isinstance(p, AnnotationProvider):
                 p = AnnotationProvider(p)
@@ -312,7 +311,7 @@ def create_annotation_provider(
     """create an annotation provider from a directory containing annotations"""
     files_and_parts = find_files(search_urlpath, glob=search_glob)
 
-    if resume:
+    if resume and output_urlpath:
         ap = AnnotationProvider.from_parquet(urlpath=output_urlpath)
     else:
         ap = AnnotationProvider({}, identifier=identifier)

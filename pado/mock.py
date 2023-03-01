@@ -12,6 +12,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Union
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -115,7 +116,7 @@ def mock_annotations(
 ) -> BaseAnnotationProvider:
     """return an annotation provider for testing"""
     # noinspection PyTypeChecker
-    ap: BaseAnnotationProvider = {}
+    ap: BaseAnnotationProvider = cast(BaseAnnotationProvider, {})
     if isinstance(image_ids, int):
         image_ids = mock_image_ids(image_ids)
 
@@ -160,7 +161,7 @@ def mock_metadata(
 ) -> BaseMetadataProvider:
     """return a metadata provider for testing"""
     # noinspection PyTypeChecker
-    mp: BaseMetadataProvider = {}
+    mp: BaseMetadataProvider = cast(BaseMetadataProvider, {})
     if isinstance(image_ids, int):
         image_ids = mock_image_ids(image_ids)
 
@@ -191,10 +192,9 @@ def mock_images(
         raise NotADirectoryError(f"{target!r}")
 
     # noinspection PyTypeChecker
-    ip: BaseImageProvider = {}
+    ip: BaseImageProvider = cast(BaseImageProvider, {})
     fs, path = of.fs, of.path
     for image_id in mock_image_ids(number):
-
         stem, _ = os.path.splitext(image_id.last)
         with temporary_mock_svs(stem=stem, size=(512, 512)) as fn:
             img_data = fn.read_bytes()
