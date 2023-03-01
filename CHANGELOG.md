@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ...
 
+## [0.12.0] - 2023-03-01
+### Fixed
+- pado: fixed most mypy typing issues
+
+### Added
+- ci: test pado on Python 3.11
+
 ## [0.11.0] - 2022-09-21
 ### Changed
 - pado: cache `???Provider.__getitem__` calls
@@ -87,7 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - started this changelog
 
-[Unreleased]: https://github.com/Bayer-Group/pado/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Bayer-Group/pado/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Bayer-Group/pado/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Bayer-Group/pado/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/Bayer-Group/pado/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Bayer-Group/pado/compare/v0.9.0...v0.10.0
