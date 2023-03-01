@@ -15,9 +15,7 @@ from typing import Iterator
 from typing import MutableMapping
 from typing import Optional
 from typing import Set
-from typing import Tuple
 from typing import Type
-from typing import TypeVar
 from typing import cast
 
 import numpy as np
@@ -30,6 +28,7 @@ from fsspec.implementations.local import LocalFileSystem
 from tqdm import tqdm
 
 from pado._compat import cached_property
+from pado.collections import PadoItemsView
 from pado.collections import clear_provider_getitem_cache
 from pado.collections import validate_dataframe_index
 from pado.images.ids import ImageId
@@ -182,12 +181,8 @@ class ImageProvider(BaseImageProvider):
     def __iter__(self) -> Iterator[ImageId]:
         return iter(map(ImageId.from_str, self.df.index))
 
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        for row in self.df.itertuples(index=True, name="ImageAsRow"):
-            # noinspection PyProtectedMember
-            x = row._asdict()
-            i = x.pop("Index")
-            yield ImageId.from_str(i), Image.from_obj(x)
+    def items(self) -> PadoItemsView[ImageId, Image]:
+        return PadoItemsView(self, value_type=Image)
 
     def __repr__(self):
         _akw = [_r.repr_dict(cast(dict, self), 0)]
@@ -230,7 +225,7 @@ class GroupedImageProvider(ImageProvider):
     # noinspection PyMissingConstructor
     def __init__(self, *providers: BaseImageProvider):
         # super().__init__() ... violating Liskov anyways...
-        self.providers = []
+        self.providers: list[ImageProvider] = []
         for p in providers:
             if not isinstance(p, ImageProvider):
                 p = ImageProvider(p)
@@ -271,7 +266,7 @@ class GroupedImageProvider(ImageProvider):
             d.update(dict.fromkeys(provider))
         return iter(d)
 
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+    def items(self) -> PadoItemsView[ImageId, Image]:
         return super().items()
 
     def __repr__(self):
@@ -323,7 +318,7 @@ class FilteredImageProvider(ImageProvider):
     def __iter__(self) -> Iterator[ImageId]:
         return iter(map(ImageId.from_str, self.df.index))  # fixme
 
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
+    def items(self) -> PadoItemsView[ImageId, Image]:
         return super().items()
 
     def __repr__(self):
@@ -368,14 +363,13 @@ class LocallyCachedImageProvider(ImageProvider):
         image.urlpath = self._prepend_cache(image.urlpath)
         return image
 
-    def items(self) -> Iterator[Tuple[ImageId, Image]]:
-        for row in self.df.itertuples(index=True, name="ImageAsRow"):
+    def items(self) -> PadoItemsView[ImageId, Image]:
+        def cache_prepend(provider, image) -> Image:
             # noinspection PyProtectedMember
-            x = row._asdict()
-            i = x.pop("Index")
-            image = Image.from_obj(x)
-            image.urlpath = self._prepend_cache(image.urlpath)
-            yield ImageId.from_str(i),
+            image.urlpath = provider._prepend_cache(image.urlpath)
+            return image
+
+        return PadoItemsView(self, value_type=Image, value_transform=cache_prepend)
 
     def __setitem__(self, image_id: ImageId, image: Image) -> None:
         raise NotImplementedError(f"can't add to {type(self).__name__}")
@@ -426,20 +420,17 @@ def image_cached_percentage(image: Image) -> float:
 # === manipulation ============================================================
 
 
-_PT = TypeVar("_PT", bound="ImageProvider")
-
-
 def update_image_provider_urlpaths(
     search_urlpath: UrlpathLike,
     search_glob: str,
     *,
-    provider: _PT | UrlpathLike,
+    provider: ImageProvider | UrlpathLike,
     inplace: bool = False,
     ignore_ambiguous: bool = False,
     progress: bool = False,
-    provider_cls: Type[_PT] = ImageProvider,
+    provider_cls: Type[ImageProvider] = ImageProvider,
     storage_options: dict[str, Any] | None = None,
-) -> _PT:
+) -> ImageProvider:
     """search a path and re-associate image urlpaths by filename"""
     files_and_parts = find_files(
         search_urlpath, glob=search_glob, storage_options=storage_options
@@ -456,9 +447,9 @@ def update_image_provider_urlpaths(
 
     if isinstance(provider, provider_cls):
         ip = provider
-        clear_provider_getitem_cache(ip)
+        clear_provider_getitem_cache(ip)  # type: ignore
     else:
-        ip = provider_cls.from_parquet(urlpath=provider)
+        ip = provider_cls.from_parquet(urlpath=provider)  # type: ignore
 
     if progress:
         print(
@@ -486,7 +477,7 @@ def update_image_provider_urlpaths(
         )
 
     if inplace and not isinstance(provider, provider_cls) and num_updated:
-        ip.to_parquet(provider)
+        ip.to_parquet(provider)  # type: ignore
     return ip
 
 
@@ -524,6 +515,7 @@ def copy_image(
     for image_id in image_ids:
         image = provider[image_id]
 
+        assert image_id.site is not None
         dst_fn = os.path.join(dst_root, image_id.site, *image_id.parts)
         dst_dir = os.path.dirname(dst_fn)
 
@@ -531,7 +523,6 @@ def copy_image(
             dst_fs.mkdir(dst_dir, create_parents=True)
             try:
                 with dst_fs.open(dst_fn, mode="wb") as dst:
-
                     prg = tqdm(
                         desc="copy",
                         total=image.file_info.size_bytes,

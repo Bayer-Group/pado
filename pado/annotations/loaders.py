@@ -6,6 +6,7 @@ import warnings
 from collections import defaultdict
 from typing import Callable
 from typing import Optional
+from typing import cast
 
 from shapely.geometry import shape
 
@@ -15,6 +16,7 @@ from pado.annotations.formats import AnnotationModel
 from pado.annotations.formats import AnnotationState
 from pado.annotations.formats import AnnotationStyle
 from pado.annotations.formats import Annotator
+from pado.annotations.formats import QPProperties
 from pado.annotations.formats import QuPathAnnotation
 from pado.io.files import uncompressed
 from pado.io.files import urlpathlike_to_fsspec
@@ -69,6 +71,7 @@ def qupath_geojson_annotations_loader(
             else:
                 errors[(type(e).__name__, str(e))].append(feature)
             continue
+        a_qp_properties = cast(QPProperties, a_qp.properties)
         a_pd = AnnotationModel(
             image_id=None,
             identifier=identifier,
@@ -76,9 +79,9 @@ def qupath_geojson_annotations_loader(
             annotator=annotator,
             state=state,
             style=style,
-            classification=a_qp.properties.classification.name,
-            color=a_qp.properties.classification.colorRGB,
-            description=a_qp.properties.name or "",
+            classification=a_qp_properties.classification.name,
+            color=a_qp_properties.classification.colorRGB,
+            description=a_qp_properties.name or "",
             comment="",  # todo: this could be QuPath's description field, but it's not exported
             geometry=shape(a_qp.geometry),
         )

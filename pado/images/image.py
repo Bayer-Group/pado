@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     import PIL.Image
 
     from pado.dataset import PadoDataset
+    from pado.images.ids import ImageId
 
 try:
     import cv2
@@ -125,7 +126,7 @@ class Image:
         "_file_info",
         "_slide",
     )  # prevent attribute errors during refactor
-    __fields__ = _SerializedImage.__fields__
+    __fields__: tuple[str, ...] = tuple(_SerializedImage.__fields__)
 
     def __init__(
         self,
@@ -133,7 +134,7 @@ class Image:
         *,
         load_metadata: bool = False,
         load_file_info: bool = False,
-        checksum: bool = False,
+        checksum: bool | str = False,
     ):
         """instantiate an image from an urlpath"""
         self.urlpath = urlpath
@@ -152,7 +153,7 @@ class Image:
                     self._file_info = self._load_file_info(checksum=checksum)
 
     @classmethod
-    def from_obj(cls, obj) -> Image:
+    def from_obj(cls, obj: Any) -> Image:
         """instantiate an image from an object, i.e. a pd.Series"""
         md = _SerializedImage.parse_obj(obj)
         # get metadata
@@ -167,7 +168,13 @@ class Image:
         # pado_info ...
         return inst
 
-    def to_record(self, *, urlpath_ignore_options: Collection[str] = ()) -> dict:
+    def to_record(
+        self,
+        image_id: ImageId | None = None,
+        *,
+        urlpath_ignore_options: Collection[str] = (),
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """return a record for serializing"""
         pado_info = PadoInfo(
             urlpath=urlpathlike_to_string(
@@ -355,7 +362,7 @@ class Image:
             return self._metadata
 
     def _load_file_info(
-        self, *, force: bool = False, checksum: bool = False
+        self, *, force: bool = False, checksum: bool | str = False
     ) -> FileInfo:
         """load the file information from the file"""
         if self._file_info is None or force:
@@ -363,11 +370,18 @@ class Image:
                 raise RuntimeError(f"{self!r} not opened and not in context manager")
 
             fs, path = urlpathlike_to_fs_and_path(self.urlpath)
-            if checksum:
+            if checksum is True:
                 checksums = compute_checksum(self.urlpath, available_only=not force)
                 _checksum = Checksum.join_checksums(checksums)
-            else:
+            elif checksum is False:
                 _checksum = None
+            elif isinstance(checksum, str):
+                checksums = Checksum.from_str(checksum, unpack_single=False)
+                _checksum = Checksum.join_checksums(checksums)
+            else:
+                raise TypeError(
+                    f"checksum must be bool or str, got: {type(checksum).__name__!r}"
+                )
 
             info = fs.info(path)
             return FileInfo(
@@ -507,6 +521,8 @@ class Image:
         self, location: IntPoint, region: IntSize, target_mpp: MPP
     ) -> np.ndarray:
         """return array from a defined mpp and a position (in the target mpp)"""
+        if self._slide is None:
+            raise RuntimeError("need to open slide")
 
         if location.mpp != target_mpp:
             raise ValueError(
@@ -580,7 +596,7 @@ class Image:
     def get_chunk_sizes(
         self,
         level: int = 0,
-    ) -> NDArray[np.int]:
+    ) -> NDArray[np.int_]:
         """return a chunk bytesize array"""
         if self._slide is None:
             raise RuntimeError(f"{self!r} not opened and not in context manager")

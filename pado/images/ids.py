@@ -17,6 +17,7 @@ from typing import Iterable
 from typing import Optional
 from typing import Set
 from typing import Tuple
+from typing import cast
 
 from itsdangerous import base64_encode
 from orjson import OPT_SORT_KEYS
@@ -26,6 +27,7 @@ from orjson import loads as orjson_loads
 
 from pado.types import FilterMissing
 from pado.types import OpenFileLike
+from pado.types import SerializedImageId
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -185,11 +187,16 @@ class ImageId(Tuple[Optional[str], ...]):
     # --- namedtuple style property access ----------------------------
 
     # note PyCharm doesn't recognize these: https://youtrack.jetbrains.com/issue/PY-47192
-    site: Optional[str] = property(itemgetter(0), doc="return site of the image id")
-    parts: Tuple[str, ...] = property(
-        itemgetter(slice(1, None)), doc="return the parts of the image id"
+    site: Optional[str] = cast(
+        "str | None", property(itemgetter(0), doc="return site of the image id")
     )
-    last: str = property(itemgetter(-1), doc="return the last part of the image id")
+    parts: Tuple[str, ...] = cast(
+        "tuple[str, ...]",
+        property(itemgetter(slice(1, None)), doc="return the parts of the image id"),
+    )
+    last: str = cast(
+        str, property(itemgetter(-1), doc="return the last part of the image id")
+    )
 
     # --- string serialization methods --------------------------------
 
@@ -221,9 +228,10 @@ class ImageId(Tuple[Optional[str], ...]):
 
     def to_json(self):
         """Serialize the ImageId instance to a json object"""
-        d = {"image_id": tuple(self[1:])}
-        if self[0] is not None:
-            d["site"] = self[0]
+        d: SerializedImageId = {"image_id": self.parts}
+        site = self[0]
+        if site is not None:
+            d["site"] = site
         return orjson_dumps(d, option=OPT_SORT_KEYS).decode()
 
     @classmethod
@@ -390,7 +398,7 @@ def image_id_from_json_file(
 
 
 def match_partial_image_ids_reversed(
-    ids: Iterable[ImageId], image_id: ImageId | tuple[str]
+    ids: Iterable[ImageId], image_id: ImageId | tuple[str, ...]
 ) -> Optional[ImageId]:
     """match image_ids from back to front
 
@@ -403,7 +411,9 @@ def match_partial_image_ids_reversed(
     else:
         match_set = set(ids)
 
-    def match(x: ImageId, s: Set[ImageId], idx: int) -> Optional[ImageId]:
+    def match(
+        x: ImageId | tuple[str, ...], s: Set[ImageId], idx: int
+    ) -> Optional[ImageId]:
         try:
             xi = x[idx]  # raises index error when out of parts to match
         except IndexError:
@@ -421,7 +431,7 @@ def match_partial_image_ids_reversed(
 
 def filter_image_ids(
     ids: Iterable[ImageId],
-    target: Iterable[ImageId | tuple[str]],
+    target: Iterable[ImageId | tuple[str, ...]],
     *,
     missing: FilterMissing | str = FilterMissing.WARN,
 ) -> set[ImageId]:
@@ -513,9 +523,13 @@ def load_image_ids_from_csv(
     if no_header and csv_columns is not None:
         csv_columns = [int(c) for c in csv_columns]
 
-    csv_columns = csv_columns or []
-    if len(csv_columns) == 0:
-        csv_columns = slice(None)
+    select: list[str | int] | slice
+    if csv_columns is None:
+        select = slice(None)
+    elif len(csv_columns) == 0:
+        select = slice(None)
+    else:
+        select = list(csv_columns)
 
     kw = {"header": None} if no_header else {}
     df = read_csv(csv_file, **kw)
@@ -525,6 +539,6 @@ def load_image_ids_from_csv(
     else:
         fieldnames = list(df.columns)
 
-    df = df.loc[:, csv_columns]
+    df = df.loc[:, select]
     rows = list(df.itertuples(index=False, name="PadoImageIdTuple"))
     return rows, fieldnames

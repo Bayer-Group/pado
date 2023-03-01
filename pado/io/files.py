@@ -14,15 +14,16 @@ import zipfile
 from ast import literal_eval
 from contextlib import ExitStack
 from contextlib import contextmanager
+from typing import IO
 from typing import Any
 from typing import AnyStr
-from typing import BinaryIO
 from typing import Collection
 from typing import ContextManager
 from typing import Iterator
 from typing import NamedTuple
 from typing import Tuple
 from typing import Union
+from typing import cast
 
 import fsspec
 from fsspec import AbstractFileSystem
@@ -150,7 +151,7 @@ def is_fsspec_open_file_like(obj: Any) -> TypeGuard[OpenFileLike]:
 def _deserialize_fsspec_json(obj: Any) -> dict[str, Any] | None:
     """try to deserialize"""
     try:
-        json_obj = json.loads(obj)  # type: ignore
+        json_obj = json.loads(obj)
     except (json.JSONDecodeError, TypeError):
         return None
 
@@ -205,7 +206,7 @@ def _get_fsspec_storage_args_options_from_serialized_fs(
 
 def _get_constructor_default_options(cls: type) -> dict[str, Any]:
     """return the default options of the class constructor"""
-    arg_spec = inspect.getfullargspec(cls.__init__)
+    arg_spec = inspect.getfullargspec(cls.__init__)  # type: ignore
     default_options = {}
     for name, value in zip(
         reversed(arg_spec.args),
@@ -222,17 +223,18 @@ def _remove_duplicate_items(d0: dict[str, Any], d1: dict[str, Any]) -> dict[str,
     return {k: v for k, v in d0.items() if not (k in d1 and d1[k] == v)}
 
 
-def _pathlike_to_string(pathlike: os.PathLike[AnyStr]) -> str:
+def _pathlike_to_string(pathlike: os.PathLike[AnyStr] | AnyStr) -> str:
     """stringify a pathlike object"""
     if isinstance(pathlike, os.PathLike):
         pathlike = os.fspath(pathlike)
 
-    if "~" in pathlike:
+    if isinstance(pathlike, bytes):
+        pathlike = pathlike.decode()  # type: ignore
+
+    if "~" in pathlike:  # type: ignore
         pathlike = os.path.expanduser(pathlike)
 
-    if isinstance(pathlike, bytes):
-        return pathlike.decode()
-    elif isinstance(pathlike, str):
+    if isinstance(pathlike, str):
         return pathlike
     else:
         raise TypeError(f"can't stringify: {pathlike!r} of type {type(pathlike)!r}")
@@ -343,7 +345,7 @@ def urlpathlike_to_uri(
         )
 
     else:
-        return _pathlike_to_string(urlpath)
+        return _pathlike_to_string(urlpath)  # type: ignore
 
 
 def urlpathlike_to_string(
@@ -381,7 +383,7 @@ def urlpathlike_to_string(
                 "ignore_options are not handled for stringified UrlpathLike",
                 stacklevel=2,
             )
-        return _pathlike_to_string(urlpath)
+        return _pathlike_to_string(urlpath)  # type: ignore
 
 
 def urlpathlike_to_fsspec(
@@ -535,14 +537,14 @@ def urlpathlike_get_storage_args_options(
 def urlpathlike_local_via_fs(
     obj: UrlpathLike,
     fs: AbstractFileSystem,
-) -> UrlpathLike:
+) -> OpenFileLike:
     """take an urlpath and access it via another fs"""
     fs_cls = urlpathlike_get_fs_cls(obj)
     if issubclass(fs_cls, LocalFileSystem):
         path = urlpathlike_get_path(obj, fs_cls=fs_cls)
         return fsopen(fs, path)
     else:
-        return obj
+        return urlpathlike_to_fsspec(obj)
 
 
 def urlpathlike_to_path_parts(obj: UrlpathLike) -> Tuple[str, ...]:
@@ -598,7 +600,7 @@ def update_fs_storage_options(
 
 def fsopen(
     fs: AbstractFileSystem,
-    path: [str, os.PathLike],
+    path: str | os.PathLike[str],
     *,
     mode: FsspecIOMode = "rb",
 ) -> OpenFile:
@@ -609,12 +611,14 @@ def fsopen(
         if fs.exists(path):
             raise FileExistsError(f"{path!r} at {fs!r}")
         else:
-            mode = mode.replace("x", "w")
+            mode = mode.replace("x", "w")  # type: ignore
     return OpenFile(fs, path, mode=mode)
 
 
 @contextmanager
-def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[BinaryIO]:
+def uncompressed(
+    file: Union[IO[bytes], ContextManager[IO[bytes]]]
+) -> Iterator[IO[bytes]]:
     """contextmanager for reading nested compressed files
 
     supported formats: GZIP, LZMA, ZIP, TAR
@@ -636,23 +640,26 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
             fileobj.seek(_pos)
 
     with ExitStack() as stack:
+        f: IO[bytes]
         if not (hasattr(file, "read") and hasattr(file, "seek")):
-            file = stack.enter_context(file)
+            f = stack.enter_context(file)
+        else:
+            f = cast(IO[bytes], file)
 
-        pos = file.tell()
-        magic = file.read(8)
-        file.seek(pos)
+        pos = f.tell()
+        magic = f.read(8)
+        f.seek(pos)
 
         if magic[:2] in GZIP:
-            fgz = stack.enter_context(gzip.open(file))
+            fgz = cast(IO[bytes], stack.enter_context(gzip.open(f)))
             yield stack.enter_context(uncompressed(fgz))
 
         elif magic[:6] in LZMA:
-            fxz = stack.enter_context(lzma.open(file))
+            fxz = cast(IO[bytes], stack.enter_context(lzma.open(f)))
             yield stack.enter_context(uncompressed(fxz))
 
         elif magic[:4] in ZIP:
-            fzip = stack.enter_context(zipfile.ZipFile(file))
+            fzip = stack.enter_context(zipfile.ZipFile(f))
             paths = fzip.namelist()
             if len(paths) != 1:
                 raise RuntimeError(
@@ -661,18 +668,22 @@ def uncompressed(file: Union[BinaryIO, ContextManager[BinaryIO]]) -> Iterator[Bi
             fzipped = stack.enter_context(fzip.open(paths[0], mode="r"))
             yield stack.enter_context(uncompressed(fzipped))
 
-        elif is_tar(file):
-            ftar = stack.enter_context(tarfile.open(fileobj=file))
+        elif is_tar(f):
+            ftar = stack.enter_context(tarfile.open(fileobj=f))
             members = ftar.getmembers()
             if len(members) != 1:
                 raise RuntimeError(
                     "tar must contain exactly one file: won't auto uncompress"
                 )
-            ftarred = stack.enter_context(ftar.extractfile(members[0]))
+            else:
+                ftar0 = ftar.extractfile(members[0])
+                if ftar0 is None:
+                    raise RuntimeError("can't extract file from tar")
+            ftarred = stack.enter_context(ftar0)
             yield stack.enter_context(uncompressed(ftarred))
 
         else:
-            yield file
+            yield f
 
 
 def urlpathlike_is_localfile(urlpath: UrlpathLike, must_exist: bool = True) -> bool:

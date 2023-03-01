@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import enum
 import struct
+from typing import ClassVar
 from typing import List
 from typing import Optional
 
@@ -46,10 +47,10 @@ class Annotator(BaseModel):
     type: AnnotatorType
     name: str
 
+    UNKNOWN: ClassVar[Annotator]
 
-# add a default instance thats not part of the model in case the annotator
-# is unknown. NOTE: could have done metaclass, or descriptor but assignment
-# to cls is easiest...
+
+# add a default instance to the model in case the annotator is unknown.
 Annotator.UNKNOWN = Annotator(type=AnnotatorType.UNKNOWN, name="unknown")
 
 
@@ -137,15 +138,15 @@ class QPProperties(BaseModel):
     classification: QPClassification
     isLocked: bool
     measurements: Optional[List]  # todo: add measurement type?
-    object_type: QPPathObjectType = None  # if provided must be of type
-    name: str = None
-    color: Color = None
+    object_type: Optional[QPPathObjectType] = None  # if provided must be of type
+    name: Optional[str] = None
+    color: Optional[Color] = None
 
 
-class QuPathAnnotation(Feature[Geometry, QPProperties]):
+class QuPathAnnotation(Feature[Geometry, QPProperties]):  # type: ignore
     """model for qupath annotations"""
 
-    id: QPPathObjectId = None
+    id: Optional[QPPathObjectId] = None
 
     @validator("geometry", pre=True)
     def parse_geometry_type(cls, v):

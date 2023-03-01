@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 import warnings
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING
@@ -22,6 +23,12 @@ from pado.types import UrlpathWithStorageOptions
 
 if TYPE_CHECKING:
     from pado import PadoDataset
+
+    if sys.version_info >= (3, 10):
+        from types import EllipsisType
+    else:
+        EllipsisType = Any
+
 
 __all__ = [
     "dataset_registry",
@@ -199,13 +206,14 @@ def set_secret(
     secret_name: str,
     value: str,
     *,
-    registry_name: str | None = ...,
+    registry_name: str | None | EllipsisType = ...,
     dataset_name: str | None = None,
 ):
     """set a secret"""
     store = secret_stores["user_input"]
     if is_secret(secret_name):
         registry_name, dataset_name, secret_name = store.parse_secret(secret_name)
+        assert dataset_name is not None
     else:
         if registry_name is ...:
             raise ValueError(
@@ -228,7 +236,7 @@ def list_secrets(value: str | UrlpathWithStorageOptions) -> list[str]:
         check = [value]
     elif isinstance(value, UrlpathWithStorageOptions):
         so = value.storage_options or {}
-        check = [value.urlpath, *so.values()]
+        check = [value.urlpath, *so.values()]  # type: ignore
     else:
         raise TypeError("must provide str or UrlpathWithStorageOptions")
     return [x for x in check if is_secret(x)]
@@ -242,7 +250,7 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFile
     def __init__(self, name: str | None):
         super().__init__(name)
 
-    def __contains__(self, name: str):
+    def __contains__(self, name):
         return name in self.data
 
     def __iter__(self):
@@ -269,7 +277,7 @@ class _DatasetRegistry(MutableMapping[str, UrlpathWithStorageOptions], _JsonFile
                     k: get_secret(v, default=v)
                     for k, v in value["storage_options"].items()
                 }
-            return UrlpathWithStorageOptions(urlpath, so)
+            return UrlpathWithStorageOptions(urlpath, so)  # type: ignore
 
     def __setitem__(
         self, name: str, path: str | UrlpathWithStorageOptions | dict[str, Any]

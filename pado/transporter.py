@@ -177,7 +177,7 @@ class _CommandIter:
         process_running = True
         try:
             while process_running:
-                output = process.stdout.readline()
+                output = process.stdout.readline() if process.stdout else b""
                 if output:
                     yield output.rstrip(b"\n").decode()
 
@@ -189,7 +189,7 @@ class _CommandIter:
             process.kill()
             raise
         finally:
-            self.stderr = process.stderr.read().decode()
+            self.stderr = process.stderr.read().decode() if process.stderr else ""
             logger.debug(self.stderr)
             process.wait()
 

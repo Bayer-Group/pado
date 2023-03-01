@@ -220,7 +220,7 @@ def ops_filter_ids(
         typer.echo("must provide either --image-id some/id.svs or --csv iids.csv")
         raise typer.Exit(1)
 
-    if no_header and not all(x.isdigit() for x in csv_column):
+    if no_header and not all(x.isdigit() for x in csv_column or []):
         typer.secho(
             "error: must provide integer column indices when using --no-header",
             err=True,
@@ -246,18 +246,18 @@ def ops_filter_ids(
         targets = []
 
     # add cli provided image ids
-    for t in image_ids:
+    for t in image_ids or []:
         try:
             iid = ImageId.from_str(t)
         except ValueError:
             iid = PurePath(t).parts
         targets.append(iid)
 
-    image_ids = set(ds.index)
-    filtered_ids = sorted(filter_image_ids(image_ids, targets, missing=missing))
+    image_id_objs = set(ds.index)
+    filtered_ids = sorted(filter_image_ids(image_id_objs, targets, missing=missing))
 
     if output is not None:
-        typer.echo(f"Filtered {len(filtered_ids)} of {len(image_ids)} image ids")
+        typer.echo(f"Filtered {len(filtered_ids)} of {len(image_id_objs)} image ids")
         filtered_ds = PadoDataset(output, mode="x")
         filtered_ds.ingest_obj(ds.filter(filtered_ids))
         typer.echo(f"Wrote new pado dataset to path: '{output}'")
@@ -299,13 +299,13 @@ def ops_remote_ids(
 
     if not as_path:
 
-        def _echo(i, _, u):
-            typer.echo(f"{i}\t{u}")
+        def _echo(a, b, c):
+            typer.echo(f"{a}\t{c}")
 
     else:
 
-        def _echo(_, i, u):
-            typer.echo(f"{i.to_path(ignore_site=True)}\t{u}")
+        def _echo(a, b, c):
+            typer.echo(f"{b.to_path(ignore_site=True)}\t{c}")
 
     up = ds.images.df.urlpath
     for iid in ds.index:
@@ -346,13 +346,13 @@ def ops_local_images(
 
     if not as_path:
 
-        def _echo(s, _, u, m):
+        def _echo(s, i, u, m):
             c = [s, u] if m is None else [s, u, m]
             typer.echo("\t".join(c))
 
     else:
 
-        def _echo(_, i, u, m):
+        def _echo(s, i, u, m):
             s = str(i.to_path(ignore_site=True))
             c = [s, u] if m is None else [s, u, m]
             typer.echo("\t".join(c))
@@ -398,7 +398,7 @@ def ops_update_images(
     is_pattern = "*" in search_urlpath
     has_glob = glob is not None
 
-    if has_glob and "*" not in glob:
+    if has_glob and "*" not in (glob or ""):
         typer.secho("provided `--glob` does not contain wildcard '*'", fg="yellow")
         raise typer.Exit(1)
 
@@ -528,7 +528,7 @@ def registry_add(
             "urlpath": _location,
             "storage_options": _so,
         }
-    typer.secho(f"Added {name} at {location!r} with {so!r}", color=typer.colors.GREEN)
+    typer.secho(f"Added {name} at {location!r} with {so!r}", fg=typer.colors.GREEN)
 
 
 @cli_registry.command(name="list")
@@ -555,7 +555,7 @@ def registry_list(check_readable: bool = Option(False)):
 
     else:
 
-        def readable(*_) -> Optional[bool]:
+        def readable(name, p) -> Optional[bool]:
             return None
 
     with dataset_registry() as registry:
@@ -578,7 +578,7 @@ def registry_list(check_readable: bool = Option(False)):
             )
 
     if not entries:
-        typer.secho("No datasets registered", color=typer.colors.YELLOW, err=True)
+        typer.secho("No datasets registered", fg=typer.colors.YELLOW, err=True)
     else:
         table = Table(title="Registered Datasets")
         table.add_column("Name", justify="left", no_wrap=True)
@@ -615,7 +615,7 @@ def registry_remove(
         typer.secho(
             f"Removed {name} with "
             f"urlpath={urlpath!r} and storage_options={storage_options!r}",
-            color=typer.colors.GREEN,
+            fg=typer.colors.GREEN,
         )
 
 
@@ -683,7 +683,7 @@ def _ds_from_name_or_path(
     if name is not None:
         with dataset_registry() as registry:
             try:
-                path, so = registry[name]
+                path, so = registry[name]  # type: ignore
             except KeyError:
                 typer.secho(f"Name {name!r} not registered", err=True)
                 raise typer.Exit(1)

@@ -59,8 +59,9 @@ class PredictionProxy:
 
     @property
     def annotations(self) -> AnnotationPredictionProvider:
+        # TODO
         # noinspection PydanticTypeChecker,PyTypeChecker
-        return {}  # fixme: todo
+        return {}  # type: ignore
 
     @property
     def metadata(self) -> MetadataPredictionProvider:

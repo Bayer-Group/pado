@@ -9,7 +9,6 @@ from enum import Enum
 from typing import IO
 from typing import TYPE_CHECKING
 from typing import Any
-from typing import AnyStr
 from typing import Iterator
 from typing import NamedTuple
 from typing import Optional
@@ -19,13 +18,15 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 
-if sys.version_info >= (3, 8):
+if sys.version_info >= (3, 11):
     from typing import Literal  # 3.8+
+    from typing import NotRequired
     from typing import Protocol  # 3.8+
     from typing import TypedDict
     from typing import runtime_checkable
 else:
     from typing_extensions import Literal
+    from typing_extensions import NotRequired
     from typing_extensions import Protocol
     from typing_extensions import TypedDict
     from typing_extensions import runtime_checkable
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
     import os
 
+    import numpy as np
     import numpy.typing as npt
     import pandas as pd
     from fsspec import AbstractFileSystem
@@ -47,24 +49,21 @@ if TYPE_CHECKING:
 # --- types ---
 
 
-S = TypeVar("S", str, bytes)
-
-
 @runtime_checkable
-class OpenFileLike(Protocol[S]):
+class OpenFileLike(Protocol):
     """minimal fsspec open file type"""
 
     fs: AbstractFileSystem
     path: str
 
-    def __enter__(self) -> IO[S]:
+    def __enter__(self) -> IO[bytes]:
         ...
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         ...
 
 
-UrlpathLike = Union[AnyStr, "os.PathLike[AnyStr]", OpenFileLike[AnyStr]]
+UrlpathLike = Union[str, "os.PathLike[str]", OpenFileLike]
 IOMode = Literal["r", "r+", "w", "a", "x"]
 FsspecIOMode = Literal["r", "rb", "w", "wb", "a", "ab", "x", "xb"]
 
@@ -85,7 +84,7 @@ class DatasetSplitter(Protocol):
         X: Sequence[Any],
         y: Optional[Sequence[Any]],
         groups: Optional[Sequence[Any]],
-    ) -> Iterator[Tuple[npt.NDArray[int], npt.NDArray[int]]]:
+    ) -> Iterator[Tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]]:
         ...
 
 
@@ -100,7 +99,9 @@ class SerializableItem(Protocol):
     def from_obj(cls: Type[PI], obj: Any) -> PI:
         ...
 
-    def to_record(self, image_id: ImageId | None = None) -> dict[str, Any]:
+    def to_record(
+        self, image_id: ImageId | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         ...
 
 
@@ -126,3 +127,10 @@ class CollatedPadoTileItems(TypedDict):
     tile: Union[list[npt.ArrayLike], npt.ArrayLike]
     metadata: list[pd.DataFrame]
     annotations: list[Annotations]
+
+
+class SerializedImageId(TypedDict):
+    """a json serialized image id"""
+
+    image_id: Sequence[str]
+    site: NotRequired[str]

@@ -58,3 +58,44 @@ py_version = "37"
 force_single_line = true
 add_imports = ["from __future__ import annotations"]
 extend_skip = ["setup.py", "docs/source/conf.py"]
+
+[tool.mypy]
+python_version = 3.8
+plugins = ["pydantic.mypy"]
+exclude = [
+  "^venv",
+  "^build",
+  "^docs",
+  "^.*/tests",
+  "^_stash",
+  "^pado/_version.py",
+  "^setup.py",
+]
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = false
+warn_unused_configs = true
+check_untyped_defs = true
+disallow_any_generics = false
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+  "cv2.*",
+  "dynaconf.*",
+  "jpype.*",
+  "pandera.*",
+  "orjson.*",
+  "fsspec.*",
+  "pandas.*",
+  "pyarrow.*",
+  "shapely.*",
+  "tifffile.*",
+  "toml.*",
+  "tqdm.*",
+  "zarr.*",
+  "PIL.*",
+]
+ignore_missing_imports = true
