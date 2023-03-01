@@ -534,8 +534,12 @@ class PadoDataset:
     def describe(self, output_format: Literal[DescribeFormat.DICT]) -> dict:
         ...
 
+    @overload
+    def describe(self, output_format: str) -> Union[str, dict]:
+        ...
+
     def describe(
-        self, output_format: DescribeFormat = DescribeFormat.PLAIN_TEXT
+        self, output_format: DescribeFormat | str = DescribeFormat.PLAIN_TEXT
     ) -> Union[str, dict]:
         """A 'to string' method for essential PadoDataset information"""
         if output_format not in list(DescribeFormat):

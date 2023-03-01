@@ -431,7 +431,7 @@ def match_partial_image_ids_reversed(
 
 def filter_image_ids(
     ids: Iterable[ImageId],
-    target: Iterable[ImageId | tuple[str]],
+    target: Iterable[ImageId | tuple[str, ...]],
     *,
     missing: FilterMissing | str = FilterMissing.WARN,
 ) -> set[ImageId]:
