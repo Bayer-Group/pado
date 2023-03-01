@@ -33,7 +33,7 @@ from pado.images.utils import match_mpp
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from pado.annotations import Annotations
+    from pado.annotations import Annotation
     from pado.images.ids import ImageId
     from pado.images.image import Image
 
@@ -75,7 +75,7 @@ class PadoTileItem(NamedTuple):
 
     id: TileId
     tile: NDArray
-    annotations: Optional[Annotations]
+    annotations: Optional[Sequence[Annotation]]
     metadata: Optional[pd.DataFrame]
 
 

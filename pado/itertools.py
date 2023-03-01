@@ -12,6 +12,9 @@ from typing import Any
 from typing import Callable
 from typing import Generator
 from typing import Iterator
+from typing import MutableSequence
+
+from pado.annotations import Annotations
 
 if sys.version_info < (3, 10):
     from typing_extensions import TypeAlias
@@ -29,6 +32,7 @@ from pado.annotations.annotation import scale_annotation
 from pado.annotations.annotation import translate_annotation
 from pado.dataset import PadoItem
 from pado.images.ids import ImageId
+from pado.images.image import Image
 from pado.images.tiles import PadoTileItem
 from pado.images.tiles import TileId
 from pado.images.tiles import TileIndex
@@ -40,10 +44,10 @@ try:
     from torch import stack
     from torch.utils.data import Dataset
 except ImportError:
-    stack = None
-    Dataset = object
+    stack = None  # type: ignore
+    Dataset = object  # type: ignore
 
-    def from_numpy(x):
+    def from_numpy(x):  # type: ignore
         return x
 
 
@@ -112,7 +116,7 @@ class SlideDataset(Dataset):
     def collate_fn(batch: list[PadoItem]) -> CollatedPadoItems:
         it = zip(PadoItem._fields, map(list, zip(*batch)))
         # noinspection PyArgumentList
-        return CollatedPadoItems(it)
+        return CollatedPadoItems(it)  # type: ignore
 
 
 # === iterate over tiles ======================================================
@@ -195,7 +199,6 @@ class TileDataset(Dataset):
         )
 
         if compute_tile_indexes or compute_annotation_indexes or force:
-
             if workers is None:
                 # single worker sequential
                 image_ids = set(self._ds.index)
@@ -282,8 +285,8 @@ class TileDataset(Dataset):
     def __getitem__(self, index: int) -> PadoTileItem:
         if self.requires_precompute():
             self.precompute_tiling(**self._precompute_kw)
+        assert self._cumulative_num_tiles is not None
         while True:
-
             try:
                 if index < 0:
                     raise NotImplementedError(index)
@@ -291,13 +294,17 @@ class TileDataset(Dataset):
                 # retrieve the pado item
                 slide_idx = int(
                     np.searchsorted(
-                        self._cumulative_num_tiles, index, side="right", sorter=None
+                        self._cumulative_num_tiles,
+                        index,
+                        side="right",
+                        sorter=None,
                     )
                 )
                 pado_item = self._ds[slide_idx]
+                pado_item_id: ImageId = pado_item.id  # type: ignore
 
                 # get the tile location
-                tile_index = self._tile_indexes[pado_item.id]
+                tile_index = self._tile_indexes[pado_item_id]
                 if slide_idx > 0:
                     idx = index - self._cumulative_num_tiles[slide_idx - 1]
                 else:
@@ -305,24 +312,26 @@ class TileDataset(Dataset):
                 location, size, mpp = tile_index[idx]
 
                 # get the tile array
-                img = pado_item.image
+                img: Image = pado_item.image  # type: ignore
                 if not img.is_open:
                     img.via(self._ds, storage_options=self._image_so)
 
                 lvl0_mpp = img.mpp
                 arr = img.get_array_at_mpp(location, size, target_mpp=mpp)
                 if self._as_tensor:
-                    arr = from_numpy(arr)
+                    arr = from_numpy(arr)  # type: ignore
 
                 # filter the annotations
-                slide_annotations = pado_item.annotations
-                str_tree = self._annotation_trees.get(pado_item.id, None)
+                slide_annotations: Annotations = pado_item.annotations  # type: ignore
+                str_tree = self._annotation_trees.get(pado_item_id, None)
                 if str_tree is not None:
                     x0, y0 = location.scale(lvl0_mpp).as_tuple()
                     tw, th = size.scale(lvl0_mpp).as_tuple()
                     tile_box = box(x0, y0, x0 + tw, y0 + th)
                     idxs = str_tree.query_items(tile_box)
-                    tile_annotations = [slide_annotations[i] for i in idxs]
+                    tile_annotations: MutableSequence[Annotation] | None = [
+                        slide_annotations[i] for i in idxs
+                    ]
                 else:
                     tile_box = None
                     tile_annotations = None
@@ -358,7 +367,7 @@ class TileDataset(Dataset):
                 # create the tile item
                 tile_item = PadoTileItem(
                     id=TileId(
-                        image_id=pado_item.id, strategy=self._strategy_str, index=idx
+                        image_id=pado_item_id, strategy=self._strategy_str, index=idx
                     ),
                     tile=arr,
                     metadata=pado_item.metadata,
@@ -389,13 +398,14 @@ class TileDataset(Dataset):
     def __len__(self):
         if self.requires_precompute():
             self.precompute_tiling(**self._precompute_kw)
+        assert self._cumulative_num_tiles is not None
         return self._cumulative_num_tiles[-1]
 
     @staticmethod
     def collate_fn(batch: list[PadoTileItem]) -> CollatedPadoTileItems:
         it = zip(PadoTileItem._fields, map(list, zip(*batch)))
         # noinspection PyArgumentList
-        dct = CollatedPadoTileItems(it)
+        dct = CollatedPadoTileItems(it)  # type: ignore
         tile = dct["tile"]
         # collate tiles
         if tile:
@@ -407,8 +417,8 @@ class TileDataset(Dataset):
 
     def caches_dump(self, fn: os.PathLike | str) -> dict:
         """dump caches to disk"""
-        tile_indexes = {}
-        annotation_trees = {}
+        tile_indexes: dict[str, Any] = {}
+        annotation_trees: dict[str, Any] = {}
         dct = {
             "type": "pado.itertools.TileDataset:cache",
             "version": 1,
@@ -425,6 +435,8 @@ class TileDataset(Dataset):
         for iid, tile_index in self._tile_indexes.items():
             tile_indexes[iid.to_str()] = tile_index.to_json(as_string=False)
         for iid, str_tree in self._annotation_trees.items():
+            if str_tree is None:
+                continue
             annotation_trees[iid.to_str()] = str_tree.to_json(as_string=False)
 
         with open(fn, mode="wb") as f:
@@ -471,7 +483,7 @@ class TileDataset(Dataset):
 # === helpers =================================================================
 
 
-def iter_exc_chain(exc: BaseException | None) -> Generator[BaseException]:
+def iter_exc_chain(exc: BaseException | None) -> Generator[BaseException, None, None]:
     if exc:
         yield exc
         if isinstance(exc, BaseException):
@@ -528,7 +540,7 @@ class RetryErrorHandler:
         self._total_delay = float(total_delay) if total_delay is not None else None
         self._exp_backoff = bool(exponential_backoff)
         self._check_exc_chain = bool(check_exception_chain)
-        self._call_counter = Counter()
+        self._call_counter: Counter[int] = Counter()
         self._sleep = time.sleep
 
     def __call__(self, td: TileDataset, index: int, exception: BaseException) -> bool:
@@ -575,6 +587,7 @@ if __name__ == "__main__":
 
     _ds = mock_dataset("memory://somewhere", num_images=97)
 
+    dataset: SlideDataset | TileDataset
     if sys.argv[1] == "slide":
         dataset = SlideDataset(_ds)
 
